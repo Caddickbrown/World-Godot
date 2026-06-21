@@ -383,8 +383,8 @@ func _handle_camera_pan(delta: float) -> void:
 	var right := Vector3(cos(_cam_angle_h), 0, -sin(_cam_angle_h))
 	var speed := PAN_SPEED * (_cam_distance / 20.0)
 
-	if _pan_keys.get("w", false): _cam_target += fwd * speed * delta; moved = true
-	if _pan_keys.get("s", false): _cam_target -= fwd * speed * delta; moved = true
+	if _pan_keys.get("w", false): _cam_target -= fwd * speed * delta; moved = true
+	if _pan_keys.get("s", false): _cam_target += fwd * speed * delta; moved = true
 	if _pan_keys.get("a", false): _cam_target -= right * speed * delta; moved = true
 	if _pan_keys.get("d", false): _cam_target += right * speed * delta; moved = true
 
@@ -482,8 +482,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _left_is_drag:
 				var delta_x: float = (em.position.x - _left_press_pos.x) * 0.005
 				var delta_y: float = (em.position.y - _left_press_pos.y) * 0.005
-				_cam_angle_h = _left_drag_angle_h + delta_x
-				_cam_angle_v = clampf(_left_drag_angle_v - delta_y, deg_to_rad(10.0), deg_to_rad(85.0))
+				_cam_angle_h = _left_drag_angle_h - delta_x
+				_cam_angle_v = clampf(_left_drag_angle_v + delta_y, deg_to_rad(10.0), deg_to_rad(85.0))
 				_update_camera()
 
 		# Pan drag
@@ -493,7 +493,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			var dz: float = (em.position.y - _pan_drag_start.y) * scale
 			var fwd  := Vector3(sin(_cam_angle_h), 0, cos(_cam_angle_h))
 			var right := Vector3(cos(_cam_angle_h), 0, -sin(_cam_angle_h))
-			_cam_target = _pan_drag_target - right * dx + fwd * dz
+			_cam_target = _pan_drag_target - right * dx - fwd * dz
 			_cam_target.x = clampf(_cam_target.x, 0, WORLD_WIDTH * TILE_SIZE)
 			_cam_target.z = clampf(_cam_target.z, 0, WORLD_HEIGHT * TILE_SIZE)
 			_update_camera()
