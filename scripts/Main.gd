@@ -421,50 +421,81 @@ func _input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			_cam_distance = clampf(_cam_distance + 4.0, ZOOM_MIN, ZOOM_MAX)
 			_update_camera()
-		elif event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			_handle_click(event.position)
 
-var _drag_start: Vector2
-var _drag_cam_target: Vector3
-var _drag_cam_angle_h: float = 0.0
-var _is_dragging: bool = false
-var _is_rotating: bool = false
+# ── Mouse drag state ─────────────────────────────────────────────────────────
+
+# Left drag: tumble (rotate + tilt). Also used for click-to-select when
+# the mouse barely moves (threshold check on release).
+var _left_press_pos: Vector2 = Vector2.ZERO
+var _left_pressed: bool = false
+var _left_is_drag: bool = false
+var _left_drag_angle_h: float = 0.0
+var _left_drag_angle_v: float = 0.0
+const LEFT_DRAG_THRESHOLD := 5.0  # pixels before motion becomes a drag
+
+# Middle / Alt+Left drag: pan
+var _pan_drag_start: Vector2 = Vector2.ZERO
+var _pan_drag_target: Vector3 = Vector3.ZERO
+var _is_pan_dragging: bool = false
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
-		# Middle mouse or Alt+Left = pan drag
-		if event.button_index == MOUSE_BUTTON_MIDDLE or \
-		   (event.button_index == MOUSE_BUTTON_LEFT and event.alt_pressed):
-			if event.pressed:
-				_drag_start = event.position
-				_drag_cam_target = _cam_target
-				_is_dragging = true
-			else:
-				_is_dragging = false
-		# Right mouse = orbit rotate
-		if event.button_index == MOUSE_BUTTON_RIGHT:
-			if event.pressed:
-				_drag_start = event.position
-				_drag_cam_angle_h = _cam_angle_h
-				_is_rotating = true
-			else:
-				_is_rotating = false
+		var mb := event as InputEventMouseButton
+		match mb.button_index:
+			MOUSE_BUTTON_LEFT:
+				if mb.alt_pressed:
+					# Alt+Left = pan drag (same as middle mouse)
+					if mb.pressed:
+						_pan_drag_start = mb.position
+						_pan_drag_target = _cam_target
+						_is_pan_dragging = true
+					else:
+						_is_pan_dragging = false
+				else:
+					# Normal left = tumble drag OR click-to-select
+					if mb.pressed:
+						_left_press_pos = mb.position
+						_left_drag_angle_h = _cam_angle_h
+						_left_drag_angle_v = _cam_angle_v
+						_left_pressed = true
+						_left_is_drag = false
+					else:
+						if _left_pressed and not _left_is_drag:
+							_handle_click(mb.position)
+						_left_pressed = false
+						_left_is_drag = false
+			MOUSE_BUTTON_MIDDLE:
+				if mb.pressed:
+					_pan_drag_start = mb.position
+					_pan_drag_target = _cam_target
+					_is_pan_dragging = true
+				else:
+					_is_pan_dragging = false
 
 	if event is InputEventMouseMotion:
 		var em := event as InputEventMouseMotion
-		if _is_dragging:
+
+		# Left drag: tumble (horizontal = orbit, vertical = tilt)
+		if _left_pressed:
+			if not _left_is_drag and em.position.distance_to(_left_press_pos) > LEFT_DRAG_THRESHOLD:
+				_left_is_drag = true
+			if _left_is_drag:
+				var delta_x: float = (em.position.x - _left_press_pos.x) * 0.005
+				var delta_y: float = (em.position.y - _left_press_pos.y) * 0.005
+				_cam_angle_h = _left_drag_angle_h + delta_x
+				_cam_angle_v = clampf(_left_drag_angle_v - delta_y, deg_to_rad(10.0), deg_to_rad(85.0))
+				_update_camera()
+
+		# Pan drag
+		if _is_pan_dragging:
 			var scale := _cam_distance / 400.0
-			var dx: float = (em.position.x - _drag_start.x) * scale
-			var dz: float = (em.position.y - _drag_start.y) * scale
-			var fwd := Vector3(sin(_cam_angle_h), 0, cos(_cam_angle_h))
+			var dx: float = (em.position.x - _pan_drag_start.x) * scale
+			var dz: float = (em.position.y - _pan_drag_start.y) * scale
+			var fwd  := Vector3(sin(_cam_angle_h), 0, cos(_cam_angle_h))
 			var right := Vector3(cos(_cam_angle_h), 0, -sin(_cam_angle_h))
-			_cam_target = _drag_cam_target - right * dx + fwd * dz
+			_cam_target = _pan_drag_target - right * dx + fwd * dz
 			_cam_target.x = clampf(_cam_target.x, 0, WORLD_WIDTH * TILE_SIZE)
 			_cam_target.z = clampf(_cam_target.z, 0, WORLD_HEIGHT * TILE_SIZE)
-			_update_camera()
-		if _is_rotating:
-			var dx: float = (em.position.x - _drag_start.x) * 0.005
-			_cam_angle_h = _drag_cam_angle_h + dx
 			_update_camera()
 
 func _centre_on_agents() -> void:
