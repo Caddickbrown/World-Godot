@@ -1,0 +1,1613 @@
+[
+  {
+    "id": "fire",
+    "name": "Fire",
+    "era": 1,
+    "icon": "\ud83d\udd25",
+    "description": "The mastery of fire brings warmth, light, protection, and the ability to cook food.",
+    "prerequisites": [],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "FOREST"
+      }
+    ],
+    "discovery_probability": 0.0006,
+    "spread_rate": 0.05,
+    "effects": {
+      "max_age_bonus": 0.15,
+      "warmth_satisfied": true
+    }
+  },
+  {
+    "id": "stone_tools",
+    "name": "Stone Tools",
+    "era": 1,
+    "icon": "\ud83e\udea8",
+    "description": "Shaping stone into tools makes gathering and hunting far more effective.",
+    "prerequisites": [],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "STONE"
+      }
+    ],
+    "discovery_probability": 0.0005,
+    "spread_rate": 0.05,
+    "effects": {
+      "gather_efficiency": 1.4
+    }
+  },
+  {
+    "id": "language",
+    "name": "Language",
+    "era": 1,
+    "icon": "\ud83d\udcac",
+    "description": "Shared symbols and sounds allow complex ideas to be passed between people.",
+    "prerequisites": [],
+    "discovery_conditions": [
+      {
+        "type": "population_nearby",
+        "value": 3
+      }
+    ],
+    "discovery_probability": 0.0003,
+    "spread_rate": 0.08,
+    "effects": {
+      "spread_rate_multiplier": 2.0
+    }
+  },
+  {
+    "id": "shelter",
+    "name": "Shelter",
+    "era": 1,
+    "icon": "\ud83c\udfda\ufe0f",
+    "description": "Simple structures provide protection from the elements and a place to rest.",
+    "prerequisites": [
+      "stone_tools"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "stone_tools"
+      }
+    ],
+    "discovery_probability": 0.0004,
+    "spread_rate": 0.04,
+    "effects": {
+      "rest_efficiency": 1.5,
+      "max_age_bonus": 0.1
+    }
+  },
+  {
+    "id": "housing",
+    "name": "Housing",
+    "era": 2,
+    "icon": "\ud83c\udfe0",
+    "description": "Durable dwellings with walls and roofs offer strong protection from storms and cold.",
+    "prerequisites": [
+      "shelter"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "shelter"
+      }
+    ],
+    "discovery_probability": 0.0003,
+    "spread_rate": 0.04,
+    "effects": {
+      "weather_protection": 0.2
+    }
+  },
+  {
+    "id": "tree_house",
+    "name": "Tree House",
+    "era": 2,
+    "icon": "\ud83c\udf33",
+    "description": "Platforms lashed high in the canopy give shelter above the damp ground and predators below.",
+    "prerequisites": [
+      "shelter",
+      "rope"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "FOREST"
+      }
+    ],
+    "discovery_probability": 0.00025,
+    "spread_rate": 0.035,
+    "effects": {
+      "rest_efficiency": 1.08,
+      "weather_protection": 0.05
+    }
+  },
+  {
+    "id": "temple",
+    "name": "Temple",
+    "era": 2,
+    "icon": "\ud83c\udfdb\ufe0f",
+    "description": "Raised gathering places for ritual and story anchor the community and the spirit.",
+    "prerequisites": [
+      "housing",
+      "art"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "GRASS"
+      },
+      {
+        "type": "population_nearby",
+        "value": 2
+      }
+    ],
+    "discovery_probability": 0.0002,
+    "spread_rate": 0.03,
+    "effects": {
+      "spread_rate_multiplier": 1.1
+    }
+  },
+  {
+    "id": "church",
+    "name": "Church",
+    "era": 2,
+    "icon": "\u26ea",
+    "description": "A shared hall and high roof gather many voices in song and counsel.",
+    "prerequisites": [
+      "housing",
+      "language"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "GRASS"
+      },
+      {
+        "type": "population_nearby",
+        "value": 5
+      }
+    ],
+    "discovery_probability": 0.0002,
+    "spread_rate": 0.007,
+    "effects": {
+      "spread_rate_multiplier": 1.12
+    }
+  },
+  {
+    "id": "cooking",
+    "name": "Cooking",
+    "era": 1,
+    "icon": "\ud83c\udf56",
+    "description": "Applying fire to food unlocks far more nutrition and reduces illness.",
+    "prerequisites": [
+      "fire"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "fire"
+      }
+    ],
+    "discovery_probability": 0.0005,
+    "spread_rate": 0.05,
+    "effects": {
+      "hunger_efficiency": 1.6,
+      "max_age_bonus": 0.2
+    }
+  },
+  {
+    "id": "sailing",
+    "name": "Sailing",
+    "era": 2,
+    "icon": "\u26f5",
+    "description": "Lashing logs into rafts and reading the wind opens up the waters \u2014 new shores, new resources.",
+    "prerequisites": [],
+    "discovery_conditions": [
+      {
+        "type": "adjacent_to",
+        "value": "WATER"
+      }
+    ],
+    "discovery_probability": 0.0003,
+    "spread_rate": 0.04,
+    "effects": {
+      "unlocks_water_travel": true
+    }
+  },
+  {
+    "id": "mountain_climbing",
+    "name": "Mountain Climbing",
+    "era": 2,
+    "icon": "\ud83c\udfd4\ufe0f",
+    "description": "Ropes, handholds, and hard-won courage let bold explorers scale the highest peaks.",
+    "prerequisites": [
+      "stone_tools"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "adjacent_to",
+        "value": "MOUNTAIN"
+      }
+    ],
+    "discovery_probability": 0.0003,
+    "spread_rate": 0.04,
+    "effects": {
+      "unlocks_mountain_travel": true
+    }
+  },
+  {
+    "id": "clothing",
+    "name": "Clothing",
+    "era": 1,
+    "icon": "\ud83e\udde5",
+    "description": "Skins and fibres shaped into garments protect against wind, rain, and cold.",
+    "prerequisites": [
+      "stone_tools"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "FOREST"
+      }
+    ],
+    "discovery_probability": 0.0004,
+    "spread_rate": 0.05,
+    "effects": {
+      "weather_protection": 0.2
+    }
+  },
+  {
+    "id": "medicine",
+    "name": "Medicine",
+    "era": 1,
+    "icon": "\ud83c\udf3f",
+    "description": "Knowledge of healing herbs and remedies extends life and eases sickness.",
+    "prerequisites": [
+      "cooking",
+      "shelter"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "FOREST"
+      },
+      {
+        "type": "tile_has_resource",
+        "value": "herbs"
+      }
+    ],
+    "discovery_probability": 0.00035,
+    "spread_rate": 0.04,
+    "effects": {
+      "max_age_bonus": 0.25,
+      "herb_healing": true,
+      "vitality_regen": 0.005
+    }
+  },
+  {
+    "id": "weaving",
+    "name": "Weaving",
+    "era": 1,
+    "icon": "\ud83e\uddf5",
+    "description": "Twining fibres into baskets and mats improves storage and comfort.",
+    "prerequisites": [
+      "stone_tools"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "FOREST"
+      }
+    ],
+    "discovery_probability": 0.0004,
+    "spread_rate": 0.05,
+    "effects": {
+      "rest_efficiency": 1.2
+    }
+  },
+  {
+    "id": "pottery",
+    "name": "Pottery",
+    "era": 2,
+    "icon": "\ud83c\udffa",
+    "description": "Baking clay in fire creates vessels for storing food and water.",
+    "prerequisites": [
+      "fire"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "STONE"
+      }
+    ],
+    "discovery_probability": 0.00035,
+    "spread_rate": 0.05,
+    "effects": {
+      "hunger_efficiency": 1.15
+    }
+  },
+  {
+    "id": "fishing",
+    "name": "Fishing",
+    "era": 1,
+    "icon": "\ud83c\udfa3",
+    "description": "Hooks, spears, and nets bring food from the waters' edge.",
+    "prerequisites": [
+      "stone_tools"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "adjacent_to",
+        "value": "WATER"
+      }
+    ],
+    "discovery_probability": 0.00035,
+    "spread_rate": 0.05,
+    "effects": {
+      "gather_efficiency": 1.1
+    }
+  },
+  {
+    "id": "hunting",
+    "name": "Hunting",
+    "era": 1,
+    "icon": "\ud83c\udff9",
+    "description": "Tracking and taking game from the forest brings meat and hides to the people.",
+    "prerequisites": [
+      "stone_tools"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "FOREST"
+      }
+    ],
+    "discovery_probability": 0.0004,
+    "spread_rate": 0.05,
+    "effects": {
+      "gather_efficiency": 1.35,
+      "forest_bonus": true
+    }
+  },
+  {
+    "id": "art",
+    "name": "Art",
+    "era": 2,
+    "icon": "\ud83c\udfad",
+    "description": "Marking walls and shaping symbols gives meaning beyond mere survival.",
+    "prerequisites": [
+      "fire",
+      "shelter"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "shelter"
+      }
+    ],
+    "discovery_probability": 0.00025,
+    "spread_rate": 0.06,
+    "effects": {}
+  },
+  {
+    "id": "animal_domestication",
+    "name": "Animal Domestication",
+    "era": 2,
+    "icon": "\ud83d\udc15",
+    "description": "Trust between people and beasts brings help in hunting, guarding, and carrying.",
+    "prerequisites": [
+      "shelter"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "GRASS"
+      }
+    ],
+    "discovery_probability": 0.00038,
+    "spread_rate": 0.04,
+    "effects": {
+      "gather_efficiency": 1.25
+    }
+  },
+  {
+    "id": "agriculture",
+    "name": "Agriculture",
+    "era": 2,
+    "icon": "\ud83c\udf3e",
+    "description": "Sowing and tending crops multiplies the land's bounty and lets people stay in one place.",
+    "prerequisites": [
+      "shelter",
+      "stone_tools"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "GRASS"
+      }
+    ],
+    "discovery_probability": 0.00025,
+    "spread_rate": 0.05,
+    "effects": {
+      "gather_efficiency": 1.35,
+      "grass_bonus": true,
+      "carrying_capacity_bonus": 1.25
+    }
+  },
+  {
+    "id": "writing",
+    "name": "Writing",
+    "era": 2,
+    "icon": "\ud83d\udcdc",
+    "description": "Marks that persist let wisdom travel across time and distance.",
+    "prerequisites": [
+      "language"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "language"
+      }
+    ],
+    "discovery_probability": 0.0002,
+    "spread_rate": 0.06,
+    "effects": {
+      "spread_rate_multiplier": 1.5
+    }
+  },
+  {
+    "id": "metal_tools",
+    "name": "Metal Tools",
+    "era": 2,
+    "icon": "\u2692\ufe0f",
+    "description": "Smelting ore into blades and points makes every task sharper and swifter.",
+    "prerequisites": [
+      "fire",
+      "stone_tools"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "STONE"
+      }
+    ],
+    "discovery_probability": 0.0002,
+    "spread_rate": 0.04,
+    "effects": {
+      "gather_efficiency": 1.25
+    }
+  },
+  {
+    "id": "herding",
+    "name": "Herding",
+    "era": 2,
+    "icon": "\ud83d\udc11",
+    "description": "Moving with the flocks brings steady meat, milk, and wool to settled life.",
+    "prerequisites": [
+      "animal_domestication"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "GRASS"
+      }
+    ],
+    "discovery_probability": 0.00025,
+    "spread_rate": 0.05,
+    "effects": {
+      "gather_efficiency": 1.15
+    }
+  },
+  {
+    "id": "community",
+    "name": "Community",
+    "era": 2,
+    "icon": "\ud83d\udc65",
+    "description": "Shared customs and kinship make families flourish and children thrive.",
+    "prerequisites": [
+      "language",
+      "shelter"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "shelter"
+      }
+    ],
+    "discovery_probability": 0.00025,
+    "spread_rate": 0.05,
+    "effects": {
+      "reproduction_cooldown_mult": 0.82
+    }
+  },
+  {
+    "id": "preservation",
+    "name": "Preservation",
+    "era": 2,
+    "icon": "\ud83c\udf6f",
+    "description": "Salt, smoke, and sealed vessels keep food through lean times.",
+    "prerequisites": [
+      "cooking",
+      "pottery"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "pottery"
+      }
+    ],
+    "discovery_probability": 0.00025,
+    "spread_rate": 0.05,
+    "effects": {
+      "hunger_efficiency": 1.12
+    }
+  },
+  {
+    "id": "rope",
+    "name": "Rope",
+    "era": 1,
+    "icon": "\ud83e\udea2",
+    "description": "Twisted fibres hold weight and bind structures together.",
+    "prerequisites": [
+      "stone_tools",
+      "weaving"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "FOREST"
+      }
+    ],
+    "discovery_probability": 0.00035,
+    "spread_rate": 0.05,
+    "effects": {
+      "rest_efficiency": 1.1
+    }
+  },
+  {
+    "id": "organisation",
+    "name": "Organisation",
+    "era": 2,
+    "icon": "\ud83d\udccb",
+    "description": "Dividing labour lets each person specialise \u2014 some gather, some teach, some explore. Together they achieve more.",
+    "prerequisites": [
+      "language",
+      "community"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "community"
+      }
+    ],
+    "discovery_probability": 0.00025,
+    "spread_rate": 0.05,
+    "effects": {
+      "unlocks_tasks": true
+    }
+  },
+  {
+    "id": "curiosity_culture",
+    "name": "Curiosity Culture",
+    "era": 2,
+    "icon": "\ud83d\udd2c",
+    "description": "A people who prize learning raise children who ask and experiment.",
+    "prerequisites": [
+      "language",
+      "art"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "art"
+      }
+    ],
+    "discovery_probability": 0.00015,
+    "spread_rate": 0.05,
+    "effects": {
+      "discovery_bonus": 1.2
+    }
+  },
+  {
+    "id": "trade",
+    "name": "Trade",
+    "era": 3,
+    "icon": "\ud83e\udd1d",
+    "description": "Exchanging surplus goods between groups brings prosperity to all \u2014 and spreads ideas faster than ever.",
+    "prerequisites": [
+      "language",
+      "agriculture"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "population_nearby",
+        "value": 5
+      }
+    ],
+    "discovery_probability": 0.00018,
+    "spread_rate": 0.06,
+    "effects": {
+      "hunger_efficiency": 1.1,
+      "spread_rate_multiplier": 1.3
+    }
+  },
+  {
+    "id": "astronomy",
+    "name": "Astronomy",
+    "era": 3,
+    "icon": "\ud83c\udf1f",
+    "description": "Reading the stars by night reveals the turning of seasons, the direction of the winds, and the way home across open water.",
+    "prerequisites": [
+      "writing",
+      "mathematics",
+      "curiosity_culture"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "MOUNTAIN"
+      }
+    ],
+    "discovery_probability": 0.00012,
+    "spread_rate": 0.04,
+    "effects": {
+      "discovery_bonus": 1.15
+    }
+  },
+  {
+    "id": "mathematics",
+    "name": "Mathematics",
+    "era": 3,
+    "icon": "\ud83d\udd22",
+    "description": "Counting, measuring, and reasoning with symbols lets people plan harvests, divide land, and build beyond guesswork.",
+    "prerequisites": [
+      "writing",
+      "trade"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "population_nearby",
+        "value": 4
+      }
+    ],
+    "discovery_probability": 0.00015,
+    "spread_rate": 0.05,
+    "effects": {
+      "gather_efficiency": 1.1,
+      "discovery_bonus": 1.1
+    }
+  },
+  {
+    "id": "governance",
+    "name": "Governance",
+    "era": 3,
+    "icon": "\u2696\ufe0f",
+    "description": "Laws, leaders, and shared rules let large groups cooperate \u2014 and resolve conflict without violence.",
+    "prerequisites": [
+      "language",
+      "community",
+      "organisation"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "population_nearby",
+        "value": 6
+      }
+    ],
+    "discovery_probability": 0.00012,
+    "spread_rate": 0.04,
+    "effects": {
+      "reproduction_cooldown_mult": 0.88,
+      "spread_rate_multiplier": 1.2
+    }
+  },
+  {
+    "id": "masonry",
+    "name": "Masonry",
+    "era": 3,
+    "icon": "\ud83e\uddf1",
+    "description": "Cutting and stacking stone creates walls that last generations \u2014 and unlocks true cities.",
+    "prerequisites": [
+      "metal_tools",
+      "housing"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "STONE"
+      }
+    ],
+    "discovery_probability": 0.00012,
+    "spread_rate": 0.04,
+    "effects": {
+      "weather_protection": 0.3,
+      "rest_efficiency": 1.2
+    }
+  },
+  {
+    "id": "music",
+    "name": "Music",
+    "era": 3,
+    "icon": "\ud83c\udfb5",
+    "description": "Rhythm, melody, and song weave community together and lift spirits through hard seasons.",
+    "prerequisites": [
+      "art",
+      "language"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "population_nearby",
+        "value": 3
+      }
+    ],
+    "discovery_probability": 0.00015,
+    "spread_rate": 0.07,
+    "effects": {
+      "reproduction_cooldown_mult": 0.92,
+      "discovery_bonus": 1.05
+    }
+  },
+  {
+    "id": "navigation",
+    "name": "Navigation",
+    "era": 3,
+    "icon": "\ud83e\udded",
+    "description": "Stars, currents, and landmarks guide sailors beyond the horizon \u2014 the whole world opens up.",
+    "prerequisites": [
+      "sailing",
+      "astronomy"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "adjacent_to",
+        "value": "WATER"
+      }
+    ],
+    "discovery_probability": 0.00012,
+    "spread_rate": 0.04,
+    "effects": {
+      "unlocks_deep_water_travel": true,
+      "discovery_bonus": 1.1
+    }
+  },
+  {
+    "id": "calendar",
+    "name": "Calendar",
+    "era": 3,
+    "icon": "\ud83d\udcc5",
+    "description": "Tracking the sun and moon tells farmers when to plant, when to harvest, and when the hard times will end.",
+    "prerequisites": [
+      "astronomy",
+      "writing"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "astronomy"
+      }
+    ],
+    "discovery_probability": 0.00012,
+    "spread_rate": 0.05,
+    "effects": {
+      "gather_efficiency": 1.15,
+      "max_age_bonus": 0.1
+    }
+  },
+  {
+    "id": "philosophy",
+    "name": "Philosophy",
+    "era": 3,
+    "icon": "\ud83e\udde0",
+    "description": "Deep questions about existence, justice, and meaning spark the greatest leaps in human understanding.",
+    "prerequisites": [
+      "writing",
+      "mathematics"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "astronomy"
+      }
+    ],
+    "discovery_probability": 0.0001,
+    "spread_rate": 0.04,
+    "effects": {
+      "discovery_bonus": 1.25,
+      "curiosity_bonus": 0.15
+    }
+  },
+  {
+    "id": "horse_taming",
+    "name": "Horse Taming",
+    "era": 2,
+    "icon": "\ud83d\udc0e",
+    "description": "Reading a horse's moods and earning its trust \u2014 then riding it across the land at great speed.",
+    "prerequisites": [
+      "animal_domestication"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "animal_domestication"
+      }
+    ],
+    "discovery_probability": 0.00022,
+    "spread_rate": 0.04,
+    "effects": {
+      "can_ride_horses": true
+    }
+  },
+  {
+    "id": "woodcutting",
+    "name": "Woodcutting",
+    "era": 1,
+    "icon": "\ud83e\ude93",
+    "description": "Felling trees with stone tools yields timber for fires and shelters. The forest grows back, but slowly.",
+    "prerequisites": [
+      "stone_tools"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "FOREST"
+      },
+      {
+        "type": "has_concept",
+        "value": "stone_tools"
+      }
+    ],
+    "discovery_probability": 0.00042,
+    "spread_rate": 0.05,
+    "effects": {
+      "wood_gathering": true
+    }
+  },
+  {
+    "id": "honey_gathering",
+    "name": "Honey Gathering",
+    "era": 1,
+    "icon": "\ud83c\udf6f",
+    "description": "Those bold enough to approach the wild bee hives discover sweet honey \u2014 a rich food that needs no fire to enjoy.",
+    "prerequisites": [],
+    "discovery_conditions": [
+      {
+        "type": "near_bee_hive",
+        "value": 5
+      }
+    ],
+    "discovery_probability": 0.0006,
+    "spread_rate": 0.05,
+    "effects": {
+      "honey_food": true
+    }
+  },
+  {
+    "id": "herbalism",
+    "name": "Herbalism",
+    "era": 2,
+    "icon": "\ud83c\udf43",
+    "description": "Deep knowledge of plants and their properties \u2014 which heal, which nourish, which protect against sickness.",
+    "prerequisites": [
+      "medicine"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "medicine"
+      },
+      {
+        "type": "tile_has_resource",
+        "value": "herbs"
+      }
+    ],
+    "discovery_probability": 0.00028,
+    "spread_rate": 0.04,
+    "effects": {
+      "max_age_bonus": 0.1,
+      "herb_healing_mult": 1.5
+    }
+  },
+  {
+    "id": "barn",
+    "name": "Barn",
+    "era": 2,
+    "icon": "\ud83d\udc04",
+    "description": "A sturdy roofed shelter keeps livestock warm and safe through storms and cold nights.",
+    "prerequisites": [
+      "housing",
+      "herding"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "GRASS"
+      },
+      {
+        "type": "has_concept",
+        "value": "herding"
+      }
+    ],
+    "discovery_probability": 0.00022,
+    "spread_rate": 0.04,
+    "effects": {
+      "gather_efficiency": 1.1
+    }
+  },
+  {
+    "id": "dairy",
+    "name": "Dairy",
+    "era": 2,
+    "icon": "\ud83e\udd5b",
+    "description": "Milking cattle provides a steady, renewable source of nourishment \u2014 richer than berries and available without the hunt.",
+    "prerequisites": [
+      "herding",
+      "animal_domestication"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "GRASS"
+      },
+      {
+        "type": "has_concept",
+        "value": "herding"
+      }
+    ],
+    "discovery_probability": 0.00022,
+    "spread_rate": 0.04,
+    "effects": {
+      "gather_efficiency": 1.1
+    }
+  },
+  {
+    "id": "coop",
+    "name": "Chicken Coop",
+    "era": 2,
+    "icon": "\ud83e\udd5a",
+    "description": "A small enclosed shelter keeps chickens safe at night. People with a coop know to collect eggs regularly \u2014 a steady, reliable food source.",
+    "prerequisites": [
+      "housing",
+      "animal_domestication"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "GRASS"
+      },
+      {
+        "type": "has_concept",
+        "value": "animal_domestication"
+      }
+    ],
+    "discovery_probability": 0.00025,
+    "spread_rate": 0.04,
+    "effects": {
+      "hunger_efficiency": 1.08
+    }
+  },
+  {
+    "id": "swimming",
+    "name": "Swimming",
+    "era": 1,
+    "icon": "\ud83c\udfca",
+    "description": "Learning to move through water opens up rivers and coastlines for foraging and travel.",
+    "prerequisites": [],
+    "discovery_conditions": [
+      {
+        "type": "adjacent_to",
+        "value": "WATER"
+      }
+    ],
+    "discovery_probability": 0.0005,
+    "spread_rate": 0.05,
+    "effects": {}
+  },
+  {
+    "id": "tracking",
+    "name": "Tracking",
+    "era": 1,
+    "icon": "\ud83d\udc3e",
+    "description": "Reading footprints, scat, and broken branches reveals where animals move \u2014 making hunts far more successful.",
+    "prerequisites": [
+      "hunting"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "FOREST"
+      },
+      {
+        "type": "has_concept",
+        "value": "hunting"
+      }
+    ],
+    "discovery_probability": 0.0004,
+    "spread_rate": 0.05,
+    "effects": {
+      "gather_efficiency": 1.2
+    }
+  },
+  {
+    "id": "tanning",
+    "name": "Tanning",
+    "era": 1,
+    "icon": "\ud83e\udd8c",
+    "description": "Treating animal hides with smoke and oils transforms raw skins into durable leather for clothing and shelter.",
+    "prerequisites": [
+      "hunting",
+      "fire"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "hunting"
+      },
+      {
+        "type": "has_concept",
+        "value": "fire"
+      }
+    ],
+    "discovery_probability": 0.00035,
+    "spread_rate": 0.05,
+    "effects": {
+      "weather_protection": 0.1
+    }
+  },
+  {
+    "id": "domestication",
+    "name": "Domestication",
+    "era": 2,
+    "icon": "\ud83d\udc03",
+    "description": "Living closely with animals over generations turns wild creatures into willing partners in labour and life.",
+    "prerequisites": [
+      "community",
+      "hunting"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "community"
+      },
+      {
+        "type": "has_concept",
+        "value": "hunting"
+      }
+    ],
+    "discovery_probability": 0.00025,
+    "spread_rate": 0.04,
+    "effects": {
+      "gather_efficiency": 1.15
+    }
+  },
+  {
+    "id": "fermentation",
+    "name": "Fermentation",
+    "era": 2,
+    "icon": "\ud83c\udf7a",
+    "description": "Controlled rot transforms grain and fruit into drinks that preserve calories and lift spirits.",
+    "prerequisites": [
+      "cooking"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "cooking"
+      }
+    ],
+    "discovery_probability": 0.0003,
+    "spread_rate": 0.04,
+    "effects": {
+      "hunger_efficiency": 1.1,
+      "max_age_bonus": 0.05
+    }
+  },
+  {
+    "id": "irrigation",
+    "name": "Irrigation",
+    "era": 2,
+    "icon": "\ud83d\udca7",
+    "description": "Channels and ditches carry water from rivers to fields, turning dry land into fertile ground.",
+    "prerequisites": [
+      "agriculture",
+      "stone_tools"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "agriculture"
+      },
+      {
+        "type": "adjacent_to",
+        "value": "WATER"
+      }
+    ],
+    "discovery_probability": 0.00025,
+    "spread_rate": 0.04,
+    "effects": {
+      "gather_efficiency": 1.25,
+      "carrying_capacity_bonus": 1.15
+    }
+  },
+  {
+    "id": "cartography",
+    "name": "Cartography",
+    "era": 2,
+    "icon": "\ud83d\uddfa\ufe0f",
+    "description": "Drawing the shape of the land on bark and hide lets scouts share what they have seen with those who stayed behind.",
+    "prerequisites": [
+      "writing"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "writing"
+      }
+    ],
+    "discovery_probability": 0.0002,
+    "spread_rate": 0.05,
+    "effects": {
+      "discovery_bonus": 1.15
+    }
+  },
+  {
+    "id": "mining",
+    "name": "Mining",
+    "era": 2,
+    "icon": "\u26cf\ufe0f",
+    "description": "Organised extraction of stone and ore from the earth, enabling access to deeper mineral deposits.",
+    "prerequisites": [
+      "stone_tools"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "STONE"
+      },
+      {
+        "type": "has_concept",
+        "value": "stone_tools"
+      }
+    ],
+    "discovery_probability": 0.0003,
+    "spread_rate": 0.04,
+    "effects": {
+      "gather_efficiency": 1.2
+    }
+  },
+  {
+    "id": "metallurgy",
+    "name": "Metallurgy",
+    "era": 3,
+    "icon": "\u2697\ufe0f",
+    "description": "Smelting ores at high heat and alloying metals produces stronger, sharper, more versatile tools and weapons.",
+    "prerequisites": [
+      "fire",
+      "stone_tools",
+      "mining"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "STONE"
+      },
+      {
+        "type": "has_concept",
+        "value": "fire"
+      }
+    ],
+    "discovery_probability": 0.00012,
+    "spread_rate": 0.04,
+    "effects": {
+      "gather_efficiency": 1.3
+    }
+  },
+  {
+    "id": "printing",
+    "name": "Printing",
+    "era": 3,
+    "icon": "\ud83d\udcf0",
+    "description": "Pressing inked blocks onto paper copies knowledge faster than any scribe \u2014 ideas spread like wildfire.",
+    "prerequisites": [
+      "writing"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "writing"
+      }
+    ],
+    "discovery_probability": 0.00012,
+    "spread_rate": 0.04,
+    "effects": {
+      "spread_rate_multiplier": 1.8,
+      "discovery_bonus": 1.1
+    }
+  },
+  {
+    "id": "ecology",
+    "name": "Ecology",
+    "era": 3,
+    "icon": "\ud83c\udf31",
+    "description": "Understanding how plants, animals, soil, and water depend on each other reveals how to live without exhausting the land.",
+    "prerequisites": [
+      "agriculture"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "agriculture"
+      },
+      {
+        "type": "tile_type",
+        "value": "WOODLAND"
+      }
+    ],
+    "discovery_probability": 0.00012,
+    "spread_rate": 0.04,
+    "effects": {
+      "gather_efficiency": 1.1,
+      "carrying_capacity_bonus": 1.1
+    }
+  },
+  {
+    "id": "conservation",
+    "name": "Conservation",
+    "era": 3,
+    "icon": "\ud83c\udf0d",
+    "description": "Choosing to protect forests, rivers, and species ensures the land will provide for generations yet to come.",
+    "prerequisites": [
+      "ecology",
+      "community"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "ecology"
+      },
+      {
+        "type": "has_concept",
+        "value": "community"
+      }
+    ],
+    "discovery_probability": 0.0001,
+    "spread_rate": 0.04,
+    "effects": {
+      "carrying_capacity_bonus": 1.2,
+      "max_age_bonus": 0.05
+    }
+  },
+  {
+    "id": "law",
+    "name": "Law",
+    "era": 3,
+    "icon": "\ud83d\udcd6",
+    "description": "Written codes of conduct and justice give structure to society \u2014 disputes are settled by reason, not force.",
+    "prerequisites": [
+      "governance",
+      "writing"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "governance"
+      },
+      {
+        "type": "has_concept",
+        "value": "writing"
+      }
+    ],
+    "discovery_probability": 0.0001,
+    "spread_rate": 0.04,
+    "effects": {
+      "spread_rate_multiplier": 1.15,
+      "reproduction_cooldown_mult": 0.9
+    }
+  },
+  {
+    "id": "poetry",
+    "name": "Poetry",
+    "era": 3,
+    "icon": "\u270d\ufe0f",
+    "description": "Words shaped with rhythm and beauty carry emotion across generations \u2014 the deepest truths need the fewest words.",
+    "prerequisites": [
+      "language",
+      "art",
+      "music"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "music"
+      },
+      {
+        "type": "has_concept",
+        "value": "art"
+      }
+    ],
+    "discovery_probability": 0.0001,
+    "spread_rate": 0.05,
+    "effects": {
+      "curiosity_bonus": 0.1,
+      "discovery_bonus": 1.05
+    }
+  },
+  {
+    "id": "observation",
+    "name": "Observation",
+    "era": 1,
+    "icon": "\ud83d\udc41\ufe0f",
+    "description": "Careful watching of the natural world \u2014 the movements of animals, patterns of weather, and cycles of seasons \u2014 forms the foundation of all knowledge.",
+    "prerequisites": [],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "FOREST"
+      }
+    ],
+    "discovery_probability": 0.0005,
+    "spread_rate": 0.06,
+    "effects": {
+      "discovery_bonus": 1.05
+    }
+  },
+  {
+    "id": "woodworking",
+    "name": "Woodworking",
+    "era": 2,
+    "icon": "\ud83e\udeb5",
+    "description": "Shaping timber with tools into planks, beams, and joinery enables the construction of boats, buildings, and vehicles.",
+    "prerequisites": [
+      "woodcutting",
+      "stone_tools"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "FOREST"
+      },
+      {
+        "type": "has_concept",
+        "value": "woodcutting"
+      }
+    ],
+    "discovery_probability": 0.0003,
+    "spread_rate": 0.05,
+    "effects": {
+      "gather_efficiency": 1.1
+    }
+  },
+  {
+    "id": "rope_bridge",
+    "name": "Rope Bridge",
+    "era": 3,
+    "icon": "\ud83c\udf09",
+    "description": "Suspending rope and plank across rivers and ravines opens up terrain that was once impassable \u2014 a step toward mastering the world's geography.",
+    "prerequisites": [
+      "rope",
+      "woodworking"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "adjacent_to",
+        "value": "WATER"
+      },
+      {
+        "type": "has_concept",
+        "value": "rope"
+      }
+    ],
+    "discovery_probability": 0.00015,
+    "spread_rate": 0.04,
+    "effects": {
+      "unlocks_bridge_building": true
+    }
+  },
+  {
+    "id": "animism",
+    "name": "Animism",
+    "era": 2,
+    "icon": "\ud83c\udf00",
+    "description": "The belief that animals, plants, and landforms hold spirits \u2014 the first step toward a sacred view of the world.",
+    "prerequisites": [
+      "observation"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "observation"
+      }
+    ],
+    "discovery_probability": 0.0004,
+    "spread_rate": 0.05,
+    "effects": {
+      "unlocks_burial_ritual": true
+    }
+  },
+  {
+    "id": "ritual",
+    "name": "Ritual",
+    "era": 2,
+    "icon": "\ud83d\udd6f\ufe0f",
+    "description": "Repeated sacred acts bind the community in shared meaning and open the door to temple construction.",
+    "prerequisites": [
+      "animism"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "animism"
+      },
+      {
+        "type": "population_nearby",
+        "value": 3
+      }
+    ],
+    "discovery_probability": 0.0003,
+    "spread_rate": 0.04,
+    "effects": {
+      "unlocks_temple_use": true,
+      "spread_rate_multiplier": 1.05
+    }
+  },
+  {
+    "id": "cosmology",
+    "name": "Cosmology",
+    "era": 3,
+    "icon": "\ud83c\udf0c",
+    "description": "An ordered understanding of the heavens \u2014 the stories and systems that place humanity within the cosmos.",
+    "prerequisites": [
+      "astronomy",
+      "ritual"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "astronomy"
+      },
+      {
+        "type": "has_concept",
+        "value": "ritual"
+      }
+    ],
+    "discovery_probability": 0.0002,
+    "spread_rate": 0.04,
+    "effects": {
+      "settlement_morale_bonus": 0.15,
+      "discovery_bonus": 1.1
+    }
+  },
+  {
+    "id": "oral_tradition",
+    "name": "Oral Tradition",
+    "era": 2,
+    "icon": "\ud83d\udce3",
+    "description": "Stories, histories, and knowledge passed mouth to mouth across generations \u2014 a living library that travels wherever the people go.",
+    "prerequisites": [
+      "language"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "language"
+      },
+      {
+        "type": "population_nearby",
+        "value": 3
+      }
+    ],
+    "discovery_probability": 0.0004,
+    "spread_rate": 0.06,
+    "effects": {
+      "concept_spread_rate_mult": 1.25
+    }
+  },
+  {
+    "id": "mythology",
+    "name": "Mythology",
+    "era": 3,
+    "icon": "\ud83d\udc09",
+    "description": "Rich cycles of stories about gods, heroes, and the origin of the world forge a deep cultural identity.",
+    "prerequisites": [
+      "oral_tradition",
+      "animism"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "oral_tradition"
+      },
+      {
+        "type": "has_concept",
+        "value": "animism"
+      }
+    ],
+    "discovery_probability": 0.0002,
+    "spread_rate": 0.05,
+    "effects": {
+      "cultural_identity": true,
+      "spread_rate_multiplier": 1.1
+    }
+  },
+  {
+    "id": "seafaring",
+    "name": "Seafaring",
+    "era": 4,
+    "icon": "\ud83d\udea2",
+    "description": "Deep-keeled ships and navigational knowledge allow crossing open ocean \u2014 contact with distant peoples and lands becomes possible.",
+    "prerequisites": [
+      "rope_bridge",
+      "woodworking"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "adjacent_to",
+        "value": "WATER"
+      },
+      {
+        "type": "has_concept",
+        "value": "woodworking"
+      }
+    ],
+    "discovery_probability": 0.00015,
+    "spread_rate": 0.04,
+    "effects": {
+      "unlocks_ocean_crossing": true,
+      "discovery_bonus": 1.2
+    }
+  },
+  {
+    "id": "conservation",
+    "name": "Conservation",
+    "era": 3,
+    "icon": "\ud83c\udf3f",
+    "description": "Understanding that balance in nature protects future generations — caring for species on the edge of extinction.",
+    "prerequisites": [
+      "ecology",
+      "community"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "ecology"
+      },
+      {
+        "type": "has_concept",
+        "value": "community"
+      }
+    ],
+    "discovery_probability": 0.00025,
+    "spread_rate": 0.04,
+    "effects": {
+      "enables_reintroduction": true
+    }
+  },
+  {
+    "id": "architecture",
+    "name": "Architecture",
+    "era": 4,
+    "icon": "\ud83c\udfd7\ufe0f",
+    "description": "The deliberate design of space, structure, and form \u2014 enabling permanent stone buildings, aqueducts, and monuments.",
+    "prerequisites": [
+      "metallurgy",
+      "governance"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "has_concept",
+        "value": "metallurgy"
+      },
+      {
+        "type": "has_concept",
+        "value": "governance"
+      }
+    ],
+    "discovery_probability": 0.0001,
+    "spread_rate": 0.04,
+    "effects": {
+      "unlocks_stone_buildings": true,
+      "weather_protection": 0.4
+    }
+  }
+]

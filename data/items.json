@@ -1,0 +1,424 @@
+[
+  {
+    "id": "berries",
+    "name": "Berries",
+    "category": "food",
+    "icon": "🫐",
+    "weight": 0.2,
+    "stackSize": 10,
+    "effects": {
+      "hunger": 0.12
+    },
+    "spoilRate": 0.008,
+    "gatherSource": {
+      "tileTypes": [
+        "GRASS",
+        "FOREST"
+      ],
+      "activity": "foraging",
+      "baseYield": [
+        1,
+        3
+      ],
+      "knowledge": []
+    }
+  },
+  {
+    "id": "fish",
+    "name": "Fish",
+    "category": "food",
+    "icon": "🐟",
+    "weight": 0.5,
+    "stackSize": 5,
+    "effects": {
+      "hunger": 0.2
+    },
+    "spoilRate": 0.012,
+    "cookable": true,
+    "cookedId": "cooked_fish",
+    "gatherSource": {
+      "tileTypes": [
+        "GRASS",
+        "FOREST"
+      ],
+      "adjacentTo": "WATER",
+      "activity": "fishing",
+      "baseYield": [
+        1,
+        2
+      ],
+      "knowledge": [
+        "fishing"
+      ]
+    }
+  },
+  {
+    "id": "cooked_fish",
+    "name": "Cooked Fish",
+    "category": "food",
+    "icon": "🍖",
+    "weight": 0.5,
+    "stackSize": 5,
+    "effects": {
+      "hunger": 0.35
+    },
+    "spoilRate": 0.003
+  },
+  {
+    "id": "meat",
+    "name": "Raw Meat",
+    "category": "food",
+    "icon": "🥩",
+    "weight": 0.8,
+    "stackSize": 5,
+    "effects": {
+      "hunger": 0.18
+    },
+    "spoilRate": 0.015,
+    "cookable": true,
+    "cookedId": "cooked_meat",
+    "gatherSource": {
+      "tileTypes": [
+        "FOREST"
+      ],
+      "activity": "hunting",
+      "baseYield": [
+        1,
+        2
+      ],
+      "knowledge": [
+        "hunting"
+      ]
+    }
+  },
+  {
+    "id": "cooked_meat",
+    "name": "Cooked Meat",
+    "category": "food",
+    "icon": "🥩",
+    "weight": 0.6,
+    "stackSize": 5,
+    "effects": {
+      "hunger": 0.4
+    },
+    "spoilRate": 0.003
+  },
+  {
+    "id": "herbs",
+    "name": "Herbs",
+    "category": "food",
+    "icon": "🌿",
+    "weight": 0.1,
+    "stackSize": 10,
+    "effects": {
+      "hunger": 0.05,
+      "health": 0.02
+    },
+    "spoilRate": 0.006,
+    "gatherSource": {
+      "tileTypes": [
+        "FOREST",
+        "WOODLAND"
+      ],
+      "activity": "foraging",
+      "baseYield": [
+        0,
+        2
+      ],
+      "knowledge": [
+        "medicine"
+      ]
+    }
+  },
+  {
+    "id": "medicine",
+    "name": "Medicine",
+    "category": "medicine",
+    "icon": "💊",
+    "weight": 0.2,
+    "stackSize": 5,
+    "effects": {
+      "health": 0.35
+    },
+    "spoilRate": 0.002,
+    "craftFrom": [
+      "herbs",
+      "herbs",
+      "herbs"
+    ],
+    "knowledge": [
+      "herbalism"
+    ]
+  },
+  {
+    "id": "wood",
+    "name": "Wood",
+    "category": "material",
+    "icon": "🪵",
+    "weight": 1.5,
+    "stackSize": 5,
+    "gatherSource": {
+      "tileTypes": [
+        "FOREST"
+      ],
+      "activity": "woodcutting",
+      "baseYield": [
+        1,
+        2
+      ],
+      "knowledge": []
+    }
+  },
+  {
+    "id": "stone",
+    "name": "Stone",
+    "category": "material",
+    "icon": "🪨",
+    "weight": 2.0,
+    "stackSize": 5,
+    "gatherSource": {
+      "tileTypes": [
+        "STONE"
+      ],
+      "activity": "mining",
+      "baseYield": [
+        1,
+        2
+      ],
+      "knowledge": []
+    }
+  },
+  {
+    "id": "hide",
+    "name": "Hide",
+    "category": "material",
+    "icon": "🟫",
+    "weight": 1.0,
+    "stackSize": 5,
+    "gatherSource": {
+      "tileTypes": [
+        "FOREST"
+      ],
+      "activity": "hunting",
+      "baseYield": [
+        0,
+        1
+      ],
+      "knowledge": [
+        "hunting"
+      ]
+    }
+  },
+  {
+    "id": "ore",
+    "name": "Ore",
+    "category": "material",
+    "icon": "⛏️",
+    "weight": 2.5,
+    "stackSize": 3,
+    "gatherSource": {
+      "tileTypes": [
+        "STONE",
+        "MOUNTAIN"
+      ],
+      "activity": "mining",
+      "baseYield": [
+        0,
+        1
+      ],
+      "knowledge": [
+        "metal_tools"
+      ]
+    }
+  },
+  {
+    "id": "stone_tool",
+    "name": "Stone Tool",
+    "category": "tool",
+    "icon": "🪓",
+    "weight": 1.5,
+    "stackSize": 1,
+    "craftFrom": [
+      "stone",
+      "wood"
+    ],
+    "knowledge": [
+      "stone_tools"
+    ],
+    "effects": {
+      "gatherMult": 1.3,
+      "activities": [
+        "woodcutting",
+        "mining",
+        "hunting"
+      ]
+    }
+  },
+  {
+    "id": "fishing_rod",
+    "name": "Fishing Rod",
+    "category": "tool",
+    "icon": "🎣",
+    "weight": 1.0,
+    "stackSize": 1,
+    "craftFrom": [
+      "wood"
+    ],
+    "knowledge": [
+      "fishing"
+    ],
+    "effects": {
+      "gatherMult": 1.2,
+      "activities": [
+        "fishing"
+      ]
+    }
+  },
+  {
+    "id": "rope",
+    "name": "Rope",
+    "category": "tool",
+    "icon": "🪢",
+    "weight": 0.5,
+    "stackSize": 3,
+    "craftFrom": [
+      "plant_fibre"
+    ],
+    "knowledge": [
+      "weaving"
+    ],
+    "effects": {
+      "activities": [
+        "river_crossing",
+        "raft"
+      ]
+    }
+  },
+  {
+    "id": "raw_meat",
+    "name": "Raw Meat",
+    "category": "food",
+    "icon": "🥩",
+    "weight": 0.8,
+    "stackSize": 5,
+    "effects": {
+      "hunger": 0.25
+    },
+    "spoilRate": 0.015
+  },
+  {
+    "id": "mushrooms",
+    "name": "Mushrooms",
+    "category": "food",
+    "icon": "🍄",
+    "weight": 0.3,
+    "stackSize": 8,
+    "effects": {
+      "hunger": 0.18
+    },
+    "poisonChance": 0.15,
+    "poisonEffect": {
+      "health": -0.25
+    },
+    "spoilRate": 0.010,
+    "seasonPreference": "Autumn",
+    "gatherSource": {
+      "tileTypes": [
+        "FOREST"
+      ],
+      "activity": "foraging",
+      "baseYield": [
+        1,
+        3
+      ],
+      "knowledge": []
+    }
+  },
+  {
+    "id": "wild_grain",
+    "name": "Wild Grain",
+    "category": "food",
+    "icon": "🌾",
+    "weight": 0.3,
+    "stackSize": 10,
+    "effects": {
+      "hunger": 0.25
+    },
+    "spoilRate": 0.003,
+    "gatherSource": {
+      "tileTypes": [
+        "GRASS"
+      ],
+      "activity": "foraging",
+      "baseYield": [
+        1,
+        3
+      ],
+      "knowledge": [
+        "agriculture"
+      ]
+    }
+  },
+  {
+    "id": "flour",
+    "name": "Flour",
+    "category": "food",
+    "icon": "🫙",
+    "weight": 0.4,
+    "stackSize": 5,
+    "effects": {},
+    "spoilRate": 0.001,
+    "craftFrom": [
+      "wild_grain",
+      "wild_grain",
+      "wild_grain"
+    ],
+    "knowledge": [
+      "agriculture"
+    ]
+  },
+  {
+    "id": "bread",
+    "name": "Bread",
+    "category": "food",
+    "icon": "🍞",
+    "weight": 0.5,
+    "stackSize": 5,
+    "effects": {
+      "hunger": 0.6
+    },
+    "spoilRate": 0.0005,
+    "craftFrom": [
+      "flour"
+    ],
+    "knowledge": [
+      "fire_making",
+      "agriculture"
+    ]
+  },
+  {
+    "id": "medicinal_herb",
+    "name": "Medicinal Herb",
+    "category": "food",
+    "icon": "🌱",
+    "weight": 0.1,
+    "stackSize": 10,
+    "effects": {
+      "health": 0.2
+    },
+    "spoilRate": 0.005,
+    "gatherSource": {
+      "tileTypes": [
+        "WOODLAND"
+      ],
+      "activity": "foraging",
+      "baseYield": [
+        1,
+        2
+      ],
+      "knowledge": [
+        "herbalism"
+      ]
+    }
+  }
+]
