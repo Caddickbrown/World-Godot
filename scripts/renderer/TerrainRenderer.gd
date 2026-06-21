@@ -35,13 +35,13 @@ func _build_mesh() -> void:
 	for z in range(World.WORLD_HEIGHT):
 		for x in range(World.WORLD_WIDTH):
 			var tile: Dictionary = world.tiles[z][x]
-			var color := tile_color(tile["type"])
+			var color := tile_color(int(tile["type"]))
 
 			# River tint
 			if tile.get("river", false):
 				color = color.lerp(Color(0.2, 0.5, 0.85), 0.4)
 
-			var elev: float = tile["elevation"]
+			var elev: float = float(tile["elevation"])
 			# Cut trees appear darker
 			if tile.get("tree_cut", false):
 				color = color.darkened(0.3)

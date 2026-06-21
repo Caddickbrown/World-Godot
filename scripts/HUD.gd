@@ -35,7 +35,7 @@ func update(data: Dictionary) -> void:
 	_set_text(lbl_day,    "Day %d" % data.get("day", 1))
 	_set_text(lbl_season, data.get("season", "Spring"))
 
-	var h := data.get("hour", 8.0)
+	var h: float = data.get("hour", 8.0)
 	var hh := int(h)
 	var mm := int((h - hh) * 60.0)
 	_set_text(lbl_time, "%02d:%02d" % [hh, mm])

@@ -244,7 +244,7 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 			var sleep_mult := 1.6 if knowledge.has("shelter") else 1.0
 			if knowledge.has("housing"): sleep_mult *= 1.15
 			if night_sleeping: sleep_mult *= 1.5
-			var task_bonus := get_tasks().get(task, {}).get("rest_bonus", 1.0)
+			var task_bonus: float = float(get_tasks().get(task, {}).get("rest_bonus", 1.0))
 			sleep_mult *= task_bonus
 			needs["energy"] = minf(1.0, needs["energy"] + ENERGY_RECOVER * delta * 1.4 * sleep_mult)
 			rest_timer -= delta
@@ -311,7 +311,7 @@ func _on_arrival(world: World, all_agents: Array, concept_graph: ConceptGraph) -
 			if knowledge.has("metal_tools"):    tool_mult *= 1.25
 			if knowledge.has("agriculture") and tile["type"] == World.TileType.GRASS: tool_mult *= 1.35
 			var cook_mult := 1.6 if knowledge.has("cooking") else 1.0
-			var yield_val := maxf(0.15, tile["resource"])
+			var yield_val: float = maxf(0.15, float(tile["resource"]))
 			needs["hunger"] = minf(1.0, needs["hunger"] + 0.60 * tool_mult * cook_mult * yield_val)
 			tile["resource"] = maxf(0.0, tile["resource"] - 0.28 / tool_mult)
 			if tile.get("depletion_level", -1.0) >= 0.0:
@@ -321,8 +321,8 @@ func _on_arrival(world: World, all_agents: Array, concept_graph: ConceptGraph) -
 
 func _decide_action(world: World, all_agents: Array, concept_graph: ConceptGraph, time_system: TimeSystem) -> void:
 	var task_def: Dictionary = get_tasks().get(task, {})
-	var gather_threshold: float = task_def.get("gather_threshold", 0.25)
-	var rest_threshold: float = task_def.get("rest_threshold", 0.2)
+	var gather_threshold: float = float(task_def.get("gather_threshold", 0.25))
+	var rest_threshold: float = float(task_def.get("rest_threshold", 0.2))
 	var env_mult := _last_weather_mult
 
 	if health < 0.40: _try_use_medicine()
@@ -390,16 +390,16 @@ func _decide_action(world: World, all_agents: Array, concept_graph: ConceptGraph
 # ── Target selection ─────────────────────────────────────────────────────────
 
 func _pick_wander_target(world: World, all_agents: Array = []) -> void:
-	var task_def := get_tasks().get(task, {})
-	var radius_bonus: int = task_def.get("wander_radius_bonus", 0)
+	var task_def: Dictionary = get_tasks().get(task, {})
+	var radius_bonus: int = int(task_def.get("wander_radius_bonus", 0))
 	var radius := 4 + int(curiosity * 4) + radius_bonus
 
 	# Bonded partner bias
 	if bonded_partner_id >= 0 and not all_agents.is_empty() and randf() < 0.4:
 		for other in all_agents:
 			if other.agent_id == bonded_partner_id and other.health > 0.0:
-				var dx := other.pos.x - pos.x
-				var dz := other.pos.y - pos.y
+				var dx: float = other.pos.x - pos.x
+				var dz: float = other.pos.y - pos.y
 				var dist := sqrt(dx * dx + dz * dz)
 				if dist > 2.0:
 					var step := minf(float(radius), dist * 0.7)
@@ -548,7 +548,7 @@ static func inherit_personality(pa: Dictionary, pb: Dictionary) -> Dictionary:
 	var traits := ["curiosity", "sociability", "industriousness", "courage", "creativity", "caution"]
 	var child := {}
 	for t in traits:
-		var parent_val := (pa.get(t, 0.5) + pb.get(t, 0.5)) / 2.0
+		var parent_val: float = (float(pa.get(t, 0.5)) + float(pb.get(t, 0.5))) / 2.0
 		var mutation := (randf() - 0.5) * 0.1
 		child[t] = clampf(parent_val + mutation, 0.0, 1.0)
 	return child

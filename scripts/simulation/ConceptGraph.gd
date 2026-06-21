@@ -19,7 +19,7 @@ func check_discovery(agent: Agent, tile: Dictionary, delta: float, world: World,
 		if not _prerequisites_met(agent, concept): continue
 		if not _conditions_met(agent, tile, concept, world, all_agents): continue
 
-		var prob: float = concept.get("discovery_probability", 0.0001) * agent.curiosity * delta
+		var prob: float = float(concept.get("discovery_probability", 0.0001)) * agent.curiosity * delta
 		if agent.knowledge.has("curiosity_culture"): prob *= 1.2
 		if agent.task == "scout": prob *= 1.15
 
@@ -47,7 +47,7 @@ func _prerequisites_met(agent: Agent, concept: Dictionary) -> bool:
 func _conditions_met(agent: Agent, tile: Dictionary, concept: Dictionary, world: World, all_agents: Array) -> bool:
 	for cond in concept.get("discovery_conditions", []):
 		var ctype: String = cond.get("type", "")
-		var value = cond.get("value", "")
+		var value: Variant = cond.get("value", "")
 		match ctype:
 			"tile_type":
 				if World.TileType.keys()[tile.get("type", -1)] != value and \
@@ -58,7 +58,7 @@ func _conditions_met(agent: Agent, tile: Dictionary, concept: Dictionary, world:
 				for other in all_agents:
 					if other == agent: continue
 					if other.health <= 0: continue
-					if abs(other.pos.x - agent.pos.x) + abs(other.pos.z - agent.pos.z) < 5.0:
+					if abs(other.pos.x - agent.pos.x) + abs(other.pos.y - agent.pos.y) < 5.0:
 						count += 1
 				if count < int(value): return false
 			"has_knowledge":
@@ -89,7 +89,7 @@ func try_spread(agent_a: Agent, agent_b: Agent, delta_time: float = 5.0) -> void
 		var learner: Agent = agent_b if a_knows else agent_a
 		var teacher: Agent = agent_a if a_knows else agent_b
 
-		var spread_rate: float = concept.get("spread_rate", 0.01) * delta_time
+		var spread_rate: float = float(concept.get("spread_rate", 0.01)) * delta_time
 		if teacher.knowledge.has("language"): spread_rate *= 2.0
 		if teacher.knowledge.has("writing"):  spread_rate *= 1.5
 		if teacher.task == "teacher":         spread_rate *= 1.1

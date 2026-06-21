@@ -118,11 +118,11 @@ func _generate() -> void:
 				continue
 			var all_water := true
 			for delta_pair in [[-1,0],[1,0],[0,-1],[0,1]]:
-				var nx := x + delta_pair[0]
-				var nz := z + delta_pair[1]
+				var nx: int = x + delta_pair[0]
+				var nz: int = z + delta_pair[1]
 				if nx < 0 or nx >= width or nz < 0 or nz >= height:
 					continue
-				var nt: int = tiles[nz][nx]["type"]
+				var nt: int = int(tiles[nz][nx]["type"])
 				if nt != TileType.WATER and nt != TileType.DEEP_WATER:
 					all_water = false
 					break
@@ -159,8 +159,8 @@ func _base_elevation(t: int) -> float:
 
 func _has_adj_type(x: int, z: int, t: int) -> bool:
 	for d in [[-1,0],[1,0],[0,-1],[0,1]]:
-		var nx := x + d[0]
-		var nz := z + d[1]
+		var nx: int = x + d[0]
+		var nz: int = z + d[1]
 		if nx < 0 or nx >= width or nz < 0 or nz >= height: continue
 		if tiles[nz][nx]["type"] == t: return true
 	return false
@@ -174,8 +174,8 @@ func _generate_glaciers() -> void:
 			for dz in [-1, 0, 1]:
 				for dx in [-1, 0, 1]:
 					if dx == 0 and dz == 0: continue
-					var nx := x + dx
-					var nz := z + dz
+					var nx: int = x + dx
+					var nz: int = z + dz
 					if nx < 0 or nx >= width or nz < 0 or nz >= height: continue
 					if tiles[nz][nx]["type"] == TileType.MOUNTAIN:
 						near_mountain = true
@@ -194,7 +194,7 @@ func _generate_rivers() -> void:
 
 	for z in range(height):
 		for x in range(width):
-			var t: int = tiles[z][x]["type"]
+			var t: int = int(tiles[z][x]["type"])
 			if t != TileType.MOUNTAIN and t != TileType.STONE: continue
 			if _rng(x, z, 400) >= RIVER_CHANCE: continue
 
@@ -209,8 +209,8 @@ func _generate_rivers() -> void:
 				var best_x := -1
 				var best_z := -1
 				for d in dirs:
-					var nx := cx + d[0]
-					var nz := cz + d[1]
+					var nx: int = cx + d[0]
+					var nz: int = cz + d[1]
 					if nx < 0 or nx >= width or nz < 0 or nz >= height: continue
 					if tiles[nz][nx]["type"] in blocked: continue
 					var ne := _noise(nx, nz)
@@ -246,14 +246,14 @@ func get_tile_f(x: float, z: float) -> Dictionary:
 func is_walkable(x: float, z: float) -> bool:
 	var tile := get_tile_f(x, z)
 	if tile.is_empty(): return false
-	var t: int = tile["type"]
+	var t: int = int(tile["type"])
 	return t != TileType.WATER and t != TileType.DEEP_WATER and \
 		   t != TileType.MOUNTAIN and t != TileType.GLACIER
 
 func can_traverse(x: float, z: float, knowledge: Dictionary) -> bool:
 	var tile := get_tile_f(x, z)
 	if tile.is_empty(): return false
-	var t: int = tile["type"]
+	var t: int = int(tile["type"])
 	if t == TileType.WATER or t == TileType.DEEP_WATER:
 		return knowledge.has("sailing")
 	if t == TileType.MOUNTAIN:
@@ -315,7 +315,7 @@ func update_cut_trees(delta: float) -> void:
 			to_remove.append(key)
 	for key in to_remove:
 		cut_trees.erase(key)
-		var parts := key.split(",")
+		var parts: PackedStringArray = key.split(",")
 		var tile := get_tile(int(parts[0]), int(parts[1]))
 		if not tile.is_empty():
 			tile["tree_cut"] = false
@@ -373,7 +373,7 @@ func get_land_spawn_points(count: int) -> Array:
 	var candidates: Array = []
 	for z in range(height):
 		for x in range(width):
-			var t: int = tiles[z][x]["type"]
+			var t: int = int(tiles[z][x]["type"])
 			if t == TileType.GRASS or t == TileType.WOODLAND or t == TileType.FOREST:
 				candidates.append({"x": x + 0.5, "z": z + 0.5})
 	candidates.shuffle()
@@ -383,7 +383,7 @@ func get_carrying_capacity() -> int:
 	var food_tiles := 0
 	for z in range(height):
 		for x in range(width):
-			var t: int = tiles[z][x]["type"]
+			var t: int = int(tiles[z][x]["type"])
 			if t == TileType.GRASS or t == TileType.WOODLAND or t == TileType.FOREST:
 				food_tiles += 1
 	return maxi(40, int(25 + food_tiles * 0.18))

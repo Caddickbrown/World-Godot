@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/dcb/Code/world-godot log --oneline -5)",
+      "Bash(git *)",
+      "Bash(gh repo *)"
+    ]
+  }
+}

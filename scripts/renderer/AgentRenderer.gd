@@ -48,7 +48,7 @@ func _add_node(agent: Agent) -> void:
 
 func update() -> void:
 	for agent in agents:
-		var node: MeshInstance3D = _agent_nodes.get(agent.agent_id)
+		var node: MeshInstance3D = _agent_nodes.get(agent.agent_id) as MeshInstance3D
 		if node == null:
 			_add_node(agent)
 			node = _agent_nodes[agent.agent_id]

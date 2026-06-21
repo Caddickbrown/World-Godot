@@ -107,7 +107,7 @@ func _init_world() -> void:
 	agents.clear()
 	var spawn_pts := world.get_spawn_points(AGENT_COUNT)
 	for p in spawn_pts:
-		var a := Agent.new(p["x"], p["z"])
+		var a := Agent.new(float(p["x"]), float(p["z"]))
 		agents.append(a)
 
 	# Terrain renderer
@@ -198,26 +198,27 @@ func _handle_births() -> void:
 	var capacity := world.get_carrying_capacity()
 	for evt in concept_graph.drain_birth_events():
 		if alive.size() >= capacity: break
-		var bx: float = evt["x"]
-		var bz: float = evt["z"]
+		var bx: float = float(evt["x"])
+		var bz: float = float(evt["z"])
 		if not world.is_walkable(bx, bz):
 			var tile := world.find_nearest(bx, bz, [World.TileType.GRASS, World.TileType.FOREST], 4.0)
 			if tile.is_empty(): continue
-			bx = tile["x"] + 0.5
-			bz = tile["z"] + 0.5
+			bx = float(tile["x"]) + 0.5
+			bz = float(tile["z"]) + 0.5
 		var child := Agent.new(bx, bz)
 
 		if evt.has("parent_a_id"):
 			child.parents.append(evt["parent_a_id"])
-			var pa: Agent = _find_agent(evt["parent_a_id"])
+			var pa: Agent = _find_agent(int(evt["parent_a_id"]))
 			if pa: pa.children.append(child.agent_id)
 		if evt.has("parent_b_id"):
 			child.parents.append(evt["parent_b_id"])
-			var pb: Agent = _find_agent(evt["parent_b_id"])
+			var pb: Agent = _find_agent(int(evt["parent_b_id"]))
 			if pb: pb.children.append(child.agent_id)
 
 		if evt.has("parent_a_personality") and evt.has("parent_b_personality"):
-			child.personality = Agent.inherit_personality(evt["parent_a_personality"], evt["parent_b_personality"])
+			child.personality = Agent.inherit_personality(
+				evt["parent_a_personality"] as Dictionary, evt["parent_b_personality"] as Dictionary)
 
 		agents.append(child)
 		agent_renderer.add_agent(child)
@@ -228,10 +229,10 @@ func _handle_births() -> void:
 func _handle_events() -> void:
 	for evt in concept_graph.drain_events():
 		if evt["type"] == "discovery":
-			var concept: Dictionary = concept_graph.concepts.get(evt["concept_id"], {})
-			var cname: String = concept.get("name", evt["concept_id"])
-			_push_notification(evt["agent_name"] + " discovered " + cname + "!")
-			var agent := _find_agent(evt["agent_id"])
+			var concept: Dictionary = concept_graph.concepts.get(str(evt["concept_id"]), {})
+			var cname: String = concept.get("name", str(evt["concept_id"]))
+			_push_notification(str(evt["agent_name"]) + " discovered " + cname + "!")
+			var agent: Agent = _find_agent(int(evt["agent_id"]))
 			if agent:
 				agent.discovery_flash = 1.5
 				if evt["concept_id"] == "organisation":
@@ -350,8 +351,9 @@ func _handle_camera_pan(delta: float) -> void:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey:
-		var k := event.keycode
-		var down := event.pressed
+		var e := event as InputEventKey
+		var k: Key = e.keycode
+		var down: bool = e.pressed
 		match k:
 			KEY_W: _pan_keys["w"] = down
 			KEY_S: _pan_keys["s"] = down
@@ -388,9 +390,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				_is_dragging = false
 
 	if event is InputEventMouseMotion and _is_dragging:
+		var em := event as InputEventMouseMotion
 		var scale := _cam_distance / 400.0
-		var dx := (event.position.x - _drag_start.x) * scale
-		var dz := (event.position.y - _drag_start.y) * scale
+		var dx: float = (em.position.x - _drag_start.x) * scale
+		var dz: float = (em.position.y - _drag_start.y) * scale
 		var fwd := Vector3(sin(_cam_angle_h), 0, cos(_cam_angle_h))
 		var right := Vector3(cos(_cam_angle_h), 0, -sin(_cam_angle_h))
 		_cam_target = _drag_cam_target - right * dx + fwd * dz
@@ -421,8 +424,8 @@ func _handle_click(screen_pos: Vector2) -> void:
 	var best_dist := 3.0  # tiles radius
 	for a in agents:
 		if a.health <= 0.0 or a.is_dead: continue
-		var ax := a.pos.x * TILE_SIZE
-		var az := a.pos.y * TILE_SIZE
+		var ax: float = a.pos.x * TILE_SIZE
+		var az: float = a.pos.y * TILE_SIZE
 		var dist := Vector2(world_pos.x - ax, world_pos.z - az).length()
 		if dist < best_dist:
 			best_dist = dist
