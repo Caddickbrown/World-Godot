@@ -1,46 +1,71 @@
 class_name SettlementRenderer
 extends Node3D
 
-const TILE_SIZE    := World.TILE_SIZE
-const HOUSE_PATH   := "res://assets/buildings/Prop_House.fbx"
-const TOPDECO_PATH := "res://assets/buildings/Prop_House_TopDeco.fbx"
-const FENCE_PATH   := "res://assets/buildings/Prop_Fence.fbx"
+const TILE_SIZE := World.TILE_SIZE
 
-# House scale — Prop_House.fbx is modelled at ~1 unit = 1 cm in Unity
-# so import scale ~0.01 makes it ~1 m.  Adjust here if it looks wrong.
-const HOUSE_SCALE := 0.8
+# Buildings unlocked progressively as concepts are discovered.
+# Era 0 (no concepts): nothing
+# Era 1 (1-4): shelters
+# Era 2 (5-9): huts
+# Era 3 (10-15): houses
+# Era 4 (16-21): houses + specialist buildings
+# Era 5 (22+): full town with church, blacksmith, tavern
+const BUILDING_TIERS: Array = [
+	[],  # era 0 — wilderness
+	["res://assets/buildings/synty/SM_Bld_Preset_Shelter_01_Optimized.fbx",
+	 "res://assets/buildings/synty/SM_Bld_Preset_Shelter_02_Optimized.fbx"],
+	["res://assets/buildings/synty/SM_Bld_Preset_Hut_01_Optimized.fbx",
+	 "res://assets/buildings/synty/SM_Bld_Preset_Hut_02_Optimized.fbx"],
+	["res://assets/buildings/synty/SM_Bld_Preset_House_01_A_Optimized.fbx",
+	 "res://assets/buildings/synty/SM_Bld_Preset_House_02_A_Optimized.fbx",
+	 "res://assets/buildings/synty/SM_Bld_Preset_House_03_Optimized.fbx"],
+	["res://assets/buildings/synty/SM_Bld_Preset_House_01_A_Optimized.fbx",
+	 "res://assets/buildings/synty/SM_Bld_Preset_House_02_A_Optimized.fbx",
+	 "res://assets/buildings/synty/SM_Bld_Preset_Blacksmith_01_Optimized.fbx",
+	 "res://assets/buildings/synty/SM_Bld_Preset_Stables_01_Optimized.fbx"],
+	["res://assets/buildings/synty/SM_Bld_Preset_House_01_A_Optimized.fbx",
+	 "res://assets/buildings/synty/SM_Bld_Preset_House_03_Optimized.fbx",
+	 "res://assets/buildings/synty/SM_Bld_Preset_Tavern_01_Optimized.fbx",
+	 "res://assets/buildings/synty/SM_Bld_Preset_Church_01_A_Optimized.fbx",
+	 "res://assets/buildings/synty/SM_Bld_Preset_Blacksmith_01_Optimized.fbx"],
+]
 
-var _house_scene: PackedScene    # null until imported
-var _topdeco_scene: PackedScene
-var _fence_scene: PackedScene
-var _house_tex: Texture2D
+# Campfire prop shown at every settlement regardless of era
+const FIREPIT_PATH := "res://assets/props/SM_Prop_Camp_Firepit_01.fbx"
 
-# settlement_key (e.g. "12,7") → Node3D root
-var _placed: Dictionary = {}
+# Synty models are in Unity units; 0.9 gives ~1 tile footprint for a house
+const BUILDING_SCALE := 0.9
+
+var _mat: StandardMaterial3D
+var _scenes: Dictionary = {}         # path → PackedScene or null
+var _placed: Dictionary = {}         # settlement_key → { node, era, path }
+var _current_era: int = 0
 
 func _ready() -> void:
-	_load_assets()
+	_mat = SyntyMaterial.make()
+	_cache_scenes()
 
-func _load_assets() -> void:
-	var tex := load("res://assets/buildings/Color Texture.png")
-	if tex is Texture2D:
-		_house_tex = tex as Texture2D
+func _cache_scenes() -> void:
+	var all_paths: Array = []
+	for tier in BUILDING_TIERS:
+		for p in tier:
+			if not all_paths.has(p):
+				all_paths.append(p)
+	all_paths.append(FIREPIT_PATH)
 
-	if ResourceLoader.exists(HOUSE_PATH):
-		var r := load(HOUSE_PATH)
-		if r is PackedScene: _house_scene = r as PackedScene
+	for path in all_paths:
+		var p: String = str(path)
+		if ResourceLoader.exists(p):
+			var res := load(p)
+			_scenes[p] = res if res is PackedScene else null
+		else:
+			_scenes[p] = null
 
-	if ResourceLoader.exists(TOPDECO_PATH):
-		var r := load(TOPDECO_PATH)
-		if r is PackedScene: _topdeco_scene = r as PackedScene
-
-	if ResourceLoader.exists(FENCE_PATH):
-		var r := load(FENCE_PATH)
-		if r is PackedScene: _fence_scene = r as PackedScene
-
-# Called from Main each frame with the current set of active settlement tiles.
-# tiles_xz is an Array of [x, z] int pairs.
-func sync(settlement_tiles: Array) -> void:
+# Called from Main each frame.
+# settlement_tiles: Array of [x, z] pairs.
+# era: int 0-5 from _get_era_index().
+func sync(settlement_tiles: Array, era: int) -> void:
+	_current_era = era
 	var active_keys: Dictionary = {}
 
 	for pair in settlement_tiles:
@@ -48,58 +73,71 @@ func sync(settlement_tiles: Array) -> void:
 		var tz: int = int(pair[1])
 		var key: String = "%d,%d" % [tx, tz]
 		active_keys[key] = true
-		if not _placed.has(key):
-			_place_house(tx, tz, key)
 
-	# Remove houses whose settlement has dissolved
+		var path: String = _pick_building(tx, tz, era)
+		if not _placed.has(key):
+			_place(tx, tz, key, path, era)
+		else:
+			# Upgrade if era increased or path differs
+			var entry: Dictionary = _placed[key] as Dictionary
+			if int(entry.get("era", -1)) != era:
+				var old_node: Node3D = entry.get("node") as Node3D
+				if old_node: old_node.queue_free()
+				_placed.erase(key)
+				_place(tx, tz, key, path, era)
+
+	# Remove dissolved settlements
 	for key in _placed.keys():
 		if not active_keys.has(key):
-			var node: Node3D = _placed[key] as Node3D
+			var entry: Dictionary = _placed[key] as Dictionary
+			var node: Node3D = entry.get("node") as Node3D
 			if node: node.queue_free()
 			_placed.erase(key)
 
-func _place_house(tx: int, tz: int, key: String) -> void:
+func _pick_building(tx: int, tz: int, era: int) -> String:
+	if era == 0: return ""
+	var tier: Array = BUILDING_TIERS[clampi(era, 0, BUILDING_TIERS.size() - 1)]
+	if tier.is_empty(): return ""
+	var idx: int = (tx * 7 + tz * 13) % tier.size()
+	return str(tier[idx])
+
+func _place(tx: int, tz: int, key: String, path: String, era: int) -> void:
+	if era == 0: return
+
 	var root := Node3D.new()
 	root.position = Vector3(
 		(float(tx) + 0.5) * TILE_SIZE,
 		0.0,
 		(float(tz) + 0.5) * TILE_SIZE
 	)
-	root.scale = Vector3(HOUSE_SCALE, HOUSE_SCALE, HOUSE_SCALE)
+	# Vary rotation so not every building faces the same way
+	root.rotation.y = float((tx + tz) % 4) * (PI * 0.5)
 	add_child(root)
 
-	if _house_scene:
-		var inst := _house_scene.instantiate()
+	# Building mesh
+	var packed: PackedScene = _scenes.get(path) as PackedScene
+	if packed:
+		var inst := packed.instantiate()
 		if inst is Node3D:
-			_apply_tex(inst as Node3D)
-			root.add_child(inst)
+			var building := inst as Node3D
+			building.scale = Vector3(BUILDING_SCALE, BUILDING_SCALE, BUILDING_SCALE)
+			SyntyMaterial.apply_to(building, _mat)
+			root.add_child(building)
 	else:
 		_add_fallback(root)
 
-	if _topdeco_scene:
-		var deco := _topdeco_scene.instantiate()
-		if deco is Node3D:
-			_apply_tex(deco as Node3D)
-			root.add_child(deco)
+	# Firepit prop at every settlement (era 1+)
+	var fp: PackedScene = _scenes.get(FIREPIT_PATH) as PackedScene
+	if fp:
+		var fire_inst := fp.instantiate()
+		if fire_inst is Node3D:
+			var fire := fire_inst as Node3D
+			fire.position = Vector3(0.3, 0.0, 0.3)
+			fire.scale = Vector3(0.8, 0.8, 0.8)
+			SyntyMaterial.apply_to(fire, _mat)
+			root.add_child(fire)
 
-	_placed[key] = root
-
-func _apply_tex(node: Node3D) -> void:
-	if not _house_tex: return
-	if node is MeshInstance3D:
-		var mi := node as MeshInstance3D
-		if mi.mesh:
-			for s in range(mi.mesh.get_surface_count()):
-				var mat := mi.get_active_material(s)
-				if mat is StandardMaterial3D:
-					var sm := mat as StandardMaterial3D
-					if sm.albedo_texture == null:
-						var nm := sm.duplicate() as StandardMaterial3D
-						nm.albedo_texture = _house_tex
-						mi.set_surface_override_material(s, nm)
-	for child in node.get_children():
-		if child is Node3D:
-			_apply_tex(child as Node3D)
+	_placed[key] = {"node": root, "era": era, "path": path}
 
 func _add_fallback(root: Node3D) -> void:
 	var mi := MeshInstance3D.new()
@@ -108,13 +146,14 @@ func _add_fallback(root: Node3D) -> void:
 	mi.mesh = box
 	mi.position.y = 0.5
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.85, 0.75, 0.60)
+	mat.albedo_color = Color(0.78, 0.68, 0.52)
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mi.material_override = mat
 	root.add_child(mi)
 
 func clear() -> void:
 	for key in _placed:
-		var node: Node3D = _placed[key] as Node3D
+		var entry: Dictionary = _placed[key] as Dictionary
+		var node: Node3D = entry.get("node") as Node3D
 		if node: node.queue_free()
 	_placed.clear()

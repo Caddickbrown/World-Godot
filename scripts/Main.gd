@@ -19,6 +19,7 @@ var terrain_renderer: TerrainRenderer
 var agent_renderer: AgentRenderer
 var animal_renderer: AnimalRenderer
 var settlement_renderer: SettlementRenderer
+var environment_renderer: EnvironmentRenderer
 
 # Wildlife simulation
 var animal_sim: AnimalSim
@@ -145,6 +146,13 @@ func _init_world() -> void:
 		settlement_renderer.queue_free()
 	settlement_renderer = SettlementRenderer.new()
 	add_child(settlement_renderer)
+
+	# Environment props (trees, bushes, rocks) — placed once at world init
+	if environment_renderer:
+		environment_renderer.queue_free()
+	environment_renderer = EnvironmentRenderer.new()
+	add_child(environment_renderer)
+	environment_renderer.setup(world)
 
 	game_over = false
 	selected_agent = null
@@ -325,6 +333,14 @@ func _get_era(n: int) -> String:
 	if n < 30:  return "Classical Age"
 	return "Advanced Age"
 
+func _get_era_index(n: int) -> int:
+	if n == 0:  return 0
+	if n < 5:   return 1
+	if n < 10:  return 2
+	if n < 16:  return 3
+	if n < 22:  return 4
+	return 5
+
 func _show_game_over() -> void:
 	var hud := get_node_or_null("HUD")
 	if hud and hud.has_method("show_game_over"):
@@ -476,14 +492,18 @@ func _update_settlements() -> void:
 	if not org_known:
 		return
 
-	# Place a house wherever there's an active campfire
+	# Determine era index for building tier selection
+	var discovered_count: int = concept_graph.get_discovered_concepts().size()
+	var era_idx: int = _get_era_index(discovered_count)
+
+	# Place buildings wherever there's an active campfire
 	var settlement_tiles: Array = []
 	for key in world.natural_fires:
 		var parts: PackedStringArray = key.split(",")
 		if parts.size() == 2:
 			settlement_tiles.append([int(parts[0]), int(parts[1])])
 
-	settlement_renderer.sync(settlement_tiles)
+	settlement_renderer.sync(settlement_tiles, era_idx)
 
 # ── Utility ───────────────────────────────────────────────────────────────────
 
