@@ -86,7 +86,7 @@ func tick(delta: float, agents: Array, concept_graph: ConceptGraph, day: int, hi
 	_tick_inter_contact(day, history_log)
 
 
-func get_settlement_for_agent(agent_id: int) -> Settlement:
+func get_settlement_for_agent(agent_id: int) -> RefCounted:
 	for s: Settlement in settlements:
 		if s.member_ids.has(agent_id):
 			return s
@@ -237,7 +237,7 @@ func _sync_knowledge_pool(agents: Array, concept_graph: ConceptGraph) -> void:
 		# Agents who just joined — contribute knowledge to pool
 		for a: Agent in agents:
 			if current_set.has(a.agent_id) and not prev_set.has(a.agent_id):
-				for k: Variant in a.knowledge.keys():
+				for k in a.knowledge.keys():
 					var concept_key: String = str(k)
 					s.knowledge_pool[concept_key] = true
 
@@ -255,7 +255,7 @@ func _sync_knowledge_pool(agents: Array, concept_graph: ConceptGraph) -> void:
 		# Contributing all current members' knowledge to pool each tick
 		for a: Agent in agents:
 			if current_set.has(a.agent_id):
-				for k: Variant in a.knowledge.keys():
+				for k in a.knowledge.keys():
 					s.knowledge_pool[str(k)] = true
 
 		_prev_members[s.id] = s.member_ids.duplicate()
@@ -327,7 +327,7 @@ func _find_centroid(agent_positions: Array) -> Vector2:
 	if agent_positions.is_empty():
 		return Vector2.ZERO
 	var sum: Vector2 = Vector2.ZERO
-	for p: Variant in agent_positions:
+	for p in agent_positions:
 		sum += p as Vector2
 	return sum / float(agent_positions.size())
 

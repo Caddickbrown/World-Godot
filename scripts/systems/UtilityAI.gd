@@ -84,7 +84,7 @@ func best_action(agent: Agent, world: World, item_defs: Dictionary) -> String:
 	var scores: Dictionary = score_actions(agent, world, item_defs)
 	var best_id: String = "wander"
 	var best_score: float = -1.0
-	for action: Variant in scores.keys():
+	for action in scores.keys():
 		var s: float = float(scores[action])
 		if s > best_score:
 			best_score = s

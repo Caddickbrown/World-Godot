@@ -41,7 +41,7 @@ func play_birth() -> void:
 	for i: int in range(num_samples):
 		var t: float = float(i) / SAMPLE_RATE
 		var s: float = 0.0
-		for freq: Variant in freqs:
+		for freq in freqs:
 			s += sin(TAU * float(freq) * t)
 		samples[i] = s * (0.2 / float(freqs.size()))
 	_play_samples(samples)
@@ -69,7 +69,7 @@ func play_achievement() -> void:
 	# Fanfare: C5 → G5 → C6, 100ms each, amp 0.35
 	var freqs: Array = [523.25, 783.99, 1046.50]
 	var all_samples: PackedFloat32Array = PackedFloat32Array()
-	for freq: Variant in freqs:
+	for freq in freqs:
 		var note: PackedFloat32Array = _make_sine(float(freq), 0.1, 0.35)
 		all_samples.append_array(note)
 	_play_samples(all_samples)

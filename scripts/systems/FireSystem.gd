@@ -11,15 +11,10 @@ var lightning_fire_pos: Vector2 = Vector2(-1.0, -1.0)
 const SPREAD_INTERVAL    := 2.0
 const SPREAD_CHANCE      := 0.02   # per adjacent flammable tile per interval
 const LIGHTNING_CHANCE   := 0.001  # per second during storms (0.1 %)
-const FIRE_BURNOUT_TYPE  := World.TileType.GRASS
 const SOIL_QUALITY_BOOST := 0.1
-
-# Tile types that can catch fire or spread fire.
-const FLAMMABLE_TYPES: Array = [
-	World.TileType.FOREST,
-	World.TileType.WOODLAND,
-	World.TileType.GRASS,
-]
+# World.TileType.GRASS=3, WOODLAND=4, FOREST=5 — stored as ints to avoid cross-class const eval
+const FIRE_BURNOUT_TYPE  := 3
+var _flammable_types: Array = [5, 4, 3]  # FOREST, WOODLAND, GRASS
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
@@ -95,7 +90,7 @@ func _do_spread(world: World, game_time: float) -> void:
 			if tile.is_empty():
 				continue
 			var tile_type: int = int(tile.get("type", -1))
-			if not (tile_type in FLAMMABLE_TYPES):
+			if not (tile_type in _flammable_types):
 				continue
 			if randf() < SPREAD_CHANCE:
 				var duration: float = 30.0 + randf() * 30.0
@@ -119,7 +114,7 @@ func _extinguish(
 		return
 
 	# FOREST → GRASS conversion on burnout.
-	if int(tile.get("type", -1)) == World.TileType.FOREST:
+	if int(tile.get("type", -1)) == 5:  # World.TileType.FOREST
 		tile["type"]     = FIRE_BURNOUT_TYPE
 		tile["tree_cut"] = false
 		tile["resource"] = 0.2

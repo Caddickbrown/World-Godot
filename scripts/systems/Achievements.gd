@@ -70,17 +70,17 @@ func tick(agents: Array, concept_graph: ConceptGraph, day: int) -> Array:
 			if all_fed:
 				newly_unlocked.append(_unlock("well_fed", day))
 
-	# Filter out nulls (already-unlocked achievements return null from _unlock)
+	# Filter out empty dicts (already-unlocked achievements return {} from _unlock)
 	var result: Array = []
-	for item: Variant in newly_unlocked:
-		if item != null:
+	for item in newly_unlocked:
+		if not item.is_empty():
 			result.append(item)
 	return result
 
 
-func _unlock(id: String, day: int) -> Variant:
+func _unlock(id: String, day: int) -> Dictionary:
 	if bool(_checks_done.get(id, false)):
-		return null
+		return {}
 	_checks_done[id] = true
 	var data: Dictionary = ACHIEVEMENTS[id] as Dictionary
 	var entry: Dictionary = {

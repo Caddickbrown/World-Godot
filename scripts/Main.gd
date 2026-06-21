@@ -23,21 +23,21 @@ var environment_renderer: EnvironmentRenderer
 
 # Wildlife simulation
 var animal_sim: AnimalSim
-var animal_skill_system: AnimalSkillSystem
+var animal_skill_system   # AnimalSkillSystem
 
 # Simulation systems
-var fire_system: FireSystem
-var disaster_system: DisasterSystem
-var ecology_system: EcologySystem
-var conflict_system: ConflictSystem
-var trading_system: TradingSystem
-var crafting_system: CraftingSystem
-var settlement_system: SettlementSystem
-var tile_items: TileItems
-var spatial_grid: SpatialGrid
-var history_log: HistoryLog
-var achievements: Achievements
-var audio_system: AudioSystem
+var fire_system           # FireSystem
+var disaster_system       # DisasterSystem
+var ecology_system        # EcologySystem
+var conflict_system       # ConflictSystem
+var trading_system        # TradingSystem
+var crafting_system       # CraftingSystem
+var settlement_system     # SettlementSystem
+var tile_items            # TileItems
+var spatial_grid          # SpatialGrid
+var history_log           # HistoryLog
+var achievements          # Achievements
+var audio_system          # AudioSystem
 
 # Camera
 var camera: Camera3D

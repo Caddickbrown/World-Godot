@@ -48,7 +48,7 @@ func on_successful_escape(animal_type: int, anim_id: int) -> void:
 
 ## Apply slow passive gain to every tracked animal each frame.
 func tick_passive(delta: float) -> void:
-	for key: Variant in _skills.keys():
+	for key in _skills.keys():
 		var d: Dictionary = _skills[key] as Dictionary
 		d["foraging"]   = minf(float(d.get("foraging",   0.0)) + 0.001 * delta, 1.0)
 		d["escape"]     = minf(float(d.get("escape",     0.0)) + 0.001 * delta, 1.0)
