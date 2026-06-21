@@ -17,6 +17,11 @@ var concepts_data: Array = []
 # Renderer nodes (children)
 var terrain_renderer: TerrainRenderer
 var agent_renderer: AgentRenderer
+var animal_renderer: AnimalRenderer
+var settlement_renderer: SettlementRenderer
+
+# Wildlife simulation
+var animal_sim: AnimalSim
 
 # Camera
 var camera: Camera3D
@@ -124,6 +129,23 @@ func _init_world() -> void:
 	add_child(agent_renderer)
 	agent_renderer.setup(agents)
 
+	# Wildlife
+	if animal_renderer:
+		animal_renderer.clear()
+		animal_renderer.queue_free()
+	animal_sim = AnimalSim.new()
+	animal_sim.spawn_wildlife(world)
+	animal_renderer = AnimalRenderer.new()
+	add_child(animal_renderer)
+	animal_renderer.setup(animal_sim)
+
+	# Settlement renderer (houses appear once organisation is discovered)
+	if settlement_renderer:
+		settlement_renderer.clear()
+		settlement_renderer.queue_free()
+	settlement_renderer = SettlementRenderer.new()
+	add_child(settlement_renderer)
+
 	game_over = false
 	selected_agent = null
 	birth_times.clear()
@@ -187,8 +209,13 @@ func _process(delta: float) -> void:
 	# Sun position (day/night)
 	_update_sun()
 
+	# Tick wildlife
+	animal_sim.tick(game_delta, world)
+
 	# Rendering
 	agent_renderer.update()
+	animal_renderer.update()
+	_update_settlements()
 	_update_hud()
 
 # ── Event handlers ─────────────────────────────────────────────────────────────
@@ -436,6 +463,27 @@ func _handle_click(screen_pos: Vector2) -> void:
 	selected_agent = best
 	if selected_agent:
 		selected_agent.selected = true
+
+# ── Settlements ───────────────────────────────────────────────────────────────
+
+func _update_settlements() -> void:
+	# Only show buildings after organisation is discovered
+	var org_known := false
+	for a in agents:
+		if a.knowledge.has("organisation"):
+			org_known = true
+			break
+	if not org_known:
+		return
+
+	# Place a house wherever there's an active campfire
+	var settlement_tiles: Array = []
+	for key in world.natural_fires:
+		var parts: PackedStringArray = key.split(",")
+		if parts.size() == 2:
+			settlement_tiles.append([int(parts[0]), int(parts[1])])
+
+	settlement_renderer.sync(settlement_tiles)
 
 # ── Utility ───────────────────────────────────────────────────────────────────
 

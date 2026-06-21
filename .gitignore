@@ -1,3 +1,6 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Unity source packs (too large to commit; keep locally in sources/)
+/sources/
