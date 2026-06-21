@@ -1,4 +1,5 @@
 class_name SyntyMaterial
+extends RefCounted
 
 # Shared helper: loads the Synty flat-colour palette and creates a
 # StandardMaterial3D that can be applied to any Synty mesh.

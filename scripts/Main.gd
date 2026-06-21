@@ -164,6 +164,7 @@ func _init_world() -> void:
 
 func _process(delta: float) -> void:
 	_handle_camera_pan(delta)
+	if game_over: return
 
 	var game_delta := time_system.update(delta)
 	if game_delta <= 0.0:
@@ -236,7 +237,7 @@ func _handle_births() -> void:
 		var bx: float = float(evt["x"])
 		var bz: float = float(evt["z"])
 		if not world.is_walkable(bx, bz):
-			var tile := world.find_nearest(bx, bz, [World.TileType.GRASS, World.TileType.FOREST], 4.0)
+			var tile := world.find_nearest(bx, bz, [World.TileType.GRASS, World.TileType.FOREST, World.TileType.WOODLAND], 4.0)
 			if tile.is_empty(): continue
 			bx = float(tile["x"]) + 0.5
 			bz = float(tile["z"]) + 0.5

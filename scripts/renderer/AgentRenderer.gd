@@ -90,7 +90,10 @@ func _add_node(agent: Agent) -> void:
 			# Inject animations from separate motion FBXes
 			if anim_player:
 				_inject_anims(anim_player, use_female)
-				anim_player.play("idle") if anim_player.has_animation("idle") else _play_first(anim_player)
+				if anim_player.has_animation("idle"):
+					anim_player.play("idle")
+				else:
+					_play_first(anim_player)
 		else:
 			inst.queue_free()
 			root = null
@@ -134,6 +137,14 @@ func _copy_anim_from_scene(target: AnimationPlayer, scene: PackedScene, rename: 
 					target_lib.add_animation(rename, anim)
 				break  # take first animation from the clip
 	inst.queue_free()
+
+func _find_anim_player(node: Node) -> AnimationPlayer:
+	if node is AnimationPlayer:
+		return node as AnimationPlayer
+	for child in node.get_children():
+		var result: AnimationPlayer = _find_anim_player(child)
+		if result: return result
+	return null
 
 func _play_first(player: AnimationPlayer) -> void:
 	var all := player.get_animation_list()
@@ -194,8 +205,8 @@ func update() -> void:
 		var anim: AnimationPlayer = entry.get("anim") as AnimationPlayer
 		if anim:
 			var prev: int = int(entry.get("prev_state", -1))
-			if agent.state != prev:
-				entry["prev_state"] = agent.state
+			if int(agent.state) != prev:
+				entry["prev_state"] = int(agent.state)
 				_set_anim(anim, agent.state)
 
 		if agent.is_dead:

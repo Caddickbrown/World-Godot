@@ -54,7 +54,7 @@ func _cache_scenes() -> void:
 func _populate(world: World) -> void:
 	# Use a fixed RNG seed so the same world always places props the same way
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 42 + world.seed
+	rng.seed = 42 + world.seed_val
 
 	for z in range(World.WORLD_HEIGHT):
 		for x in range(World.WORLD_WIDTH):

@@ -50,8 +50,8 @@ func _conditions_met(agent: Agent, tile: Dictionary, concept: Dictionary, world:
 		var value: Variant = cond.get("value", "")
 		match ctype:
 			"tile_type":
-				if World.TileType.keys()[tile.get("type", -1)] != value and \
-				   tile.get("type", -1) != _tile_type_from_string(value):
+				if World.TileType.keys()[tile.get("type", 0)] != value and \
+				   tile.get("type", 0) != _tile_type_from_string(value):
 					return false
 			"population_nearby":
 				var count := 0

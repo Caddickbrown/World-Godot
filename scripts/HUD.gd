@@ -50,7 +50,7 @@ func update(data: Dictionary) -> void:
 		_set_text(lbl_concepts, "\n".join(recent.map(func(c): return c.get("name", "?"))))
 
 	# Agent inspector
-	var selected: Agent = data.get("selected_agent", null)
+	var selected: Agent = data.get("selected_agent", null) as Agent
 	if selected and is_instance_valid(selected) and selected.health > 0.0:
 		agent_panel.visible = true
 		agent_name_lbl.text  = selected.agent_name
