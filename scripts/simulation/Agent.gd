@@ -8,6 +8,8 @@ enum State {
 	DISCOVERING,
 	FISHING,
 	PERFORMING,
+	TRADING,
+	RITUAL,
 }
 
 const AGENT_SPEED    := 1.8   # tiles/sec

@@ -224,11 +224,15 @@ func update() -> void:
 func _set_anim(player: AnimationPlayer, state: int) -> void:
 	var name_to_try: String
 	match state:
-		Agent.State.SLEEPING:   name_to_try = "idle"
-		Agent.State.GATHERING:  name_to_try = "run"
-		Agent.State.WANDERING:  name_to_try = "run"
-		Agent.State.SOCIALIZING:name_to_try = "idle"
-		_:                      name_to_try = "idle"
+		Agent.State.SLEEPING:    name_to_try = "idle"
+		Agent.State.GATHERING:   name_to_try = "run"
+		Agent.State.WANDERING:   name_to_try = "run"
+		Agent.State.SOCIALIZING: name_to_try = "idle"
+		Agent.State.TRADING:     name_to_try = "idle"
+		Agent.State.RITUAL:      name_to_try = "idle"
+		Agent.State.PERFORMING:  name_to_try = "idle"
+		Agent.State.FISHING:     name_to_try = "idle"
+		_:                       name_to_try = "idle"
 	if player.has_animation(name_to_try):
 		player.play(name_to_try)
 	else:

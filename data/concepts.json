@@ -3,7 +3,7 @@
     "id": "fire",
     "name": "Fire",
     "era": 1,
-    "icon": "\ud83d\udd25",
+    "icon": "🔥",
     "description": "The mastery of fire brings warmth, light, protection, and the ability to cook food.",
     "prerequisites": [],
     "discovery_conditions": [
@@ -23,7 +23,7 @@
     "id": "stone_tools",
     "name": "Stone Tools",
     "era": 1,
-    "icon": "\ud83e\udea8",
+    "icon": "🪨",
     "description": "Shaping stone into tools makes gathering and hunting far more effective.",
     "prerequisites": [],
     "discovery_conditions": [
@@ -42,7 +42,7 @@
     "id": "language",
     "name": "Language",
     "era": 1,
-    "icon": "\ud83d\udcac",
+    "icon": "💬",
     "description": "Shared symbols and sounds allow complex ideas to be passed between people.",
     "prerequisites": [],
     "discovery_conditions": [
@@ -61,7 +61,7 @@
     "id": "shelter",
     "name": "Shelter",
     "era": 1,
-    "icon": "\ud83c\udfda\ufe0f",
+    "icon": "🏚️",
     "description": "Simple structures provide protection from the elements and a place to rest.",
     "prerequisites": [
       "stone_tools"
@@ -83,7 +83,7 @@
     "id": "housing",
     "name": "Housing",
     "era": 2,
-    "icon": "\ud83c\udfe0",
+    "icon": "🏠",
     "description": "Durable dwellings with walls and roofs offer strong protection from storms and cold.",
     "prerequisites": [
       "shelter"
@@ -104,7 +104,7 @@
     "id": "tree_house",
     "name": "Tree House",
     "era": 2,
-    "icon": "\ud83c\udf33",
+    "icon": "🌳",
     "description": "Platforms lashed high in the canopy give shelter above the damp ground and predators below.",
     "prerequisites": [
       "shelter",
@@ -127,7 +127,7 @@
     "id": "temple",
     "name": "Temple",
     "era": 2,
-    "icon": "\ud83c\udfdb\ufe0f",
+    "icon": "🏛️",
     "description": "Raised gathering places for ritual and story anchor the community and the spirit.",
     "prerequisites": [
       "housing",
@@ -153,7 +153,7 @@
     "id": "church",
     "name": "Church",
     "era": 2,
-    "icon": "\u26ea",
+    "icon": "⛪",
     "description": "A shared hall and high roof gather many voices in song and counsel.",
     "prerequisites": [
       "housing",
@@ -179,7 +179,7 @@
     "id": "cooking",
     "name": "Cooking",
     "era": 1,
-    "icon": "\ud83c\udf56",
+    "icon": "🍖",
     "description": "Applying fire to food unlocks far more nutrition and reduces illness.",
     "prerequisites": [
       "fire"
@@ -201,8 +201,8 @@
     "id": "sailing",
     "name": "Sailing",
     "era": 2,
-    "icon": "\u26f5",
-    "description": "Lashing logs into rafts and reading the wind opens up the waters \u2014 new shores, new resources.",
+    "icon": "⛵",
+    "description": "Lashing logs into rafts and reading the wind opens up the waters — new shores, new resources.",
     "prerequisites": [],
     "discovery_conditions": [
       {
@@ -220,7 +220,7 @@
     "id": "mountain_climbing",
     "name": "Mountain Climbing",
     "era": 2,
-    "icon": "\ud83c\udfd4\ufe0f",
+    "icon": "🏔️",
     "description": "Ropes, handholds, and hard-won courage let bold explorers scale the highest peaks.",
     "prerequisites": [
       "stone_tools"
@@ -241,7 +241,7 @@
     "id": "clothing",
     "name": "Clothing",
     "era": 1,
-    "icon": "\ud83e\udde5",
+    "icon": "🧥",
     "description": "Skins and fibres shaped into garments protect against wind, rain, and cold.",
     "prerequisites": [
       "stone_tools"
@@ -262,7 +262,7 @@
     "id": "medicine",
     "name": "Medicine",
     "era": 1,
-    "icon": "\ud83c\udf3f",
+    "icon": "🌿",
     "description": "Knowledge of healing herbs and remedies extends life and eases sickness.",
     "prerequisites": [
       "cooking",
@@ -290,7 +290,7 @@
     "id": "weaving",
     "name": "Weaving",
     "era": 1,
-    "icon": "\ud83e\uddf5",
+    "icon": "🧵",
     "description": "Twining fibres into baskets and mats improves storage and comfort.",
     "prerequisites": [
       "stone_tools"
@@ -311,7 +311,7 @@
     "id": "pottery",
     "name": "Pottery",
     "era": 2,
-    "icon": "\ud83c\udffa",
+    "icon": "🏺",
     "description": "Baking clay in fire creates vessels for storing food and water.",
     "prerequisites": [
       "fire"
@@ -332,7 +332,7 @@
     "id": "fishing",
     "name": "Fishing",
     "era": 1,
-    "icon": "\ud83c\udfa3",
+    "icon": "🎣",
     "description": "Hooks, spears, and nets bring food from the waters' edge.",
     "prerequisites": [
       "stone_tools"
@@ -353,7 +353,7 @@
     "id": "hunting",
     "name": "Hunting",
     "era": 1,
-    "icon": "\ud83c\udff9",
+    "icon": "🏹",
     "description": "Tracking and taking game from the forest brings meat and hides to the people.",
     "prerequisites": [
       "stone_tools"
@@ -375,7 +375,7 @@
     "id": "art",
     "name": "Art",
     "era": 2,
-    "icon": "\ud83c\udfad",
+    "icon": "🎭",
     "description": "Marking walls and shaping symbols gives meaning beyond mere survival.",
     "prerequisites": [
       "fire",
@@ -395,7 +395,7 @@
     "id": "animal_domestication",
     "name": "Animal Domestication",
     "era": 2,
-    "icon": "\ud83d\udc15",
+    "icon": "🐕",
     "description": "Trust between people and beasts brings help in hunting, guarding, and carrying.",
     "prerequisites": [
       "shelter"
@@ -416,7 +416,7 @@
     "id": "agriculture",
     "name": "Agriculture",
     "era": 2,
-    "icon": "\ud83c\udf3e",
+    "icon": "🌾",
     "description": "Sowing and tending crops multiplies the land's bounty and lets people stay in one place.",
     "prerequisites": [
       "shelter",
@@ -440,7 +440,7 @@
     "id": "writing",
     "name": "Writing",
     "era": 2,
-    "icon": "\ud83d\udcdc",
+    "icon": "📜",
     "description": "Marks that persist let wisdom travel across time and distance.",
     "prerequisites": [
       "language"
@@ -461,7 +461,7 @@
     "id": "metal_tools",
     "name": "Metal Tools",
     "era": 2,
-    "icon": "\u2692\ufe0f",
+    "icon": "⚒️",
     "description": "Smelting ore into blades and points makes every task sharper and swifter.",
     "prerequisites": [
       "fire",
@@ -483,7 +483,7 @@
     "id": "herding",
     "name": "Herding",
     "era": 2,
-    "icon": "\ud83d\udc11",
+    "icon": "🐑",
     "description": "Moving with the flocks brings steady meat, milk, and wool to settled life.",
     "prerequisites": [
       "animal_domestication"
@@ -504,7 +504,7 @@
     "id": "community",
     "name": "Community",
     "era": 2,
-    "icon": "\ud83d\udc65",
+    "icon": "👥",
     "description": "Shared customs and kinship make families flourish and children thrive.",
     "prerequisites": [
       "language",
@@ -526,7 +526,7 @@
     "id": "preservation",
     "name": "Preservation",
     "era": 2,
-    "icon": "\ud83c\udf6f",
+    "icon": "🍯",
     "description": "Salt, smoke, and sealed vessels keep food through lean times.",
     "prerequisites": [
       "cooking",
@@ -548,7 +548,7 @@
     "id": "rope",
     "name": "Rope",
     "era": 1,
-    "icon": "\ud83e\udea2",
+    "icon": "🪢",
     "description": "Twisted fibres hold weight and bind structures together.",
     "prerequisites": [
       "stone_tools",
@@ -570,8 +570,8 @@
     "id": "organisation",
     "name": "Organisation",
     "era": 2,
-    "icon": "\ud83d\udccb",
-    "description": "Dividing labour lets each person specialise \u2014 some gather, some teach, some explore. Together they achieve more.",
+    "icon": "📋",
+    "description": "Dividing labour lets each person specialise — some gather, some teach, some explore. Together they achieve more.",
     "prerequisites": [
       "language",
       "community"
@@ -592,7 +592,7 @@
     "id": "curiosity_culture",
     "name": "Curiosity Culture",
     "era": 2,
-    "icon": "\ud83d\udd2c",
+    "icon": "🔬",
     "description": "A people who prize learning raise children who ask and experiment.",
     "prerequisites": [
       "language",
@@ -614,8 +614,8 @@
     "id": "trade",
     "name": "Trade",
     "era": 3,
-    "icon": "\ud83e\udd1d",
-    "description": "Exchanging surplus goods between groups brings prosperity to all \u2014 and spreads ideas faster than ever.",
+    "icon": "🤝",
+    "description": "Exchanging surplus goods between groups brings prosperity to all — and spreads ideas faster than ever.",
     "prerequisites": [
       "language",
       "agriculture"
@@ -637,7 +637,7 @@
     "id": "astronomy",
     "name": "Astronomy",
     "era": 3,
-    "icon": "\ud83c\udf1f",
+    "icon": "🌟",
     "description": "Reading the stars by night reveals the turning of seasons, the direction of the winds, and the way home across open water.",
     "prerequisites": [
       "writing",
@@ -660,7 +660,7 @@
     "id": "mathematics",
     "name": "Mathematics",
     "era": 3,
-    "icon": "\ud83d\udd22",
+    "icon": "🔢",
     "description": "Counting, measuring, and reasoning with symbols lets people plan harvests, divide land, and build beyond guesswork.",
     "prerequisites": [
       "writing",
@@ -683,8 +683,8 @@
     "id": "governance",
     "name": "Governance",
     "era": 3,
-    "icon": "\u2696\ufe0f",
-    "description": "Laws, leaders, and shared rules let large groups cooperate \u2014 and resolve conflict without violence.",
+    "icon": "⚖️",
+    "description": "Laws, leaders, and shared rules let large groups cooperate — and resolve conflict without violence.",
     "prerequisites": [
       "language",
       "community",
@@ -707,8 +707,8 @@
     "id": "masonry",
     "name": "Masonry",
     "era": 3,
-    "icon": "\ud83e\uddf1",
-    "description": "Cutting and stacking stone creates walls that last generations \u2014 and unlocks true cities.",
+    "icon": "🧱",
+    "description": "Cutting and stacking stone creates walls that last generations — and unlocks true cities.",
     "prerequisites": [
       "metal_tools",
       "housing"
@@ -730,7 +730,7 @@
     "id": "music",
     "name": "Music",
     "era": 3,
-    "icon": "\ud83c\udfb5",
+    "icon": "🎵",
     "description": "Rhythm, melody, and song weave community together and lift spirits through hard seasons.",
     "prerequisites": [
       "art",
@@ -753,8 +753,8 @@
     "id": "navigation",
     "name": "Navigation",
     "era": 3,
-    "icon": "\ud83e\udded",
-    "description": "Stars, currents, and landmarks guide sailors beyond the horizon \u2014 the whole world opens up.",
+    "icon": "🧭",
+    "description": "Stars, currents, and landmarks guide sailors beyond the horizon — the whole world opens up.",
     "prerequisites": [
       "sailing",
       "astronomy"
@@ -776,7 +776,7 @@
     "id": "calendar",
     "name": "Calendar",
     "era": 3,
-    "icon": "\ud83d\udcc5",
+    "icon": "📅",
     "description": "Tracking the sun and moon tells farmers when to plant, when to harvest, and when the hard times will end.",
     "prerequisites": [
       "astronomy",
@@ -799,7 +799,7 @@
     "id": "philosophy",
     "name": "Philosophy",
     "era": 3,
-    "icon": "\ud83e\udde0",
+    "icon": "🧠",
     "description": "Deep questions about existence, justice, and meaning spark the greatest leaps in human understanding.",
     "prerequisites": [
       "writing",
@@ -822,8 +822,8 @@
     "id": "horse_taming",
     "name": "Horse Taming",
     "era": 2,
-    "icon": "\ud83d\udc0e",
-    "description": "Reading a horse's moods and earning its trust \u2014 then riding it across the land at great speed.",
+    "icon": "🐎",
+    "description": "Reading a horse's moods and earning its trust — then riding it across the land at great speed.",
     "prerequisites": [
       "animal_domestication"
     ],
@@ -843,7 +843,7 @@
     "id": "woodcutting",
     "name": "Woodcutting",
     "era": 1,
-    "icon": "\ud83e\ude93",
+    "icon": "🪓",
     "description": "Felling trees with stone tools yields timber for fires and shelters. The forest grows back, but slowly.",
     "prerequisites": [
       "stone_tools"
@@ -868,8 +868,8 @@
     "id": "honey_gathering",
     "name": "Honey Gathering",
     "era": 1,
-    "icon": "\ud83c\udf6f",
-    "description": "Those bold enough to approach the wild bee hives discover sweet honey \u2014 a rich food that needs no fire to enjoy.",
+    "icon": "🍯",
+    "description": "Those bold enough to approach the wild bee hives discover sweet honey — a rich food that needs no fire to enjoy.",
     "prerequisites": [],
     "discovery_conditions": [
       {
@@ -887,8 +887,8 @@
     "id": "herbalism",
     "name": "Herbalism",
     "era": 2,
-    "icon": "\ud83c\udf43",
-    "description": "Deep knowledge of plants and their properties \u2014 which heal, which nourish, which protect against sickness.",
+    "icon": "🍃",
+    "description": "Deep knowledge of plants and their properties — which heal, which nourish, which protect against sickness.",
     "prerequisites": [
       "medicine"
     ],
@@ -913,7 +913,7 @@
     "id": "barn",
     "name": "Barn",
     "era": 2,
-    "icon": "\ud83d\udc04",
+    "icon": "🐄",
     "description": "A sturdy roofed shelter keeps livestock warm and safe through storms and cold nights.",
     "prerequisites": [
       "housing",
@@ -939,8 +939,8 @@
     "id": "dairy",
     "name": "Dairy",
     "era": 2,
-    "icon": "\ud83e\udd5b",
-    "description": "Milking cattle provides a steady, renewable source of nourishment \u2014 richer than berries and available without the hunt.",
+    "icon": "🥛",
+    "description": "Milking cattle provides a steady, renewable source of nourishment — richer than berries and available without the hunt.",
     "prerequisites": [
       "herding",
       "animal_domestication"
@@ -965,8 +965,8 @@
     "id": "coop",
     "name": "Chicken Coop",
     "era": 2,
-    "icon": "\ud83e\udd5a",
-    "description": "A small enclosed shelter keeps chickens safe at night. People with a coop know to collect eggs regularly \u2014 a steady, reliable food source.",
+    "icon": "🥚",
+    "description": "A small enclosed shelter keeps chickens safe at night. People with a coop know to collect eggs regularly — a steady, reliable food source.",
     "prerequisites": [
       "housing",
       "animal_domestication"
@@ -991,7 +991,7 @@
     "id": "swimming",
     "name": "Swimming",
     "era": 1,
-    "icon": "\ud83c\udfca",
+    "icon": "🏊",
     "description": "Learning to move through water opens up rivers and coastlines for foraging and travel.",
     "prerequisites": [],
     "discovery_conditions": [
@@ -1008,8 +1008,8 @@
     "id": "tracking",
     "name": "Tracking",
     "era": 1,
-    "icon": "\ud83d\udc3e",
-    "description": "Reading footprints, scat, and broken branches reveals where animals move \u2014 making hunts far more successful.",
+    "icon": "🐾",
+    "description": "Reading footprints, scat, and broken branches reveals where animals move — making hunts far more successful.",
     "prerequisites": [
       "hunting"
     ],
@@ -1033,7 +1033,7 @@
     "id": "tanning",
     "name": "Tanning",
     "era": 1,
-    "icon": "\ud83e\udd8c",
+    "icon": "🦌",
     "description": "Treating animal hides with smoke and oils transforms raw skins into durable leather for clothing and shelter.",
     "prerequisites": [
       "hunting",
@@ -1059,7 +1059,7 @@
     "id": "domestication",
     "name": "Domestication",
     "era": 2,
-    "icon": "\ud83d\udc03",
+    "icon": "🐂",
     "description": "Living closely with animals over generations turns wild creatures into willing partners in labour and life.",
     "prerequisites": [
       "community",
@@ -1085,7 +1085,7 @@
     "id": "fermentation",
     "name": "Fermentation",
     "era": 2,
-    "icon": "\ud83c\udf7a",
+    "icon": "🍺",
     "description": "Controlled rot transforms grain and fruit into drinks that preserve calories and lift spirits.",
     "prerequisites": [
       "cooking"
@@ -1107,7 +1107,7 @@
     "id": "irrigation",
     "name": "Irrigation",
     "era": 2,
-    "icon": "\ud83d\udca7",
+    "icon": "💧",
     "description": "Channels and ditches carry water from rivers to fields, turning dry land into fertile ground.",
     "prerequisites": [
       "agriculture",
@@ -1134,7 +1134,7 @@
     "id": "cartography",
     "name": "Cartography",
     "era": 2,
-    "icon": "\ud83d\uddfa\ufe0f",
+    "icon": "🗺️",
     "description": "Drawing the shape of the land on bark and hide lets scouts share what they have seen with those who stayed behind.",
     "prerequisites": [
       "writing"
@@ -1155,7 +1155,7 @@
     "id": "mining",
     "name": "Mining",
     "era": 2,
-    "icon": "\u26cf\ufe0f",
+    "icon": "⛏️",
     "description": "Organised extraction of stone and ore from the earth, enabling access to deeper mineral deposits.",
     "prerequisites": [
       "stone_tools"
@@ -1180,7 +1180,7 @@
     "id": "metallurgy",
     "name": "Metallurgy",
     "era": 3,
-    "icon": "\u2697\ufe0f",
+    "icon": "⚗️",
     "description": "Smelting ores at high heat and alloying metals produces stronger, sharper, more versatile tools and weapons.",
     "prerequisites": [
       "fire",
@@ -1207,8 +1207,8 @@
     "id": "printing",
     "name": "Printing",
     "era": 3,
-    "icon": "\ud83d\udcf0",
-    "description": "Pressing inked blocks onto paper copies knowledge faster than any scribe \u2014 ideas spread like wildfire.",
+    "icon": "📰",
+    "description": "Pressing inked blocks onto paper copies knowledge faster than any scribe — ideas spread like wildfire.",
     "prerequisites": [
       "writing"
     ],
@@ -1229,7 +1229,7 @@
     "id": "ecology",
     "name": "Ecology",
     "era": 3,
-    "icon": "\ud83c\udf31",
+    "icon": "🌱",
     "description": "Understanding how plants, animals, soil, and water depend on each other reveals how to live without exhausting the land.",
     "prerequisites": [
       "agriculture"
@@ -1255,7 +1255,7 @@
     "id": "conservation",
     "name": "Conservation",
     "era": 3,
-    "icon": "\ud83c\udf0d",
+    "icon": "🌍",
     "description": "Choosing to protect forests, rivers, and species ensures the land will provide for generations yet to come.",
     "prerequisites": [
       "ecology",
@@ -1275,15 +1275,16 @@
     "spread_rate": 0.04,
     "effects": {
       "carrying_capacity_bonus": 1.2,
-      "max_age_bonus": 0.05
+      "max_age_bonus": 0.05,
+      "enables_reintroduction": true
     }
   },
   {
     "id": "law",
     "name": "Law",
     "era": 3,
-    "icon": "\ud83d\udcd6",
-    "description": "Written codes of conduct and justice give structure to society \u2014 disputes are settled by reason, not force.",
+    "icon": "📖",
+    "description": "Written codes of conduct and justice give structure to society — disputes are settled by reason, not force.",
     "prerequisites": [
       "governance",
       "writing"
@@ -1309,8 +1310,8 @@
     "id": "poetry",
     "name": "Poetry",
     "era": 3,
-    "icon": "\u270d\ufe0f",
-    "description": "Words shaped with rhythm and beauty carry emotion across generations \u2014 the deepest truths need the fewest words.",
+    "icon": "✍️",
+    "description": "Words shaped with rhythm and beauty carry emotion across generations — the deepest truths need the fewest words.",
     "prerequisites": [
       "language",
       "art",
@@ -1337,8 +1338,8 @@
     "id": "observation",
     "name": "Observation",
     "era": 1,
-    "icon": "\ud83d\udc41\ufe0f",
-    "description": "Careful watching of the natural world \u2014 the movements of animals, patterns of weather, and cycles of seasons \u2014 forms the foundation of all knowledge.",
+    "icon": "👁️",
+    "description": "Careful watching of the natural world — the movements of animals, patterns of weather, and cycles of seasons — forms the foundation of all knowledge.",
     "prerequisites": [],
     "discovery_conditions": [
       {
@@ -1356,7 +1357,7 @@
     "id": "woodworking",
     "name": "Woodworking",
     "era": 2,
-    "icon": "\ud83e\udeb5",
+    "icon": "🪵",
     "description": "Shaping timber with tools into planks, beams, and joinery enables the construction of boats, buildings, and vehicles.",
     "prerequisites": [
       "woodcutting",
@@ -1382,8 +1383,8 @@
     "id": "rope_bridge",
     "name": "Rope Bridge",
     "era": 3,
-    "icon": "\ud83c\udf09",
-    "description": "Suspending rope and plank across rivers and ravines opens up terrain that was once impassable \u2014 a step toward mastering the world's geography.",
+    "icon": "🌉",
+    "description": "Suspending rope and plank across rivers and ravines opens up terrain that was once impassable — a step toward mastering the world's geography.",
     "prerequisites": [
       "rope",
       "woodworking"
@@ -1408,8 +1409,8 @@
     "id": "animism",
     "name": "Animism",
     "era": 2,
-    "icon": "\ud83c\udf00",
-    "description": "The belief that animals, plants, and landforms hold spirits \u2014 the first step toward a sacred view of the world.",
+    "icon": "🌀",
+    "description": "The belief that animals, plants, and landforms hold spirits — the first step toward a sacred view of the world.",
     "prerequisites": [
       "observation"
     ],
@@ -1429,7 +1430,7 @@
     "id": "ritual",
     "name": "Ritual",
     "era": 2,
-    "icon": "\ud83d\udd6f\ufe0f",
+    "icon": "🕯️",
     "description": "Repeated sacred acts bind the community in shared meaning and open the door to temple construction.",
     "prerequisites": [
       "animism"
@@ -1455,8 +1456,8 @@
     "id": "cosmology",
     "name": "Cosmology",
     "era": 3,
-    "icon": "\ud83c\udf0c",
-    "description": "An ordered understanding of the heavens \u2014 the stories and systems that place humanity within the cosmos.",
+    "icon": "🌌",
+    "description": "An ordered understanding of the heavens — the stories and systems that place humanity within the cosmos.",
     "prerequisites": [
       "astronomy",
       "ritual"
@@ -1482,8 +1483,8 @@
     "id": "oral_tradition",
     "name": "Oral Tradition",
     "era": 2,
-    "icon": "\ud83d\udce3",
-    "description": "Stories, histories, and knowledge passed mouth to mouth across generations \u2014 a living library that travels wherever the people go.",
+    "icon": "📣",
+    "description": "Stories, histories, and knowledge passed mouth to mouth across generations — a living library that travels wherever the people go.",
     "prerequisites": [
       "language"
     ],
@@ -1507,7 +1508,7 @@
     "id": "mythology",
     "name": "Mythology",
     "era": 3,
-    "icon": "\ud83d\udc09",
+    "icon": "🐉",
     "description": "Rich cycles of stories about gods, heroes, and the origin of the world forge a deep cultural identity.",
     "prerequisites": [
       "oral_tradition",
@@ -1534,8 +1535,8 @@
     "id": "seafaring",
     "name": "Seafaring",
     "era": 4,
-    "icon": "\ud83d\udea2",
-    "description": "Deep-keeled ships and navigational knowledge allow crossing open ocean \u2014 contact with distant peoples and lands becomes possible.",
+    "icon": "🚢",
+    "description": "Deep-keeled ships and navigational knowledge allow crossing open ocean — contact with distant peoples and lands becomes possible.",
     "prerequisites": [
       "rope_bridge",
       "woodworking"
@@ -1558,37 +1559,11 @@
     }
   },
   {
-    "id": "conservation",
-    "name": "Conservation",
-    "era": 3,
-    "icon": "\ud83c\udf3f",
-    "description": "Understanding that balance in nature protects future generations — caring for species on the edge of extinction.",
-    "prerequisites": [
-      "ecology",
-      "community"
-    ],
-    "discovery_conditions": [
-      {
-        "type": "has_concept",
-        "value": "ecology"
-      },
-      {
-        "type": "has_concept",
-        "value": "community"
-      }
-    ],
-    "discovery_probability": 0.00025,
-    "spread_rate": 0.04,
-    "effects": {
-      "enables_reintroduction": true
-    }
-  },
-  {
     "id": "architecture",
     "name": "Architecture",
     "era": 4,
-    "icon": "\ud83c\udfd7\ufe0f",
-    "description": "The deliberate design of space, structure, and form \u2014 enabling permanent stone buildings, aqueducts, and monuments.",
+    "icon": "🏗️",
+    "description": "The deliberate design of space, structure, and form — enabling permanent stone buildings, aqueducts, and monuments.",
     "prerequisites": [
       "metallurgy",
       "governance"
@@ -1608,6 +1583,300 @@
     "effects": {
       "unlocks_stone_buildings": true,
       "weather_protection": 0.4
+    }
+  },
+  {
+    "id": "plant_lore",
+    "name": "Plant Lore",
+    "era": 1,
+    "icon": "🌿",
+    "description": "Detailed knowledge of wild plants — which are edible, which are poisonous, and which have healing properties.",
+    "prerequisites": [],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "WOODLAND"
+      }
+    ],
+    "discovery_probability": 0.0004,
+    "spread_rate": 0.025,
+    "effects": {
+      "gather_efficiency": 1.1
+    }
+  },
+  {
+    "id": "rope_making",
+    "name": "Rope Making",
+    "era": 1,
+    "icon": "🪢",
+    "description": "Twisting plant fibres into strong cord — the foundation of nets, traps, and lashed structures.",
+    "prerequisites": [
+      "weaving"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "inventory_item",
+        "value": "plant_fibre"
+      }
+    ],
+    "discovery_probability": 0.0003,
+    "spread_rate": 0.02,
+    "effects": {
+      "rest_efficiency": 1.05
+    }
+  },
+  {
+    "id": "boat_building",
+    "name": "Boat Building",
+    "era": 2,
+    "icon": "⛵",
+    "description": "Shaping wood and sealing it with pitch creates vessels that can carry people and goods across water.",
+    "prerequisites": [
+      "stone_tools",
+      "rope_making"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "WATER"
+      }
+    ],
+    "discovery_probability": 0.0001,
+    "spread_rate": 0.008,
+    "effects": {
+      "unlocks_water_travel": true
+    }
+  },
+  {
+    "id": "beekeeping",
+    "name": "Beekeeping",
+    "era": 2,
+    "icon": "🐝",
+    "description": "Tending wild bee colonies in crafted hives yields a reliable supply of honey and beeswax.",
+    "prerequisites": [
+      "plant_lore",
+      "animal_domestication"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "WOODLAND"
+      }
+    ],
+    "discovery_probability": 0.0002,
+    "spread_rate": 0.012,
+    "effects": {
+      "hunger_efficiency": 1.08,
+      "gather_efficiency": 1.05
+    }
+  },
+  {
+    "id": "dyeing",
+    "name": "Dyeing",
+    "era": 2,
+    "icon": "🎨",
+    "description": "Extracting pigments from plants and minerals to colour cloth and leather — beauty and identity in fabric.",
+    "prerequisites": [
+      "weaving",
+      "plant_lore"
+    ],
+    "discovery_conditions": [],
+    "discovery_probability": 0.0002,
+    "spread_rate": 0.015,
+    "effects": {
+      "spread_rate_multiplier": 1.05
+    }
+  },
+  {
+    "id": "taxation",
+    "name": "Taxation",
+    "era": 3,
+    "icon": "📜",
+    "description": "Collecting a portion of surplus from the population funds shared works — roads, walls, and granaries.",
+    "prerequisites": [
+      "governance",
+      "writing"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "population_nearby",
+        "value": 6
+      }
+    ],
+    "discovery_probability": 0.00008,
+    "spread_rate": 0.008,
+    "effects": {
+      "carrying_capacity_bonus": 1.2,
+      "spread_rate_multiplier": 1.1
+    }
+  },
+  {
+    "id": "engineering",
+    "name": "Engineering",
+    "era": 3,
+    "icon": "⚙️",
+    "description": "Applying mathematical principles to construction — bridges, aqueducts, and machines that multiply human effort.",
+    "prerequisites": [
+      "architecture",
+      "mathematics",
+      "metal_tools"
+    ],
+    "discovery_conditions": [],
+    "discovery_probability": 0.00006,
+    "spread_rate": 0.006,
+    "effects": {
+      "gather_efficiency": 1.2,
+      "carrying_capacity_bonus": 1.15
+    }
+  },
+  {
+    "id": "currency",
+    "name": "Currency",
+    "era": 3,
+    "icon": "💰",
+    "description": "Standardised tokens of value allow exchange without barter — trade expands across vast distances.",
+    "prerequisites": [
+      "trade",
+      "metallurgy"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "population_nearby",
+        "value": 5
+      }
+    ],
+    "discovery_probability": 0.00008,
+    "spread_rate": 0.009,
+    "effects": {
+      "hunger_efficiency": 1.15,
+      "spread_rate_multiplier": 1.2
+    }
+  },
+  {
+    "id": "diplomacy",
+    "name": "Diplomacy",
+    "era": 3,
+    "icon": "🕊️",
+    "description": "Formal negotiation between groups resolves conflict and forges alliances — peace becomes a tool as powerful as war.",
+    "prerequisites": [
+      "governance",
+      "language",
+      "trade"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "population_nearby",
+        "value": 4
+      }
+    ],
+    "discovery_probability": 0.00007,
+    "spread_rate": 0.008,
+    "effects": {
+      "spread_rate_multiplier": 1.25,
+      "reproduction_cooldown_mult": 0.92
+    }
+  },
+  {
+    "id": "military_tactics",
+    "name": "Military Tactics",
+    "era": 3,
+    "icon": "⚔️",
+    "description": "Coordinated formations, supply lines, and strategic planning make armies far more effective — and defending settlements more possible.",
+    "prerequisites": [
+      "governance",
+      "metal_tools"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "population_nearby",
+        "value": 5
+      }
+    ],
+    "discovery_probability": 0.0001,
+    "spread_rate": 0.012,
+    "effects": {
+      "gather_efficiency": 1.1
+    }
+  },
+  {
+    "id": "animal_breeding",
+    "name": "Animal Breeding",
+    "era": 3,
+    "icon": "🐄",
+    "description": "Selecting the strongest and most docile animals across generations produces livestock far superior to their wild ancestors.",
+    "prerequisites": [
+      "herding",
+      "animal_domestication",
+      "agriculture"
+    ],
+    "discovery_conditions": [],
+    "discovery_probability": 0.0001,
+    "spread_rate": 0.01,
+    "effects": {
+      "gather_efficiency": 1.2,
+      "carrying_capacity_bonus": 1.1
+    }
+  },
+  {
+    "id": "medicine_advanced",
+    "name": "Advanced Medicine",
+    "era": 4,
+    "icon": "⚕️",
+    "description": "Systematic study of the body and disease — surgery, inoculation, and written medical knowledge that saves countless lives.",
+    "prerequisites": [
+      "medicine",
+      "herbalism",
+      "writing"
+    ],
+    "discovery_conditions": [],
+    "discovery_probability": 0.00004,
+    "spread_rate": 0.005,
+    "effects": {
+      "max_age_bonus": 0.4,
+      "vitality_regen": 0.015
+    }
+  },
+  {
+    "id": "city_planning",
+    "name": "City Planning",
+    "era": 4,
+    "icon": "🏙️",
+    "description": "Laying out streets, districts, and public spaces before building them — cities that are liveable, defensible, and lasting.",
+    "prerequisites": [
+      "architecture",
+      "governance",
+      "engineering"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "population_nearby",
+        "value": 8
+      }
+    ],
+    "discovery_probability": 0.00003,
+    "spread_rate": 0.004,
+    "effects": {
+      "carrying_capacity_bonus": 1.4,
+      "weather_protection": 0.5
+    }
+  },
+  {
+    "id": "trade_routes",
+    "name": "Trade Routes",
+    "era": 4,
+    "icon": "🛤️",
+    "description": "Established paths connecting distant settlements — goods, ideas, and people flow steadily along roads that cross the known world.",
+    "prerequisites": [
+      "cartography",
+      "currency",
+      "diplomacy"
+    ],
+    "discovery_conditions": [],
+    "discovery_probability": 0.00004,
+    "spread_rate": 0.005,
+    "effects": {
+      "spread_rate_multiplier": 1.5,
+      "hunger_efficiency": 1.15
     }
   }
 ]

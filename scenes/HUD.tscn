@@ -10,7 +10,7 @@ anchors_preset = 0
 offset_left = 8.0
 offset_top = 8.0
 offset_right = 220.0
-offset_bottom = 220.0
+offset_bottom = 246.0
 
 [node name="VBox" type="VBoxContainer" parent="Panel"]
 anchors_preset = 15
@@ -39,10 +39,37 @@ text = "Clear"
 [node name="Era" type="Label" parent="Panel/VBox"]
 text = "Stone Age"
 
+[node name="Disaster" type="Label" parent="Panel/VBox"]
+text = ""
+modulate = Color(1, 0.4, 0.1, 1)
+visible = false
+
 [node name="Concepts" type="Label" parent="Panel/VBox"]
 text = "No discoveries yet"
 custom_minimum_size = Vector2(0, 60)
 autowrap_mode = 3
+
+[node name="SpeedPanel" type="HBoxContainer" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 24)
+
+[node name="SpeedLbl" type="Label" parent="Panel/VBox/SpeedPanel"]
+text = "Speed:"
+
+[node name="BtnPause" type="Button" parent="Panel/VBox/SpeedPanel"]
+text = "⏸"
+custom_minimum_size = Vector2(28, 0)
+
+[node name="Btn1x" type="Button" parent="Panel/VBox/SpeedPanel"]
+text = "1×"
+custom_minimum_size = Vector2(28, 0)
+
+[node name="Btn5x" type="Button" parent="Panel/VBox/SpeedPanel"]
+text = "5×"
+custom_minimum_size = Vector2(28, 0)
+
+[node name="Btn20x" type="Button" parent="Panel/VBox/SpeedPanel"]
+text = "20×"
+custom_minimum_size = Vector2(32, 0)
 
 [node name="Notifications" type="VBoxContainer" parent="."]
 anchor_left = 1.0
@@ -102,6 +129,31 @@ text = ""
 [node name="Knowledge" type="Label" parent="AgentPanel/VBox"]
 text = "—"
 autowrap_mode = 3
+
+[node name="HistoryPanel" type="Panel" parent="."]
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_top = 0.0
+anchor_bottom = 0.0
+offset_left = -260.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = 180.0
+
+[node name="VBox" type="VBoxContainer" parent="HistoryPanel"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 6.0
+offset_right = -6.0
+offset_bottom = -6.0
+
+[node name="HistoryTitle" type="Label" parent="HistoryPanel/VBox"]
+text = "History"
+theme_override_font_sizes/font_size = 11
+
+[node name="HistoryList" type="VBoxContainer" parent="HistoryPanel/VBox"]
 
 [node name="GameOver" type="Panel" parent="."]
 visible = false

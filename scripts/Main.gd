@@ -23,6 +23,21 @@ var environment_renderer: EnvironmentRenderer
 
 # Wildlife simulation
 var animal_sim: AnimalSim
+var animal_skill_system: AnimalSkillSystem
+
+# Simulation systems
+var fire_system: FireSystem
+var disaster_system: DisasterSystem
+var ecology_system: EcologySystem
+var conflict_system: ConflictSystem
+var trading_system: TradingSystem
+var crafting_system: CraftingSystem
+var settlement_system: SettlementSystem
+var tile_items: TileItems
+var spatial_grid: SpatialGrid
+var history_log: HistoryLog
+var achievements: Achievements
+var audio_system: AudioSystem
 
 # Camera
 var camera: Camera3D
@@ -51,6 +66,10 @@ func _ready() -> void:
 	_load_data()
 
 func _setup_scene() -> void:
+	# Audio (needs to be in scene tree)
+	audio_system = AudioSystem.new()
+	add_child(audio_system)
+
 	# Camera
 	camera = Camera3D.new()
 	add_child(camera)
@@ -154,9 +173,28 @@ func _init_world() -> void:
 	add_child(environment_renderer)
 	environment_renderer.setup(world)
 
+	# Simulation systems
+	history_log = HistoryLog.new()
+	achievements = Achievements.new()
+	fire_system = FireSystem.new()
+	disaster_system = DisasterSystem.new()
+	ecology_system = EcologySystem.new()
+	conflict_system = ConflictSystem.new()
+	trading_system = TradingSystem.new()
+	crafting_system = CraftingSystem.new()
+	settlement_system = SettlementSystem.new()
+	tile_items = TileItems.new()
+	spatial_grid = SpatialGrid.new()
+	animal_skill_system = AnimalSkillSystem.new()
+
 	game_over = false
 	selected_agent = null
 	birth_times.clear()
+
+	# Wire HUD speed buttons back to Main
+	var hud := get_node_or_null("HUD")
+	if hud and hud.has_method("set_main"):
+		hud.set_main(self)
 
 	_update_hud()
 
@@ -183,9 +221,27 @@ func _process(delta: float) -> void:
 		world.flora_slow_tick(world.flora_slow_timer, season)
 		world.flora_slow_timer = 0.0
 
-	# Lightning during storms
+	# Fire system (spreading fires + lightning)
+	fire_system.tick(game_delta, world, time_system.game_time, weather_system.is_storm, time_system.day, history_log)
+	if fire_system.lightning_fire_pos != Vector2(-1, -1):
+		_push_notification("Lightning strikes the forest!")
+
+	# Disaster system
+	var prev_disaster: int = disaster_system.current
+	disaster_system.tick(game_delta, time_system.day, history_log)
+	if disaster_system.current != prev_disaster:
+		if disaster_system.current != 0:
+			_push_notification(disaster_system.label + " has begun!")
+			audio_system.play_disaster()
+		else:
+			_push_notification("The disaster has passed.")
+
+	# Legacy lightning storms (now handled by FireSystem but keep for safety)
 	if weather_system.is_storm:
 		_maybe_lightning(game_delta)
+
+	# Spatial grid update (before agent ticks so proximity queries are fresh)
+	spatial_grid.update(agents)
 
 	# Tick agents
 	for a in agents:
@@ -204,10 +260,40 @@ func _process(delta: float) -> void:
 	# Handle campfires
 	_handle_campfires(game_delta)
 
+	# Ecology, conflict, trading, crafting, settlements
+	ecology_system.tick(game_delta, world, agents, time_system.day, history_log)
+	conflict_system.tick(game_delta, agents, time_system.day, history_log)
+	trading_system.tick(game_delta, agents, item_defs, time_system.day, history_log)
+	crafting_system.tick(game_delta, agents, item_defs, time_system.day, history_log)
+	settlement_system.tick(game_delta, agents, concept_graph, time_system.day, history_log)
+	tile_items.tick_spoilage(game_delta, item_defs, disaster_system.get_spoilage_mult())
+	animal_skill_system.tick_passive(game_delta)
+
+	# Achievements
+	var new_achievements: Array = achievements.tick(agents, concept_graph, time_system.day)
+	for ach in new_achievements:
+		var aname: String = str(ach.get("name", ""))
+		_push_notification("Achievement: " + aname + "!")
+		audio_system.play_achievement()
+		history_log.add("achievement", "Achievement unlocked: " + aname, time_system.day)
+
+	# Drop items on death
+	for a in agents:
+		if a.is_dead and not bool(a.get_meta("items_dropped", false)):
+			tile_items.drop_agent_items(a, world)
+			a.set_meta("items_dropped", true)
+
 	# Prune expired fires
 	for key in world.natural_fires.keys():
 		if time_system.game_time >= world.natural_fires[key]["end_time"]:
 			world.natural_fires.erase(key)
+
+	# Log deaths
+	for a in agents:
+		if a.is_dead and not bool(a.get_meta("death_logged", false)):
+			a.set_meta("death_logged", true)
+			history_log.add("death", history_log.format_death(a.agent_name, a.death_cause), time_system.day)
+			audio_system.play_death()
 
 	# Game over detection
 	var alive_count := agents.filter(func(a): return a.health > 0.0 and not a.is_dead).size()
@@ -260,7 +346,10 @@ func _handle_births() -> void:
 		agent_renderer.add_agent(child)
 		birth_times.append(time_system.game_time)
 		alive.append(child)
-		_push_notification(evt.get("parent_name", "Someone") + " has a child — " + child.agent_name)
+		var birth_msg: String = str(evt.get("parent_name", "Someone")) + " has a child — " + child.agent_name
+		_push_notification(birth_msg)
+		history_log.add("birth", birth_msg, time_system.day)
+		audio_system.play_birth()
 
 func _handle_events() -> void:
 	for evt in concept_graph.drain_events():
@@ -268,6 +357,8 @@ func _handle_events() -> void:
 			var concept: Dictionary = concept_graph.concepts.get(str(evt["concept_id"]), {})
 			var cname: String = concept.get("name", str(evt["concept_id"]))
 			_push_notification(str(evt["agent_name"]) + " discovered " + cname + "!")
+			history_log.add("discovery", str(evt["agent_name"]) + " discovered " + cname, time_system.day)
+			audio_system.play_discovery()
 			var agent: Agent = _find_agent(int(evt["agent_id"]))
 			if agent:
 				agent.discovery_flash = 1.5
@@ -294,6 +385,9 @@ func _maybe_lightning(_delta: float) -> void:
 # ── Notifications ─────────────────────────────────────────────────────────────
 
 var _notifications: Array = []  # Array of {msg, timer}
+
+func _set_speed(s: float) -> void:
+	time_system.set_speed(s)
 
 func _push_notification(msg: String) -> void:
 	_notifications.append({"msg": msg, "timer": 4.0})
@@ -323,6 +417,11 @@ func _update_hud() -> void:
 			"era": _get_era(discovered.size()),
 			"concepts": discovered,
 			"selected_agent": selected_agent,
+			"disaster": disaster_system.label if disaster_system.current != 0 else "",
+			"history": history_log.get_recent(8),
+			"settlements": settlement_system.get_settlements().size(),
+			"speed": time_system.speed,
+			"unlocked_achievements": achievements.get_unlocked_list(),
 		})
 
 func _get_era(n: int) -> String:
@@ -410,9 +509,14 @@ func _input(event: InputEvent) -> void:
 			KEY_Q: _pan_keys["q"] = down
 			KEY_E: _pan_keys["e"] = down
 			KEY_R:
-				if down: _init_world()  # Reset
+				if down: _init_world()
 			KEY_H:
 				if down: _centre_on_agents()
+			KEY_SPACE:
+				if down: time_system.set_speed(0.0 if time_system.speed > 0.0 else 1.0)
+			KEY_1: if down: time_system.set_speed(1.0)
+			KEY_2: if down: time_system.set_speed(5.0)
+			KEY_3: if down: time_system.set_speed(20.0)
 
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
