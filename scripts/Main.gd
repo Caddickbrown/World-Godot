@@ -383,10 +383,14 @@ func _handle_camera_pan(delta: float) -> void:
 	var right := Vector3(cos(_cam_angle_h), 0, -sin(_cam_angle_h))
 	var speed := PAN_SPEED * (_cam_distance / 20.0)
 
-	if _pan_keys.get("w", false): _cam_target -= fwd * speed * delta; moved = true
-	if _pan_keys.get("s", false): _cam_target += fwd * speed * delta; moved = true
+	if _pan_keys.get("w", false): _cam_target += fwd * speed * delta; moved = true
+	if _pan_keys.get("s", false): _cam_target -= fwd * speed * delta; moved = true
 	if _pan_keys.get("a", false): _cam_target -= right * speed * delta; moved = true
 	if _pan_keys.get("d", false): _cam_target += right * speed * delta; moved = true
+
+	const ROT_SPEED := 1.8  # radians/sec
+	if _pan_keys.get("q", false): _cam_angle_h -= ROT_SPEED * delta; moved = true
+	if _pan_keys.get("e", false): _cam_angle_h += ROT_SPEED * delta; moved = true
 
 	_cam_target.x = clampf(_cam_target.x, 0, WORLD_WIDTH * TILE_SIZE)
 	_cam_target.z = clampf(_cam_target.z, 0, WORLD_HEIGHT * TILE_SIZE)
@@ -403,6 +407,8 @@ func _input(event: InputEvent) -> void:
 			KEY_S: _pan_keys["s"] = down
 			KEY_A: _pan_keys["a"] = down
 			KEY_D: _pan_keys["d"] = down
+			KEY_Q: _pan_keys["q"] = down
+			KEY_E: _pan_keys["e"] = down
 			KEY_R:
 				if down: _init_world()  # Reset
 			KEY_H:
@@ -420,10 +426,13 @@ func _input(event: InputEvent) -> void:
 
 var _drag_start: Vector2
 var _drag_cam_target: Vector3
+var _drag_cam_angle_h: float = 0.0
 var _is_dragging: bool = false
+var _is_rotating: bool = false
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
+		# Middle mouse or Alt+Left = pan drag
 		if event.button_index == MOUSE_BUTTON_MIDDLE or \
 		   (event.button_index == MOUSE_BUTTON_LEFT and event.alt_pressed):
 			if event.pressed:
@@ -432,18 +441,31 @@ func _unhandled_input(event: InputEvent) -> void:
 				_is_dragging = true
 			else:
 				_is_dragging = false
+		# Right mouse = orbit rotate
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			if event.pressed:
+				_drag_start = event.position
+				_drag_cam_angle_h = _cam_angle_h
+				_is_rotating = true
+			else:
+				_is_rotating = false
 
-	if event is InputEventMouseMotion and _is_dragging:
+	if event is InputEventMouseMotion:
 		var em := event as InputEventMouseMotion
-		var scale := _cam_distance / 400.0
-		var dx: float = (em.position.x - _drag_start.x) * scale
-		var dz: float = (em.position.y - _drag_start.y) * scale
-		var fwd := Vector3(sin(_cam_angle_h), 0, cos(_cam_angle_h))
-		var right := Vector3(cos(_cam_angle_h), 0, -sin(_cam_angle_h))
-		_cam_target = _drag_cam_target - right * dx + fwd * dz
-		_cam_target.x = clampf(_cam_target.x, 0, WORLD_WIDTH * TILE_SIZE)
-		_cam_target.z = clampf(_cam_target.z, 0, WORLD_HEIGHT * TILE_SIZE)
-		_update_camera()
+		if _is_dragging:
+			var scale := _cam_distance / 400.0
+			var dx: float = (em.position.x - _drag_start.x) * scale
+			var dz: float = (em.position.y - _drag_start.y) * scale
+			var fwd := Vector3(sin(_cam_angle_h), 0, cos(_cam_angle_h))
+			var right := Vector3(cos(_cam_angle_h), 0, -sin(_cam_angle_h))
+			_cam_target = _drag_cam_target - right * dx + fwd * dz
+			_cam_target.x = clampf(_cam_target.x, 0, WORLD_WIDTH * TILE_SIZE)
+			_cam_target.z = clampf(_cam_target.z, 0, WORLD_HEIGHT * TILE_SIZE)
+			_update_camera()
+		if _is_rotating:
+			var dx: float = (em.position.x - _drag_start.x) * 0.005
+			_cam_angle_h = _drag_cam_angle_h + dx
+			_update_camera()
 
 func _centre_on_agents() -> void:
 	var alive := agents.filter(func(a): return a.health > 0.0 and not a.is_dead)
