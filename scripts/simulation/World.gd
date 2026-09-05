@@ -1,7 +1,13 @@
 class_name World
 
-const WORLD_WIDTH := 32
-const WORLD_HEIGHT := 32
+const WORLD_WIDTH := 128
+const WORLD_HEIGHT := 128
+
+# The generator's noise frequencies were authored against a 32x32 world.
+# Coordinates are scaled by this so the macro landmass shape is preserved at
+# any world size; a detail octave adds the finer variation the extra
+# resolution can now carry.
+const NOISE_REFERENCE_SIZE := 32.0
 const TILE_SIZE := 2.0
 
 enum TileType {
@@ -31,11 +37,32 @@ var flora_slow_timer: float = 0.0
 
 var _home_occupants: Dictionary = {}
 
+# Continuous per-tile updates (regrowth, depletion recovery) are linear
+# accumulators, so instead of touching all 16k tiles every frame we walk one
+# stripe of rows per call and advance it by STRIPE_COUNT * delta. Aggregate
+# behaviour is identical; the per-frame cost drops by the same factor.
+const STRIPE_COUNT := 8
+var _resource_stripe: int = 0
+var _depletion_stripe: int = 0
+
+# Carrying capacity needs a full scan, but the food-tile count only moves when
+# terrain changes. Recompute at most once per in-game day.
+var _capacity_cache: int = -1
+var _capacity_cache_day: int = -1
+
+# Coordinate scale into the generator's reference space (1.0 at 32x32).
+var _noise_scale: float = 1.0
+# Area relative to the reference world; per-tile spawn probabilities that
+# should produce a constant *count* rather than a constant density divide by it.
+var _area_scale: float = 1.0
+
 func _init(p_seed: int = -1) -> void:
 	if p_seed < 0:
 		seed_val = randi() % 9999
 	else:
 		seed_val = p_seed
+	_noise_scale = NOISE_REFERENCE_SIZE / float(maxi(width, height))
+	_area_scale = float(width * height) / (NOISE_REFERENCE_SIZE * NOISE_REFERENCE_SIZE)
 	_generate()
 	_generate_glaciers()
 	_generate_rivers()
@@ -48,12 +75,24 @@ func _rng(x: int, z: int, offset: float = 0.0) -> float:
 
 func _noise(x: int, z: int) -> float:
 	var s := seed_val * 0.137
-	return (
-		sin(x * 0.18 + s)        * cos(z * 0.14 + s * 1.71) * 0.45 +
-		sin(x * 0.35 + s * 2.13) * cos(z * 0.29 + s * 0.63) * 0.30 +
-		sin(x * 0.72 + s * 0.54) * cos(z * 0.61 + s * 1.23) * 0.15 +
-		cos(x * 0.11 + z * 0.16 + s * 1.87)                  * 0.25
+	# Scale into the reference space so landmasses keep their shape at any size.
+	var fx := float(x) * _noise_scale
+	var fz := float(z) * _noise_scale
+	var base := (
+		sin(fx * 0.18 + s)        * cos(fz * 0.14 + s * 1.71) * 0.45 +
+		sin(fx * 0.35 + s * 2.13) * cos(fz * 0.29 + s * 0.63) * 0.30 +
+		sin(fx * 0.72 + s * 0.54) * cos(fz * 0.61 + s * 1.23) * 0.15 +
+		cos(fx * 0.11 + fz * 0.16 + s * 1.87)                  * 0.25
 	) / 1.15
+	# Detail octave at native resolution — too fine to see at 32x32, adds
+	# coastline and ridge variation once the world is larger.
+	if _noise_scale < 1.0:
+		var detail := (
+			sin(x * 0.31 + s * 3.1) * cos(z * 0.27 + s * 2.2) * 0.6 +
+			sin(x * 0.63 + s * 1.4) * cos(z * 0.55 + s * 3.7) * 0.4
+		)
+		base += detail * 0.055 * (1.0 - _noise_scale)
+	return base
 
 # ── Generation ─────────────────────────────────────────────────────────────
 
@@ -74,10 +113,12 @@ func _generate() -> void:
 
 			if t == TileType.GRASS or t == TileType.WOODLAND or t == TileType.FOREST:
 				var s := seed_val * 0.491
+				var ax := float(x) * _noise_scale
+				var az := float(z) * _noise_scale
 				var arid := (
-					sin(x * 0.09 + s)       * cos(z * 0.07 + s * 1.6) * 0.50 +
-					sin(x * 0.17 + s * 1.9) * cos(z * 0.13 + s * 0.5) * 0.30 +
-					cos(x * 0.05 + z * 0.08 + s * 1.2)                 * 0.20
+					sin(ax * 0.09 + s)       * cos(az * 0.07 + s * 1.6) * 0.50 +
+					sin(ax * 0.17 + s * 1.9) * cos(az * 0.13 + s * 0.5) * 0.30 +
+					cos(ax * 0.05 + az * 0.08 + s * 1.2)                 * 0.20
 				) / 1.0 + 0.5
 				if arid > 0.91:
 					t = TileType.DESERT
@@ -186,8 +227,10 @@ func _generate_glaciers() -> void:
 				tile["elevation"] = 0.60
 
 func _generate_rivers() -> void:
-	const RIVER_CHANCE := 0.08
-	const MAX_LEN := 24
+	# Source chance is per mountain/stone tile, so divide by area to keep the
+	# number of rivers stable rather than scaling with the tile count.
+	var river_chance: float = 0.08 / maxf(_area_scale, 1.0)
+	var max_len: int = int(24 * maxf(1.0, float(maxi(width, height)) / NOISE_REFERENCE_SIZE))
 	var terminal := [TileType.WATER, TileType.DEEP_WATER, TileType.BEACH]
 	var blocked  := [TileType.GLACIER, TileType.MOUNTAIN]
 	var dirs := [[-1,0],[1,0],[0,-1],[0,1]]
@@ -196,11 +239,11 @@ func _generate_rivers() -> void:
 		for x in range(width):
 			var t: int = int(tiles[z][x]["type"])
 			if t != TileType.MOUNTAIN and t != TileType.STONE: continue
-			if _rng(x, z, 400) >= RIVER_CHANCE: continue
+			if _rng(x, z, 400) >= river_chance: continue
 
 			var cx := x
 			var cz := z
-			for _step in range(MAX_LEN):
+			for _step in range(max_len):
 				var tile: Dictionary = tiles[cz][cx]
 				if tile["type"] in terminal: break
 				tile["river"] = true
@@ -280,17 +323,20 @@ func get_season() -> String:
 
 func update_resources(delta: float, season: String) -> void:
 	var mult := _season_mult(season)
-	for z in range(height):
+	var d := delta * float(STRIPE_COUNT)
+	var start := _resource_stripe
+	_resource_stripe = (_resource_stripe + 1) % STRIPE_COUNT
+	for z in range(start, height, STRIPE_COUNT):
 		for x in range(width):
 			var tile: Dictionary = tiles[z][x]
 			match tile["type"]:
-				TileType.GRASS:    tile["resource"] = minf(1.0, tile["resource"] + 0.0020 * delta * mult)
-				TileType.WOODLAND: tile["resource"] = minf(1.0, tile["resource"] + 0.0016 * delta * mult)
-				TileType.FOREST:   tile["resource"] = minf(1.0, tile["resource"] + 0.0012 * delta * mult)
+				TileType.GRASS:    tile["resource"] = minf(1.0, tile["resource"] + 0.0020 * d * mult)
+				TileType.WOODLAND: tile["resource"] = minf(1.0, tile["resource"] + 0.0016 * d * mult)
+				TileType.FOREST:   tile["resource"] = minf(1.0, tile["resource"] + 0.0012 * d * mult)
 			if tile["herbs"] >= 0.0:
-				tile["herbs"] = minf(1.0, tile["herbs"] + 0.0006 * delta * mult)
+				tile["herbs"] = minf(1.0, tile["herbs"] + 0.0006 * d * mult)
 			if tile["mushrooms"] >= 0.0:
-				tile["mushrooms"] = minf(1.0, tile["mushrooms"] + 0.0008 * delta * mult)
+				tile["mushrooms"] = minf(1.0, tile["mushrooms"] + 0.0008 * d * mult)
 
 func _season_mult(season: String) -> float:
 	match season:
@@ -301,11 +347,14 @@ func _season_mult(season: String) -> float:
 	return 1.0
 
 func update_depletion(delta: float) -> void:
-	for z in range(height):
+	var d := delta * float(STRIPE_COUNT)
+	var start := _depletion_stripe
+	_depletion_stripe = (_depletion_stripe + 1) % STRIPE_COUNT
+	for z in range(start, height, STRIPE_COUNT):
 		for x in range(width):
 			var tile: Dictionary = tiles[z][x]
 			if tile["depletion_level"] > 0.0:
-				tile["depletion_level"] = maxf(0.0, tile["depletion_level"] - 0.002 * delta)
+				tile["depletion_level"] = maxf(0.0, tile["depletion_level"] - 0.002 * d)
 
 func update_cut_trees(delta: float) -> void:
 	var to_remove: Array = []
@@ -360,14 +409,68 @@ static func is_depleted(tile: Dictionary) -> bool:
 
 # ── Spawn points ─────────────────────────────────────────────────────────────
 
+# Agents spawn as a single band, not scattered across the whole map. On a large
+# world a uniform scatter puts founders a hundred tiles apart, so they never meet
+# and no society ever forms. Pick the most food-rich grass region and seed there.
 func get_spawn_points(count: int) -> Array:
-	var candidates: Array = []
+	var grass: Array = []
 	for z in range(height):
 		for x in range(width):
 			if tiles[z][x]["type"] == TileType.GRASS:
-				candidates.append({"x": x + 0.5, "z": z + 0.5})
-	candidates.shuffle()
-	return candidates.slice(0, count)
+				grass.append(Vector2i(x, z))
+	if grass.is_empty():
+		return get_land_spawn_points(count)
+
+	var origin := _pick_spawn_origin(grass)
+
+	# Collect grass tiles nearest the chosen origin, widening until we have enough.
+	var scored: Array = []
+	for g in grass:
+		var gx: Vector2i = g
+		var d := Vector2(gx.x - origin.x, gx.y - origin.y).length()
+		scored.append({"x": gx.x, "z": gx.y, "d": d})
+	scored.sort_custom(func(a, b): return float(a["d"]) < float(b["d"]))
+
+	# Take from a pool a few times the requested size so the band has some spread
+	# rather than being a solid block.
+	var pool_size: int = mini(scored.size(), maxi(count * 4, count))
+	var pool: Array = scored.slice(0, pool_size)
+	pool.shuffle()
+
+	var out: Array = []
+	for i in range(mini(count, pool.size())):
+		out.append({"x": float(pool[i]["x"]) + 0.5, "z": float(pool[i]["z"]) + 0.5})
+	return out
+
+# Scores candidate grass tiles by how much food/forest sits within a short radius
+# and returns the best, so founders start somewhere survivable.
+func _pick_spawn_origin(grass: Array) -> Vector2i:
+	var best := grass[0] as Vector2i
+	var best_score := -1.0
+	# Sample rather than scoring every grass tile — this runs at world init.
+	var step: int = maxi(1, grass.size() / 400)
+	var i := 0
+	while i < grass.size():
+		var g := grass[i] as Vector2i
+		var score := 0.0
+		for dz in range(-4, 5):
+			for dx in range(-4, 5):
+				var t := get_tile(g.x + dx, g.y + dz)
+				if t.is_empty():
+					score -= 0.5   # penalise map edges
+					continue
+				match int(t["type"]):
+					TileType.GRASS:    score += 1.0
+					TileType.WOODLAND: score += 1.4
+					TileType.FOREST:   score += 1.2
+					TileType.WATER:    score += 0.8
+					TileType.MOUNTAIN: score -= 0.6
+					TileType.DEEP_WATER: score -= 1.0
+		if score > best_score:
+			best_score = score
+			best = g
+		i += step
+	return best
 
 func get_land_spawn_points(count: int) -> Array:
 	var candidates: Array = []
@@ -380,13 +483,19 @@ func get_land_spawn_points(count: int) -> Array:
 	return candidates.slice(0, count)
 
 func get_carrying_capacity() -> int:
+	# Called every frame from several places; the underlying food-tile count
+	# only shifts when terrain does, so one full scan per in-game day is plenty.
+	if _capacity_cache_day == day and _capacity_cache >= 0:
+		return _capacity_cache
 	var food_tiles := 0
 	for z in range(height):
 		for x in range(width):
 			var t: int = int(tiles[z][x]["type"])
 			if t == TileType.GRASS or t == TileType.WOODLAND or t == TileType.FOREST:
 				food_tiles += 1
-	return maxi(40, int(25 + food_tiles * 0.18))
+	_capacity_cache = maxi(40, int(25 + food_tiles * 0.18))
+	_capacity_cache_day = day
+	return _capacity_cache
 
 func find_nearest(cx: float, cz: float, types: Array, radius: float = 10.0) -> Dictionary:
 	var best := {}

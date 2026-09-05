@@ -38,6 +38,13 @@ func get_moisture(tile: Dictionary) -> float:
 
 # ── Main tick ─────────────────────────────────────────────────────────────────
 
+# Continuous full-world passes are striped across frames: each call handles one
+# row in STRIPE_COUNT and advances by STRIPE_COUNT * delta. These are linear
+# accumulators and rare-event checks, so the aggregate result is unchanged.
+const STRIPE_COUNT := 8
+var _soil_stripe: int = 0
+var _desert_stripe: int = 0
+
 func tick(delta: float, world: World, agents: Array, day: int, history_log: HistoryLog) -> void:
 	_forest_timer += delta
 	if _forest_timer >= FOREST_SPREAD_INTERVAL:
@@ -168,16 +175,17 @@ func _tick_overgraze_decay(delta: float, world: World, day: int, history_log: Hi
 			_overgrazing[key] = current
 
 	# Recovery of overgrazed DESERT tiles.
-	for z in range(World.WORLD_HEIGHT):
-		for x in range(World.WORLD_WIDTH):
-			var tile: Dictionary = world.get_tile(x, z)
-			if tile.is_empty():
-				continue
+	var dd := delta * float(STRIPE_COUNT)
+	var dstart := _desert_stripe
+	_desert_stripe = (_desert_stripe + 1) % STRIPE_COUNT
+	for z in range(dstart, world.height, STRIPE_COUNT):
+		for x in range(world.width):
+			var tile: Dictionary = world.tiles[z][x]
 			if int(tile.get("type", -1)) != World.TileType.DESERT:
 				continue
 			if not bool(tile.get("overgrazed", false)):
 				continue
-			var ot: float = float(tile.get("overgraze_time", 0.0)) + delta
+			var ot: float = float(tile.get("overgraze_time", 0.0)) + dd
 			tile["overgraze_time"] = ot
 			if ot >= OVERGRAZE_RECOVER_TIME:
 				tile["type"] = World.TileType.GRASS
@@ -192,20 +200,21 @@ func _tick_overgraze_decay(delta: float, world: World, day: int, history_log: Hi
 # ── Soil quality ──────────────────────────────────────────────────────────────
 
 func _tick_soil(delta: float, world: World) -> void:
-	for z in range(World.WORLD_HEIGHT):
-		for x in range(World.WORLD_WIDTH):
-			var tile: Dictionary = world.get_tile(x, z)
-			if tile.is_empty():
-				continue
+	var d := delta * float(STRIPE_COUNT)
+	var start := _soil_stripe
+	_soil_stripe = (_soil_stripe + 1) % STRIPE_COUNT
+	for z in range(start, world.height, STRIPE_COUNT):
+		for x in range(world.width):
+			var tile: Dictionary = world.tiles[z][x]
 			var tile_type: int = int(tile.get("type", -1))
 
 			if tile_type == World.TileType.FOREST:
 				# Slow regeneration toward 1.0.
 				var sq: float = float(tile.get("soil_quality", 1.0))
-				tile["soil_quality"] = minf(1.0, sq + SOIL_REGEN_FOREST * delta)
+				tile["soil_quality"] = minf(1.0, sq + SOIL_REGEN_FOREST * d)
 
 			elif tile_type == World.TileType.GRASS:
 				# Post-fire tiles have elevated soil_quality; continue improving.
 				var sq: float = float(tile.get("soil_quality", 1.0))
 				if sq < 1.0:
-					tile["soil_quality"] = minf(1.0, sq + SOIL_REGEN_BURNOUT * delta)
+					tile["soil_quality"] = minf(1.0, sq + SOIL_REGEN_BURNOUT * d)

@@ -1,6 +1,6 @@
 extends Node3D
 
-const AGENT_COUNT := 12
+const AGENT_COUNT := 40
 const WORLD_WIDTH := World.WORLD_WIDTH
 const WORLD_HEIGHT := World.WORLD_HEIGHT
 const TILE_SIZE := World.TILE_SIZE
@@ -42,13 +42,15 @@ var audio_system          # AudioSystem
 # Camera
 var camera: Camera3D
 var _cam_target: Vector3
-var _cam_distance: float = 40.0
+var _cam_distance: float = 90.0
 var _cam_angle_h: float = 0.0         # horizontal orbit
 var _cam_angle_v: float = deg_to_rad(55.0) # vertical tilt
 var _pan_keys: Dictionary = {}
 const PAN_SPEED := 8.0
 const ZOOM_MIN := 8.0
-const ZOOM_MAX := 100.0
+# The world is WORLD_WIDTH * TILE_SIZE units across, so the far limit has to
+# scale with it or you can never pull back far enough to see the whole map.
+const ZOOM_MAX := 340.0
 
 # Lighting
 var sun: DirectionalLight3D
@@ -190,6 +192,10 @@ func _init_world() -> void:
 	game_over = false
 	selected_agent = null
 	birth_times.clear()
+
+	# Founders spawn as a cluster somewhere in the world, so open the camera on
+	# them rather than on the geometric centre of an empty map.
+	_centre_on_agents()
 
 	# Wire HUD speed buttons back to Main
 	var hud := get_node_or_null("HUD")
@@ -519,11 +525,13 @@ func _input(event: InputEvent) -> void:
 			KEY_3: if down: time_system.set_speed(20.0)
 
 	if event is InputEventMouseButton:
+		# Proportional zoom: a fixed step feels fine up close and glacial when
+		# pulled back across a 256-unit world.
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_cam_distance = clampf(_cam_distance - 4.0, ZOOM_MIN, ZOOM_MAX)
+			_cam_distance = clampf(_cam_distance * 0.88, ZOOM_MIN, ZOOM_MAX)
 			_update_camera()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_cam_distance = clampf(_cam_distance + 4.0, ZOOM_MIN, ZOOM_MAX)
+			_cam_distance = clampf(_cam_distance / 0.88, ZOOM_MIN, ZOOM_MAX)
 			_update_camera()
 
 # ── Mouse drag state ─────────────────────────────────────────────────────────
