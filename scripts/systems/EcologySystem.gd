@@ -90,6 +90,7 @@ func _do_forest_spread(world: World) -> void:
 					if int(ntile.get("type", -1)) == World.TileType.GRASS:
 						if randf() < spread_prob:
 							ntile["type"] = World.TileType.WOODLAND
+							world.mark_tile_dirty(nx, nz)
 							if randf() < HERB_SPAWN_CHANCE:
 								ntile["herbs"] = 1.0
 
@@ -108,6 +109,7 @@ func _do_forest_spread(world: World) -> void:
 				if not has_forest_neighbour:
 					if randf() < revert_prob:
 						tile["type"] = World.TileType.GRASS
+						world.mark_tile_dirty(x, z)
 
 # ── Overgrazing ───────────────────────────────────────────────────────────────
 
@@ -143,6 +145,7 @@ func _do_overgraze_check(agents: Array, world: World, day: int, history_log: His
 				var tile: Dictionary = world.get_tile(tx, tz)
 				if not tile.is_empty() and int(tile.get("type", -1)) == World.TileType.GRASS:
 					tile["type"] = World.TileType.DESERT
+					world.mark_tile_dirty(tx, tz)
 					tile["overgrazed"] = true
 					tile["overgraze_time"] = 0.0
 					_overgrazing.erase(key)
@@ -191,6 +194,7 @@ func _tick_overgraze_decay(delta: float, world: World, day: int, history_log: Hi
 				tile["type"] = World.TileType.GRASS
 				tile.erase("overgrazed")
 				tile.erase("overgraze_time")
+				world.mark_tile_dirty(x, z)
 				history_log.add(
 					"ecology",
 					"An overgrazed desert at (%d, %d) has recovered to grassland" % [x, z],

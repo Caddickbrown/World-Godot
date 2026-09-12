@@ -17,6 +17,9 @@ const HUNGER_DRAIN   := 1.0 / 90.0
 const ENERGY_DRAIN   := 1.0 / 200.0
 const ENERGY_RECOVER := 1.0 / 20.0
 const SOCIAL_COOLDOWN := 4.0
+const MEMORY_FOOD_CAP := 10
+const MEMORY_DANGER_CAP := 5
+const DANGER_AVOID_RADIUS := 3.0
 
 static var _next_id: int = 1
 
@@ -56,10 +59,33 @@ var speech_bubble_timer: float = 0.0
 var speech_bubble: String = ""
 var night_sleeping: bool = false
 
-var task: String = ""  # "gatherer" | "teacher" | "scout" | "carer" | ""
+# An agent holds ONE vocation, stored here. Tier 1 vocations unlock with
+# "organisation"; tier 2 are specialisations gated on a settlement knowing the
+# relevant concept. See get_tasks(). The field keeps its original name because
+# the HUD and renderers already read it.
+var task: String = ""
 var home_id: String = ""
 var bonded_partner_id: int = -1
 var social_history: Dictionary = {}
+
+# Spatial memory. Agents remember where food was and where they were hurt,
+# so foraging stops being a blind radial search and danger is avoided.
+var memory: Dictionary = {
+	"food_sources": [],  # [{x, z, type, last_visited}] capped at MEMORY_FOOD_CAP
+	"dangers":      [],  # [{x, z, type, day}]          capped at MEMORY_DANGER_CAP
+}
+
+# Rituals: periodic gatherings that lift morale once a group shares beliefs.
+var ritual_timer: float = 0.0
+var ritual_cooldown: float = 0.0
+var ritual_morale: float = 0.0
+
+# Trader journeys between settlements.
+var trader_state: String = ""        # "" | "outbound" | "returning"
+var trader_target_settlement: int = -1
+var trader_home_settlement: int = -1
+var trader_cargo: Array = []
+var trader_cooldown: float = 0.0
 
 var parents: Array = []
 var children: Array = []
@@ -77,15 +103,99 @@ var inventory: Inventory
 var _last_weather_mult: float = 1.0
 var _item_defs: Dictionary = {}
 var _season: String = ""
+var _current_day: int = 0
+var _tile_items = null          # TileItems, optional
+var _settlement_system = null   # SettlementSystem, optional
+var _spatial_grid_ref: WeakRef = null   # SpatialGrid — weak, see _grid()
 
 # ── TASKS ─────────────────────────────────────────────────────────────────────
+# One table, two tiers. Tier 1 is the early division of labour that appears
+# with "organisation"; tier 2 are specialisations a settlement can only support
+# once it knows the gating concept. An agent occupies exactly one at a time and
+# is promoted from tier 1 to tier 2 when their settlement's knowledge allows.
 static func get_tasks() -> Dictionary:
 	return {
-		"gatherer": {"icon": "🌾", "name": "Gatherer", "gather_threshold": 0.5, "gather_bonus": 1.05},
-		"teacher":  {"icon": "📢", "name": "Teacher",  "seek_social": true, "spread_bonus": 1.1},
-		"scout":    {"icon": "🔭", "name": "Scout",    "wander_radius_bonus": 3, "discovery_bonus": 1.15},
-		"carer":    {"icon": "💚", "name": "Carer",    "rest_threshold": 0.35, "rest_bonus": 1.1},
+		# ── Tier 1 ──
+		"gatherer": {"tier": 1, "icon": "🌾", "name": "Gatherer", "gather_threshold": 0.5, "gather_bonus": 1.05},
+		"teacher":  {"tier": 1, "icon": "📢", "name": "Teacher",  "seek_social": true, "spread_bonus": 1.1},
+		"scout":    {"tier": 1, "icon": "🔭", "name": "Scout",    "wander_radius_bonus": 3, "discovery_bonus": 1.15},
+		"carer":    {"tier": 1, "icon": "💚", "name": "Carer",    "rest_threshold": 0.35, "rest_bonus": 1.1},
+		# ── Tier 2: gated on "requires", weighted by "trait" ──
+		"farmer":   {"tier": 2, "icon": "🌱", "name": "Farmer",   "requires": "agriculture",
+					 "trait": "industriousness", "min_trait": 0.5, "gather_bonus": 1.25, "gather_threshold": 0.5},
+		"herder":   {"tier": 2, "icon": "🐑", "name": "Herder",   "requires": "animal_domestication",
+					 "trait": "caution", "gather_bonus": 1.1},
+		"builder":  {"tier": 2, "icon": "🔨", "name": "Builder",  "requires": "construction",
+					 "trait": "industriousness", "build_bonus": 1.3},
+		"healer":   {"tier": 2, "icon": "⚕", "name": "Healer",   "requires": "medicine",
+					 "trait": "caution", "rest_threshold": 0.35, "heal_bonus": 1.4},
+		"musician": {"tier": 2, "icon": "🎵", "name": "Musician", "requires": "music",
+					 "trait": "creativity", "min_trait": 0.5, "morale_bonus": 1.3, "seek_social": true},
+		"trader":   {"tier": 2, "icon": "⚖", "name": "Trader",   "requires": "trade",
+					 "trait": "sociability", "trade_bonus": 1.3},
+		"guard":    {"tier": 2, "icon": "🛡", "name": "Guard",    "requires": "governance",
+					 "trait": "courage", "defence_bonus": 1.35},
 	}
+
+# Promote to a tier-2 specialisation when the surrounding group knows the
+# gating concept. Knowledge is pooled from nearby agents as a proxy for
+# "the settlement knows this".
+func maybe_promote_vocation(all_agents: Array) -> bool:
+	if not knowledge.has("organisation"):
+		return false
+	var defs := get_tasks()
+	# Already specialised.
+	if not task.is_empty() and int(defs.get(task, {}).get("tier", 1)) == 2:
+		return false
+
+	var pooled: Dictionary = knowledge.duplicate()
+	var considered := 0
+	for other in _neighbours(all_agents, 10.0):
+		if other == self or other.is_dead or other.health <= 0.0:
+			continue
+		for k in other.knowledge:
+			pooled[k] = true
+		considered += 1
+		if considered >= 20:
+			break
+
+	var candidates: Array = []
+	var total_weight := 0.0
+	for id in defs:
+		var d: Dictionary = defs[id]
+		if int(d.get("tier", 1)) != 2:
+			continue
+		if not pooled.has(str(d.get("requires", ""))):
+			continue
+		var trait_name := str(d.get("trait", "curiosity"))
+		var trait_val: float = float(personality.get(trait_name, 0.0))
+		if trait_val < float(d.get("min_trait", 0.0)):
+			continue
+		var w := 0.4 + trait_val
+		candidates.append({"id": id, "w": w})
+		total_weight += w
+
+	if candidates.is_empty():
+		return false
+
+	var roll := randf() * total_weight
+	for c in candidates:
+		roll -= float(c["w"])
+		if roll <= 0.0:
+			_set_vocation(str(c["id"]))
+			return true
+	_set_vocation(str(candidates[candidates.size() - 1]["id"]))
+	return true
+
+# Taking a vocation nudges the personality trait it draws on — people are
+# shaped by the work they do.
+func _set_vocation(id: String) -> void:
+	task = id
+	var d: Dictionary = get_tasks().get(id, {})
+	var trait_name := str(d.get("trait", ""))
+	if trait_name.is_empty() or not personality.has(trait_name):
+		return
+	personality[trait_name] = minf(1.0, float(personality[trait_name]) + 0.05)
 
 func _init(x: float, z: float) -> void:
 	agent_id = _next_id
@@ -109,6 +219,12 @@ func _init(x: float, z: float) -> void:
 	social_timer = randf() * SOCIAL_COOLDOWN
 	fire_cooldown = 20.0 + randf() * 20.0
 	needs_check_timer = 2.0 + randf() * 3.0
+	ritual_cooldown = 30.0 + randf() * 60.0
+	trader_cooldown = 60.0 + randf() * 60.0
+
+	# Dictionaries and arrays are reference types in GDScript, so each agent
+	# needs its own memory rather than sharing the initialiser's instance.
+	memory = {"food_sources": [], "dangers": []}
 
 	inventory = Inventory.new()
 
@@ -166,10 +282,15 @@ var is_immune: bool:
 
 func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptGraph,
 		  weather_mult: float = 1.0, item_defs: Dictionary = {}, season: String = "spring",
-		  time_system: TimeSystem = null) -> void:
+		  time_system: TimeSystem = null, current_day: int = 0,
+		  tile_items = null, settlement_system = null, spatial_grid = null) -> void:
 
 	_item_defs = item_defs
 	_season = season
+	_current_day = current_day
+	_tile_items = tile_items
+	_settlement_system = settlement_system
+	_spatial_grid_ref = weakref(spatial_grid) if spatial_grid != null else null
 	age += delta
 
 	# Starvation
@@ -223,6 +344,9 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 
 	if discovery_flash > 0.0:  discovery_flash -= delta
 	if fire_cooldown > 0.0:    fire_cooldown -= delta
+	if ritual_cooldown > 0.0:  ritual_cooldown -= delta
+	if ritual_morale > 0.0:    ritual_morale -= delta
+	if trader_cooldown > 0.0:  trader_cooldown -= delta
 	if speech_bubble_timer > 0.0:
 		speech_bubble_timer -= delta
 		if speech_bubble_timer <= 0.0: speech_bubble = ""
@@ -276,6 +400,24 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 			_try_socialise(delta, all_agents, concept_graph)
 			return
 
+		State.RITUAL:
+			# Standing together at a shared site. Energy drains slower and the
+			# gathering leaves a lasting morale boost.
+			ritual_timer -= delta
+			needs["energy"] = minf(1.0, needs["energy"] + ENERGY_RECOVER * delta * 0.4)
+			if ritual_timer <= 0.0:
+				# Boost scales with how many others shared the ritual.
+				var companions := 0
+				for other in _neighbours(all_agents, 6.0):
+					if other != self and not other.is_dead and other.state == State.RITUAL:
+						companions += 1
+				ritual_morale = 40.0 + float(companions) * 12.0
+				ritual_cooldown = 90.0 + randf() * 90.0
+				state = State.WANDERING
+				_pick_wander_target(world, all_agents)
+			_try_socialise(delta, all_agents, concept_graph)
+			return
+
 	# Periodic re-evaluation
 	needs_check_timer -= delta
 	if needs_check_timer <= 0.0:
@@ -318,6 +460,15 @@ func _on_arrival(world: World, all_agents: Array, concept_graph: ConceptGraph) -
 			tile["resource"] = maxf(0.0, tile["resource"] - 0.28 / tool_mult)
 			if tile.get("depletion_level", -1.0) >= 0.0:
 				tile["depletion_level"] = minf(1.0, tile.get("depletion_level", 0.0) + 0.1 / tool_mult)
+			# Worth coming back to — remember it.
+			if yield_val > 0.3:
+				_remember_food_source(int(tile["x"]), int(tile["z"]), int(tile["type"]))
+
+	_pick_up_ground_items(world)
+
+	if not trader_state.is_empty() and _settlement_system != null:
+		_advance_trader_journey(world)
+		return
 
 	_decide_action(world, all_agents, concept_graph, null)
 
@@ -328,6 +479,10 @@ func _decide_action(world: World, all_agents: Array, concept_graph: ConceptGraph
 	var env_mult := _last_weather_mult
 
 	if health < 0.40: _try_use_medicine()
+
+	# A journey in progress overrides ordinary decision-making.
+	if not trader_state.is_empty():
+		return
 
 	# Time-of-day behaviour
 	if time_system != null:
@@ -343,6 +498,26 @@ func _decide_action(world: World, all_agents: Array, concept_graph: ConceptGraph
 		if time_system.is_dawn() and needs["hunger"] < 0.75:
 			state = State.GATHERING
 			_pick_gather_target(world)
+			return
+
+		# At dusk, head back toward shelter rather than being caught out in
+		# the open when night falls.
+		if time_system.is_dusk():
+			var home := _home_position(world)
+			if home.x >= 0.0 and pos.distance_to(home) > 2.0:
+				state = State.WANDERING
+				target = home
+				return
+
+	# Rituals: a shared gathering once the idea exists and others are near.
+	if knowledge.has("ritual") and ritual_cooldown <= 0.0 and needs["hunger"] > 0.35 \
+	   and needs["energy"] > 0.25:
+		if _try_start_ritual(world, all_agents):
+			return
+
+	# Trade journeys between settlements.
+	if knowledge.has("trade") and trader_cooldown <= 0.0 and _settlement_system != null:
+		if _try_start_trader_journey(world):
 			return
 
 	# Critical hunger
@@ -397,37 +572,334 @@ func _pick_wander_target(world: World, all_agents: Array = []) -> void:
 	var radius := 4 + int(curiosity * 4) + radius_bonus
 
 	# Bonded partner bias
-	if bonded_partner_id >= 0 and not all_agents.is_empty() and randf() < 0.4:
-		for other in all_agents:
-			if other.agent_id == bonded_partner_id and other.health > 0.0:
-				var dx: float = other.pos.x - pos.x
-				var dz: float = other.pos.y - pos.y
-				var dist := sqrt(dx * dx + dz * dz)
-				if dist > 2.0:
-					var step := minf(float(radius), dist * 0.7)
-					var tx := floori(pos.x + (dx / dist) * step)
-					var tz := floori(pos.y + (dz / dist) * step)
-					if world.can_traverse(float(tx), float(tz), knowledge):
-						target = Vector2(tx + 0.5, tz + 0.5)
-						return
-				break
+	if bonded_partner_id >= 0 and randf() < 0.4:
+		var partner: Agent = null
+		var grid = _grid()
+		if grid != null:
+			partner = grid.get_agent(bonded_partner_id)
+		else:
+			for other in all_agents:
+				if other.agent_id == bonded_partner_id:
+					partner = other
+					break
+		if partner != null and partner.health > 0.0:
+			var dx: float = partner.pos.x - pos.x
+			var dz: float = partner.pos.y - pos.y
+			var dist := sqrt(dx * dx + dz * dz)
+			if dist > 2.0:
+				var step := minf(float(radius), dist * 0.7)
+				var tx := floori(pos.x + (dx / dist) * step)
+				var tz := floori(pos.y + (dz / dist) * step)
+				if world.can_traverse(float(tx), float(tz), knowledge):
+					target = Vector2(tx + 0.5, tz + 0.5)
+					return
 
-	# Random candidates with seasonal scoring
+	# Sample candidates and take the best rather than the first traversable one,
+	# so season and remembered danger actually steer where agents go.
+	var best := Vector2(-1, -1)
+	var best_score := -INF
 	for _attempt in range(25):
 		var tx := floori(pos.x) + randi_range(-radius, radius)
 		var tz := floori(pos.y) + randi_range(-radius, radius)
-		if world.can_traverse(float(tx), float(tz), knowledge):
-			target = Vector2(tx + 0.5, tz + 0.5)
-			return
+		if not world.can_traverse(float(tx), float(tz), knowledge):
+			continue
+		var tile := world.get_tile(tx, tz)
+		if tile.is_empty():
+			continue
+		var score := _seasonal_tile_score(tile, _season)
+		score -= _danger_penalty(float(tx), float(tz))
+		# Mild preference for somewhere with food still on it.
+		score += float(tile.get("resource", 0.0)) * 0.25
+		# Small random jitter so agents do not all converge on one tile.
+		score += randf() * 0.2
+		if score > best_score:
+			best_score = score
+			best = Vector2(tx + 0.5, tz + 0.5)
+
+	if best.x >= 0.0:
+		target = best
+		return
 
 	target = pos
 
 func _pick_gather_target(world: World) -> void:
-	var tile := world.find_nearest(pos.x, pos.y, [World.TileType.GRASS, World.TileType.FOREST, World.TileType.WOODLAND], 8.0)
-	if not tile.is_empty():
-		target = Vector2(tile["x"] + 0.5, tile["z"] + 0.5)
+	# Head for a remembered food source before falling back to a blind search.
+	var best_mem: Dictionary = {}
+	var best_score := -INF
+	var food: Array = memory["food_sources"]
+	for entry_v in food:
+		var entry: Dictionary = entry_v
+		var ex := float(entry["x"])
+		var ez := float(entry["z"])
+		if not world.can_traverse(ex, ez, knowledge):
+			continue
+		var tile := world.get_tile(int(ex), int(ez))
+		if tile.is_empty():
+			continue
+		# Skip somewhere we have already stripped bare.
+		if float(tile.get("resource", 0.0)) < 0.2:
+			continue
+		var dist := pos.distance_to(Vector2(ex, ez))
+		# Nearer is better; staler memories are trusted a little less.
+		var staleness := float(_current_day - int(entry.get("last_visited", 0)))
+		var score := -dist - staleness * 0.4
+		if score > best_score:
+			best_score = score
+			best_mem = entry
+	if not best_mem.is_empty():
+		target = Vector2(float(best_mem["x"]) + 0.5, float(best_mem["z"]) + 0.5)
+		return
+
+	var tile2 := world.find_nearest(pos.x, pos.y, [World.TileType.GRASS, World.TileType.FOREST, World.TileType.WOODLAND], 8.0)
+	if not tile2.is_empty():
+		target = Vector2(tile2["x"] + 0.5, tile2["z"] + 0.5)
 	else:
 		_pick_wander_target(world)
+
+# Agents within `radius`. Uses the spatial grid when one is available, which
+# turns what would be an O(population) scan per agent per tick into a lookup
+# over a handful of cells. Falls back to the linear scan when there is no grid
+# (the harness and any caller that does not maintain one).
+func _grid():
+	if _spatial_grid_ref == null:
+		return null
+	return _spatial_grid_ref.get_ref()
+
+func _neighbours(all_agents: Array, radius: float) -> Array:
+	var grid = _grid()
+	if grid != null:
+		return grid.get_nearby_agents(pos, radius)
+	var out: Array = []
+	for other in all_agents:
+		if other == self or other.is_dead or other.health <= 0.0:
+			continue
+		if pos.distance_to(other.pos) <= radius:
+			out.append(other)
+	return out
+
+# ── Rituals, trade journeys and shelter ──────────────────────────────────────
+
+# The settlement centre if the agent belongs to one, otherwise the nearest
+# sheltering tile. Returns (-1, -1) when there is nowhere in particular to go.
+func _home_position(world: World) -> Vector2:
+	if _settlement_system != null:
+		var st = _settlement_system.get_settlement_for_agent(agent_id)
+		if st != null:
+			return st.centre
+	var cave := world.find_nearest(pos.x, pos.y, [World.TileType.WOODLAND, World.TileType.FOREST], 8.0)
+	if not cave.is_empty():
+		return Vector2(float(cave["x"]) + 0.5, float(cave["z"]) + 0.5)
+	return Vector2(-1, -1)
+
+func _try_start_ritual(world: World, all_agents: Array) -> bool:
+	# Prefer a temple if the settlement has raised one.
+	var site := Vector2(-1, -1)
+	if _settlement_system != null:
+		var st = _settlement_system.get_settlement_for_agent(agent_id)
+		if st != null and st.has_temple:
+			site = st.temple_pos
+		elif st != null:
+			site = st.centre
+
+	# Otherwise a ritual needs company to be worth holding.
+	if site.x < 0.0:
+		var near := 0
+		for other in _neighbours(all_agents, 6.0):
+			if other != self and not other.is_dead and other.knowledge.has("ritual"):
+				near += 1
+		if near < 2:
+			return false
+		site = pos
+
+	if not world.can_traverse(site.x, site.y, knowledge):
+		return false
+
+	state = State.RITUAL
+	ritual_timer = 8.0 + randf() * 6.0
+	target = site
+	return true
+
+func _try_start_trader_journey(world: World) -> bool:
+	var home = _settlement_system.get_settlement_for_agent(agent_id)
+	if home == null:
+		return false
+	var all_settlements: Array = _settlement_system.get_settlements()
+	if all_settlements.size() < 2:
+		return false
+
+	# Pick the nearest settlement that is not our own.
+	var best = null
+	var best_dist := INF
+	for st in all_settlements:
+		if st.id == home.id:
+			continue
+		var d: float = pos.distance_to(st.centre)
+		if d < best_dist:
+			best_dist = d
+			best = st
+	if best == null:
+		return false
+	if not world.can_traverse(best.centre.x, best.centre.y, knowledge):
+		return false
+
+	# Load whatever we can spare.
+	trader_cargo = _load_trade_cargo()
+	if trader_cargo.is_empty():
+		# Nothing to trade — try again later rather than walking empty-handed.
+		trader_cooldown = 45.0 + randf() * 45.0
+		return false
+
+	trader_home_settlement = home.id
+	trader_target_settlement = best.id
+	trader_state = "outbound"
+	state = State.TRADING
+	target = best.centre
+	return true
+
+# Takes a portion of any item the agent holds more than a working amount of.
+func _load_trade_cargo() -> Array:
+	var cargo: Array = []
+	for stack_v in inventory.stacks.duplicate():
+		var stack: Dictionary = stack_v
+		var item_id := str(stack.get("item_id", ""))
+		var qty := float(stack.get("quantity", 0.0))
+		if item_id.is_empty() or qty <= 1.0:
+			continue
+		var spare := floorf(qty * 0.5)
+		if spare <= 0.0:
+			continue
+		inventory.remove(item_id, spare)
+		cargo.append({"item_id": item_id, "qty": spare})
+	return cargo
+
+# Called on arrival while a journey is in progress.
+func _advance_trader_journey(world: World) -> void:
+	if trader_state == "outbound":
+		var dest = _settlement_system.get_settlement_for_id(trader_target_settlement) \
+			if _settlement_system.has_method("get_settlement_for_id") else null
+		if dest == null:
+			for st in _settlement_system.get_settlements():
+				if st.id == trader_target_settlement:
+					dest = st
+					break
+		if dest != null:
+			# Deliver the cargo into the host settlement's stores.
+			for entry_v in trader_cargo:
+				var entry: Dictionary = entry_v
+				var qty := float(entry["qty"])
+				var def: Dictionary = _item_defs.get(str(entry["item_id"]), {})
+				if bool(def.get("edible", false)) or str(def.get("category", "")) == "food":
+					dest.food_store += qty
+				else:
+					dest.wood_store += qty
+			dest.last_contact_day = _current_day
+		trader_cargo.clear()
+
+		# Head home.
+		var home = null
+		for st in _settlement_system.get_settlements():
+			if st.id == trader_home_settlement:
+				home = st
+				break
+		if home == null:
+			_finish_trader_journey(world)
+			return
+		trader_state = "returning"
+		target = home.centre
+		return
+
+	_finish_trader_journey(world)
+
+func _finish_trader_journey(world: World) -> void:
+	trader_state = ""
+	trader_target_settlement = -1
+	trader_home_settlement = -1
+	trader_cargo.clear()
+	trader_cooldown = 120.0 + randf() * 120.0
+	state = State.WANDERING
+	_pick_wander_target(world)
+
+# ── Memory ───────────────────────────────────────────────────────────────────
+
+func _remember_food_source(tx: int, tz: int, tile_type: int) -> void:
+	var food: Array = memory["food_sources"]
+	for entry_v in food:
+		var entry: Dictionary = entry_v
+		if int(entry["x"]) == tx and int(entry["z"]) == tz:
+			entry["last_visited"] = _current_day
+			return
+	food.append({"x": tx, "z": tz, "type": tile_type, "last_visited": _current_day})
+	if food.size() > MEMORY_FOOD_CAP:
+		# Forget the least recently visited.
+		food.sort_custom(func(a, b): return int(a["last_visited"]) < int(b["last_visited"]))
+		food.remove_at(0)
+
+func remember_danger(dx: int, dz: int, kind: String) -> void:
+	var dangers: Array = memory["dangers"]
+	dangers.append({"x": dx, "z": dz, "type": kind, "day": _current_day})
+	if dangers.size() > MEMORY_DANGER_CAP:
+		dangers.remove_at(0)
+
+func _danger_penalty(tx: float, tz: float) -> float:
+	var penalty := 0.0
+	var dangers: Array = memory["dangers"]
+	for d_v in dangers:
+		var d: Dictionary = d_v
+		var dist := Vector2(float(d["x"]), float(d["z"])).distance_to(Vector2(tx, tz))
+		if dist < DANGER_AVOID_RADIUS:
+			penalty += (DANGER_AVOID_RADIUS - dist) * 0.6
+	return penalty
+
+# ── Seasonal preference ──────────────────────────────────────────────────────
+
+func _seasonal_tile_score(tile: Dictionary, season: String) -> float:
+	if season.to_lower() != "winter":
+		return 1.0
+	# In winter, open low ground is survivable and high stone is not.
+	match int(tile.get("type", -1)):
+		World.TileType.GRASS, World.TileType.WOODLAND:
+			return 1.3
+		World.TileType.MOUNTAIN, World.TileType.STONE:
+			return 0.4
+	return 1.0
+
+# ── Ground items ─────────────────────────────────────────────────────────────
+
+func _pick_up_ground_items(world: World) -> void:
+	if _tile_items == null:
+		return
+	var tx := int(floor(pos.x))
+	var tz := int(floor(pos.y))
+	if not _tile_items.has_items(tx, tz):
+		return
+	var here: Array = _tile_items.get_items(tx, tz)
+	for stack_v in here.duplicate():
+		var stack: Dictionary = stack_v
+		var item_id := str(stack.get("item_id", ""))
+		if item_id.is_empty():
+			continue
+		if inventory.is_full(item_id, _item_defs):
+			continue
+		var want := float(stack.get("quantity", 0.0))
+		var taken: float = _tile_items.pickup(tx, tz, item_id, want)
+		if taken > 0.0:
+			var leftover := inventory.add(item_id, taken, _item_defs)
+			# Anything that would not fit goes straight back on the ground.
+			if leftover > 0.0:
+				_tile_items.drop(tx, tz, item_id, leftover)
+
+# ── Family ───────────────────────────────────────────────────────────────────
+
+func get_family(all_agents: Array) -> Dictionary:
+	var out := {"parents": [], "children": [], "partner": null}
+	for other in all_agents:
+		if other.agent_id in parents:
+			out["parents"].append(other)
+		elif other.agent_id in children:
+			out["children"].append(other)
+		elif bonded_partner_id >= 0 and other.agent_id == bonded_partner_id:
+			out["partner"] = other
+	return out
 
 # ── Discovery ────────────────────────────────────────────────────────────────
 
@@ -446,14 +918,13 @@ func _try_socialise(delta: float, all_agents: Array, concept_graph: ConceptGraph
 	if social_timer > 0.0: return
 	social_timer = (SOCIAL_COOLDOWN + randf() * 2.0) / social_mult
 
-	for other in all_agents:
+	for other in _neighbours(all_agents, 5.0):
 		if other == self or other.health <= 0.0: continue
 		var dist := pos.distance_to(other.pos)
-		if dist < 5.0:
-			concept_graph.try_spread(self, other, SOCIAL_COOLDOWN)
-			_try_spread_infection(other)
-			_track_social_and_bond(other)
-			if dist < 3.5: _try_reproduce(other, concept_graph)
+		concept_graph.try_spread(self, other, SOCIAL_COOLDOWN)
+		_try_spread_infection(other)
+		_track_social_and_bond(other)
+		if dist < 3.5: _try_reproduce(other, concept_graph)
 
 func _track_social_and_bond(other: Agent) -> void:
 	if not is_adult or not other.is_adult: return

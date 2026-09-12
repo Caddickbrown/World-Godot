@@ -9,7 +9,8 @@ var _trade_cooldowns: Dictionary = {}  # agent_id (int) → float countdown
 # Public API
 # ---------------------------------------------------------------------------
 
-func tick(delta: float, agents: Array, item_defs: Dictionary, day: int, history_log: HistoryLog) -> void:
+func tick(delta: float, agents: Array, item_defs: Dictionary, day: int, history_log: HistoryLog,
+		  spatial_grid = null) -> void:
 	# Decrement all trade cooldowns
 	var expired_ids: Array = []
 	for key in _trade_cooldowns:
@@ -37,7 +38,7 @@ func tick(delta: float, agents: Array, item_defs: Dictionary, day: int, history_
 		if _trade_cooldowns.has(agent.agent_id):
 			continue
 
-		var partner: Agent = _find_partner(agent, agents)
+		var partner: Agent = _find_partner(agent, agents, spatial_grid)
 		if partner == null:
 			continue
 		if _trade_cooldowns.has(partner.agent_id):
@@ -52,11 +53,19 @@ func tick(delta: float, agents: Array, item_defs: Dictionary, day: int, history_
 			# _try_trade returns only bool.  See _try_trade_logged() variant below.
 
 
-func _find_partner(agent: Agent, agents: Array) -> Agent:
+const TRADE_RADIUS := 3.0
+
+func _find_partner(agent: Agent, agents: Array, spatial_grid = null) -> Agent:
 	var best: Agent = null
 	var best_dist: float = INF
 
-	for entry in agents:
+	# Partners must be within TRADE_RADIUS, so search only nearby agents when a
+	# grid is available rather than the whole population per trader.
+	var pool: Array = agents
+	if spatial_grid != null:
+		pool = spatial_grid.get_nearby_agents(agent.pos, TRADE_RADIUS)
+
+	for entry in pool:
 		var candidate := entry as Agent
 		if candidate == null:
 			continue
@@ -70,7 +79,7 @@ func _find_partner(agent: Agent, agents: Array) -> Agent:
 			continue
 
 		var dist: float = agent.pos.distance_to(candidate.pos)
-		if dist <= 3.0 and dist < best_dist:
+		if dist <= TRADE_RADIUS and dist < best_dist:
 			best_dist = dist
 			best = candidate
 

@@ -9,7 +9,8 @@ var _conflict_pairs: Dictionary = {}  # "id1:id2" → cooldown float
 # Public API
 # ---------------------------------------------------------------------------
 
-func tick(delta: float, agents: Array, day: int, history_log: HistoryLog) -> void:
+func tick(delta: float, agents: Array, day: int, history_log: HistoryLog,
+		  spatial_grid = null) -> void:
 	var alive: Array = []
 	for entry in agents:
 		var a := entry as Agent
@@ -32,16 +33,40 @@ func tick(delta: float, agents: Array, day: int, history_log: HistoryLog) -> voi
 	if alive.size() <= 15:
 		return
 
-	# Check pairs of alive agents for potential conflict
+	# Conflict only fires within CONFLICT_RADIUS tiles, so an all-pairs sweep is
+	# almost entirely wasted work — at a thousand agents that is half a million
+	# distance checks a frame. Ask the spatial grid for the handful of agents
+	# actually close enough to clash.
+	if spatial_grid != null:
+		var seen: Dictionary = {}
+		for entry in alive:
+			var agent_a := entry as Agent
+			if agent_a == null:
+				continue
+			for other in spatial_grid.get_nearby_agents(agent_a.pos, CONFLICT_RADIUS):
+				var agent_b := other as Agent
+				if agent_b == null or agent_b.agent_id == agent_a.agent_id:
+					continue
+				# Each unordered pair once.
+				var lo: int = mini(agent_a.agent_id, agent_b.agent_id)
+				var hi: int = maxi(agent_a.agent_id, agent_b.agent_id)
+				var key: int = lo * 100000 + hi
+				if seen.has(key):
+					continue
+				seen[key] = true
+				_check_agent_conflict(agent_a, agent_b, day, history_log)
+		return
+
+	# Fallback when no grid is supplied.
 	for i: int in range(alive.size()):
-		var agent_a := alive[i] as Agent
-		if agent_a == null:
+		var agent_a2 := alive[i] as Agent
+		if agent_a2 == null:
 			continue
 		for j: int in range(i + 1, alive.size()):
-			var agent_b := alive[j] as Agent
-			if agent_b == null:
+			var agent_b2 := alive[j] as Agent
+			if agent_b2 == null:
 				continue
-			_check_agent_conflict(agent_a, agent_b, day, history_log)
+			_check_agent_conflict(agent_a2, agent_b2, day, history_log)
 
 
 func trigger_war(side_a: Array, side_b: Array, day: int, history_log: HistoryLog) -> void:
@@ -80,14 +105,17 @@ func is_in_conflict(agent: Agent) -> bool:
 # Private helpers
 # ---------------------------------------------------------------------------
 
+# Maximum distance at which two agents can clash.
+const CONFLICT_RADIUS := 1.5
+
 func _check_agent_conflict(agent_a: Agent, agent_b: Agent, day: int, history_log: HistoryLog) -> void:
 	# Must be different factions
 	if get_faction(agent_a) == get_faction(agent_b):
 		return
 
-	# Must be within 1.5 tiles
+	# Must be within CONFLICT_RADIUS tiles
 	var dist: float = agent_a.pos.distance_to(agent_b.pos)
-	if dist > 1.5:
+	if dist > CONFLICT_RADIUS:
 		return
 
 	# Either on cooldown — skip

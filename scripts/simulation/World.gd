@@ -21,6 +21,7 @@ enum TileType {
 	STONE,
 	MOUNTAIN,
 	GLACIER,
+	LAVA, # appended at the end so existing integer values do not shift
 }
 
 var width: int = WORLD_WIDTH
@@ -34,6 +35,23 @@ var cows: Array = []
 var predators: Array = []
 var day: int = 1
 var flora_slow_timer: float = 0.0
+
+# Tiles whose appearance changed since the renderer last looked. The terrain is
+# chunk-meshed, so a changed tile has to name itself rather than the renderer
+# rescanning 16k tiles to find out what moved.
+var dirty_tiles: Array = []   # Array of Vector2i
+
+# "x,z" → { x, z, melt } for every GLACIER tile. melt is 0 (full ice) to 1 (fully melted).
+var glacier_data: Dictionary = {}
+
+# Generalised ground-nesting sites (chickens, ducks, etc. — any species id).
+# "x,z" → { species, x, z, clutch, max_clutch, clutch_timer, spawn_ready }
+var nesting_sites: Dictionary = {}
+
+# CAD-177: how many times traders have traversed each tile — "x,z" → float count.
+# Written directly by movement/trade code, decayed daily via decay_trade_traffic().
+var trade_traffic: Dictionary = {}
+var _traffic_last_decay_day: int = 0
 
 var _home_occupants: Dictionary = {}
 
@@ -63,10 +81,12 @@ func _init(p_seed: int = -1) -> void:
 		seed_val = p_seed
 	_noise_scale = NOISE_REFERENCE_SIZE / float(maxi(width, height))
 	_area_scale = float(width * height) / (NOISE_REFERENCE_SIZE * NOISE_REFERENCE_SIZE)
-	_generate()
+	_generate()           # includes water-connectivity repair as its final pass
 	_generate_glaciers()
+	_generate_lava()
 	_generate_rivers()
 	_generate_caves()
+	_init_glacier_melt()  # melt-state bookkeeping, after tile types are final
 
 # ── RNG ───────────────────────────────────────────────────────────────────
 
@@ -185,6 +205,10 @@ func _generate() -> void:
 			if tile["type"] == TileType.STONE:
 				if _rng(x, z, 306) < 0.25: tile["flint"] = 1
 
+	# Fourth pass: fix water connectivity — remove isolated puddles, smooth coastlines.
+	# Must run before glaciers/lava/rivers touch STONE/MOUNTAIN tiles.
+	_fix_water_connectivity()
+
 func _base_elevation(t: int) -> float:
 	match t:
 		TileType.WATER:    return 0.04
@@ -196,7 +220,72 @@ func _base_elevation(t: int) -> float:
 		TileType.STONE:    return 0.32
 		TileType.MOUNTAIN: return 1.5
 		TileType.GLACIER:  return 0.60
+		TileType.LAVA:     return 0.08
 		_:                 return 0.1
+
+# Remove isolated inland puddles (<4 connected WATER/DEEP_WATER tiles become BEACH)
+# and smooth coastlines: lone BEACH deep in grassland becomes GRASS, GRASS mostly
+# surrounded by water becomes BEACH. Matters far more at 128x128 than at 32x32,
+# where the coarse noise field can leave single-tile puddles inland.
+func _fix_water_connectivity() -> void:
+	var visited: Dictionary = {}
+	var bodies: Array = []
+
+	for z in range(height):
+		for x in range(width):
+			var key0 := "%d,%d" % [x, z]
+			var t0: int = int(tiles[z][x]["type"])
+			if (t0 != TileType.WATER and t0 != TileType.DEEP_WATER) or visited.has(key0):
+				continue
+			# BFS this water body.
+			var body: Array = []
+			var queue: Array = [Vector2i(x, z)]
+			var qi := 0
+			while qi < queue.size():
+				var c: Vector2i = queue[qi]
+				qi += 1
+				var key := "%d,%d" % [c.x, c.y]
+				if visited.has(key): continue
+				visited[key] = true
+				if c.x < 0 or c.x >= width or c.y < 0 or c.y >= height: continue
+				var t: int = int(tiles[c.y][c.x]["type"])
+				if t != TileType.WATER and t != TileType.DEEP_WATER: continue
+				body.append(c)
+				queue.append(Vector2i(c.x + 1, c.y))
+				queue.append(Vector2i(c.x - 1, c.y))
+				queue.append(Vector2i(c.x, c.y + 1))
+				queue.append(Vector2i(c.x, c.y - 1))
+			bodies.append(body)
+
+	# Remove isolated water bodies (< 4 tiles).
+	for body in bodies:
+		if body.size() < 4:
+			for c2 in body:
+				var cc: Vector2i = c2
+				tiles[cc.y][cc.x]["type"] = TileType.BEACH
+
+	# Coastal smoothing.
+	var diag8 := [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]]
+	for z in range(height):
+		for x in range(width):
+			var tile: Dictionary = tiles[z][x]
+			var t: int = int(tile["type"])
+			if t != TileType.BEACH and t != TileType.GRASS: continue
+			var grass_count := 0
+			var water_count := 0
+			for d in diag8:
+				var nx: int = x + d[0]
+				var nz: int = z + d[1]
+				if nx < 0 or nx >= width or nz < 0 or nz >= height: continue
+				var nt: int = int(tiles[nz][nx]["type"])
+				if nt == TileType.GRASS or nt == TileType.WOODLAND or nt == TileType.FOREST:
+					grass_count += 1
+				elif nt == TileType.WATER or nt == TileType.DEEP_WATER:
+					water_count += 1
+			if t == TileType.BEACH and grass_count >= 5:
+				tile["type"] = TileType.GRASS
+			elif t == TileType.GRASS and water_count >= 4:
+				tile["type"] = TileType.BEACH
 
 func _has_adj_type(x: int, z: int, t: int) -> bool:
 	for d in [[-1,0],[1,0],[0,-1],[0,1]]:
@@ -225,6 +314,25 @@ func _generate_glaciers() -> void:
 			if near_mountain and _rng(x, z, 500) < 0.40:
 				tile["type"] = TileType.GLACIER
 				tile["elevation"] = 0.60
+
+# Small LAVA patches near MOUNTAIN tiles: ~15% of STONE tiles directly (4-dir)
+# adjacent to a MOUNTAIN become LAVA. LAVA is always impassable and damaging.
+func _generate_lava() -> void:
+	for z in range(height):
+		for x in range(width):
+			var tile: Dictionary = tiles[z][x]
+			if tile["type"] != TileType.STONE: continue
+			var near_mountain := false
+			for d in [[-1,0],[1,0],[0,-1],[0,1]]:
+				var nx: int = x + d[0]
+				var nz: int = z + d[1]
+				if nx < 0 or nx >= width or nz < 0 or nz >= height: continue
+				if tiles[nz][nx]["type"] == TileType.MOUNTAIN:
+					near_mountain = true
+					break
+			if near_mountain and _rng(x, z, 600) < 0.15:
+				tile["type"] = TileType.LAVA
+				tile["elevation"] = 0.08
 
 func _generate_rivers() -> void:
 	# Source chance is per mountain/stone tile, so divide by area to keep the
@@ -274,7 +382,37 @@ func _generate_caves() -> void:
 				tile["cave"] = true
 				tile["is_shelter"] = true
 
+# ── Glaciers (melt data) ─────────────────────────────────────────────────────
+
+func _init_glacier_melt() -> void:
+	glacier_data.clear()
+	for z in range(height):
+		for x in range(width):
+			if tiles[z][x]["type"] != TileType.GLACIER: continue
+			glacier_data["%d,%d" % [x, z]] = {"x": x, "z": z, "melt": 0.0}
+
+# Glaciers retreat (melt → 1) when warm, hold/advance (melt → 0) when cold.
+# glacier_data is a sparse subset of tiles (only actual GLACIER tiles), so this
+# is not a full-world scan and needs no striping.
+func update_glaciers(delta: float, temperature: float) -> void:
+	var rate: float = (temperature / 25.0) * 0.00028
+	for key in glacier_data:
+		var g: Dictionary = glacier_data[key]
+		g["melt"] = clampf(g["melt"] + rate * delta, 0.0, 1.0)
+
 # ── Queries ─────────────────────────────────────────────────────────────────
+
+# Systems that mutate a tile's appearance (type, tree_cut, river) call this so
+# the renderer can rebuild just the affected chunk.
+func mark_tile_dirty(x: int, z: int) -> void:
+	dirty_tiles.append(Vector2i(x, z))
+
+func drain_dirty_tiles() -> Array:
+	if dirty_tiles.is_empty():
+		return []
+	var out := dirty_tiles
+	dirty_tiles = []
+	return out
 
 func get_tile(x: int, z: int) -> Dictionary:
 	var tx := int(floor(x))
@@ -291,7 +429,7 @@ func is_walkable(x: float, z: float) -> bool:
 	if tile.is_empty(): return false
 	var t: int = int(tile["type"])
 	return t != TileType.WATER and t != TileType.DEEP_WATER and \
-		   t != TileType.MOUNTAIN and t != TileType.GLACIER
+		   t != TileType.MOUNTAIN and t != TileType.GLACIER and t != TileType.LAVA
 
 func can_traverse(x: float, z: float, knowledge: Dictionary) -> bool:
 	var tile := get_tile_f(x, z)
@@ -302,6 +440,8 @@ func can_traverse(x: float, z: float, knowledge: Dictionary) -> bool:
 	if t == TileType.MOUNTAIN:
 		return knowledge.has("mountain_climbing")
 	if t == TileType.GLACIER:
+		return false
+	if t == TileType.LAVA:
 		return false
 	return true
 
@@ -368,6 +508,7 @@ func update_cut_trees(delta: float) -> void:
 		var tile := get_tile(int(parts[0]), int(parts[1]))
 		if not tile.is_empty():
 			tile["tree_cut"] = false
+			mark_tile_dirty(int(tile["x"]), int(tile["z"]))
 
 func cut_tree(x: int, z: int) -> bool:
 	var tile := get_tile(x, z)
@@ -377,7 +518,103 @@ func cut_tree(x: int, z: int) -> bool:
 	if cut_trees.has(key): return false
 	tile["tree_cut"] = true
 	cut_trees[key] = 90.0 + randf() * 60.0
+	mark_tile_dirty(int(tile["x"]), int(tile["z"]))
 	return true
+
+# ── Nesting sites (generalised ground-nesting fauna) ─────────────────────────
+#
+# Any ground-nesting species (chickens, ducks, ...) can use these tiles: a
+# clutch timer accumulates eggs, and once the clutch is full the nest is
+# spawn-ready. update_nests() reports spawn events; the caller (fauna system)
+# is responsible for actually spawning the animal and then calling
+# consume_nest_spawn() to reset the nest for its next cycle.
+
+# Registers ground-nesting sites on the given tiles for one species.
+# `tile_coords` is an Array of Vector2i (or anything with .x/.y) tile coordinates.
+func init_nesting_sites(tile_coords: Array, species: String, max_clutch: int = 3) -> void:
+	for tc in tile_coords:
+		var tx: int = int(tc.x)
+		var tz: int = int(tc.y)
+		nesting_sites["%d,%d" % [tx, tz]] = {
+			"species": species,
+			"x": tx, "z": tz,
+			"clutch": 0,
+			"max_clutch": max_clutch,
+			"clutch_timer": 10.0 + randf() * 20.0, # stagger initial lay times
+			"spawn_ready": false,
+		}
+
+# Ticks clutch timers. Each nest lays one egg per ~20–35 game-seconds until its
+# clutch is full, at which point it becomes spawn-ready and stops accumulating.
+# Returns an Array of spawn events: [{ "x", "z", "species" }, ...] for newly
+# spawn-ready nests this tick, for the caller to act on.
+func update_nests(delta: float) -> Array:
+	var events: Array = []
+	for key in nesting_sites:
+		var nest: Dictionary = nesting_sites[key]
+		if nest["spawn_ready"]: continue
+		nest["clutch_timer"] -= delta
+		if nest["clutch_timer"] <= 0.0:
+			nest["clutch"] += 1
+			nest["clutch_timer"] = 20.0 + randf() * 15.0
+			if int(nest["clutch"]) >= int(nest["max_clutch"]):
+				nest["spawn_ready"] = true
+				events.append({"x": nest["x"], "z": nest["z"], "species": nest["species"]})
+	return events
+
+# Call once the caller has spawned an animal from a spawn-ready nest, to reset
+# it (clutch back to 0) so it can start accumulating again.
+func consume_nest_spawn(x: int, z: int) -> void:
+	var key := "%d,%d" % [x, z]
+	if not nesting_sites.has(key): return
+	var nest: Dictionary = nesting_sites[key]
+	nest["clutch"] = 0
+	nest["spawn_ready"] = false
+	nest["clutch_timer"] = 20.0 + randf() * 15.0
+
+# ── Domestication ─────────────────────────────────────────────────────────────
+
+# Domestication feedback: nesting sites within `radius` tiles of a building get
+# a lay-rate bonus (matches the 1.3x chicken-nest bonus from the JS prototype,
+# generalised to any species). `building_positions` is an Array of Vector2 (or
+# Vector2i) where .x is the tile x and .y is the tile z — building/animal data
+# this file cannot reach on its own, so the caller supplies positions.
+func update_domestication(delta: float, building_positions: Array, radius: float = 4.0) -> void:
+	if building_positions.is_empty(): return
+	for key in nesting_sites:
+		var nest: Dictionary = nesting_sites[key]
+		if nest["spawn_ready"]: continue
+		var nx: float = float(nest["x"])
+		var nz: float = float(nest["z"])
+		var near := false
+		for b in building_positions:
+			var bx: float = float(b.x)
+			var bz: float = float(b.y)
+			if Vector2(bx - nx, bz - nz).length() <= radius:
+				near = true
+				break
+		if near:
+			nest["clutch_timer"] -= delta * 0.3
+
+# ── Trade traffic ─────────────────────────────────────────────────────────────
+
+# CAD-177: Convenience accumulator — callers may also write trade_traffic
+# directly, matching the JS pattern of incrementing world._tradeTraffic in place.
+func add_trade_traffic(x: int, z: int, amount: float = 1.0) -> void:
+	var key := "%d,%d" % [x, z]
+	trade_traffic[key] = float(trade_traffic.get(key, 0.0)) + amount
+
+# CAD-177: Decay trade traffic counts once per in-game day. Paths fade if unused.
+func decay_trade_traffic(current_day: int) -> void:
+	if current_day - _traffic_last_decay_day < 1: return
+	_traffic_last_decay_day = current_day
+	var to_remove: Array = []
+	for key in trade_traffic:
+		trade_traffic[key] = float(trade_traffic[key]) * 0.98
+		if float(trade_traffic[key]) < 0.5:
+			to_remove.append(key)
+	for key in to_remove:
+		trade_traffic.erase(key)
 
 func flora_slow_tick(delta: float, season: String) -> void:
 	var growth_mult := _flora_growth_mult(season)

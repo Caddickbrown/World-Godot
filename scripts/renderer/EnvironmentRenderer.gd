@@ -31,12 +31,40 @@ const GRASS_DENSITY    := 0.12
 const STONE_DENSITY    := 0.20
 
 var _synty_mat: StandardMaterial3D
-var _scenes: Dictionary = {}   # path → PackedScene or null
+
+# path -> Array[{mesh: Mesh, xform: Transform3D}]  (one entry per MeshInstance3D
+# found in that prop's source scene, transform relative to the scene root)
+var _mesh_defs: Dictionary = {}
+# path -> bool, whether the source scene loaded successfully
+var _scene_valid: Dictionary = {}
+
+# path -> Array[Transform3D]  (per-tile placement transform, collected in pass 1)
+var _pending: Dictionary = {}
+# "x,z" -> {path: String, idx: int}  (tree placements only, for remove_tree_at)
+var _tree_lookup: Dictionary = {}
+# path -> Array[MultiMesh]  (one MultiMesh per mesh part of that prop)
+var _multimesh_by_path: Dictionary = {}
 
 func setup(world: World) -> void:
+	clear()
 	_synty_mat = SyntyMaterial.make()
+	_mesh_defs.clear()
+	_scene_valid.clear()
 	_cache_scenes()
 	_populate(world)
+
+func clear() -> void:
+	for child in get_children():
+		if child is MultiMeshInstance3D:
+			child.queue_free()
+	_pending.clear()
+	_tree_lookup.clear()
+	_multimesh_by_path.clear()
+
+# ---------------------------------------------------------------------------
+# Scene caching: load each prop scene once, extract its mesh part(s) and their
+# local transforms relative to the scene root, then discard the scene.
+# ---------------------------------------------------------------------------
 
 func _cache_scenes() -> void:
 	var all_paths: Array = []
@@ -45,11 +73,60 @@ func _cache_scenes() -> void:
 
 	for path in all_paths:
 		var p: String = str(path)
-		if ResourceLoader.exists(p):
-			var res := load(p)
-			_scenes[p] = res if res is PackedScene else null
-		else:
-			_scenes[p] = null
+		_mesh_defs[p] = []
+		_scene_valid[p] = false
+		if not ResourceLoader.exists(p):
+			continue
+		var res := load(p)
+		if not (res is PackedScene):
+			continue
+		_scene_valid[p] = true
+		var packed := res as PackedScene
+		var inst := packed.instantiate()
+		if inst is Node3D:
+			var is_dae_tree: bool = TREE_PATHS.has(p)
+			var parts: Array = []
+			_extract_mesh_defs(inst as Node3D, Transform3D.IDENTITY, true, is_dae_tree, parts)
+			_mesh_defs[p] = parts
+		inst.free()
+
+# Walk a freshly-instantiated (unparented) scene, recording each MeshInstance3D's
+# mesh together with its transform relative to the scene root. The root's own
+# transform is excluded, since at placement time the root is replaced by the
+# per-tile placement transform (mirrors the old node.position/rotation/scale
+# assignment onto the root of an instantiated scene).
+func _extract_mesh_defs(node: Node3D, accum: Transform3D, is_root: bool, is_dae_tree: bool, out_list: Array) -> void:
+	var local_xform: Transform3D = accum if is_root else accum * node.transform
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		if mi.mesh:
+			var mesh: Mesh = mi.mesh
+			if not is_dae_tree:
+				mesh = _bake_synty_material(mesh)
+			out_list.append({"mesh": mesh, "xform": local_xform})
+	for child in node.get_children():
+		if child is Node3D:
+			_extract_mesh_defs(child as Node3D, local_xform, false, is_dae_tree, out_list)
+
+# Synty FBX props need the flat-colour palette applied to any surface that
+# doesn't already have its own albedo texture. Bake this onto a duplicated
+# mesh resource once, so every MultiMesh instance gets it for free.
+func _bake_synty_material(mesh: Mesh) -> Mesh:
+	var new_mesh: Mesh = mesh.duplicate()
+	for s in range(new_mesh.get_surface_count()):
+		var existing := new_mesh.surface_get_material(s)
+		var needs_apply := true
+		if existing is StandardMaterial3D:
+			if (existing as StandardMaterial3D).albedo_texture != null:
+				needs_apply = false
+		if needs_apply:
+			new_mesh.surface_set_material(s, _synty_mat)
+	return new_mesh
+
+# ---------------------------------------------------------------------------
+# Pass 1: walk the world and collect per-tile placement transforms, keyed by
+# prop path. No nodes are instantiated here.
+# ---------------------------------------------------------------------------
 
 func _populate(world: World) -> void:
 	# Use a fixed RNG seed so the same world always places props the same way
@@ -61,6 +138,8 @@ func _populate(world: World) -> void:
 			var tile: Dictionary = world.tiles[z][x]
 			var tile_type: int = int(tile.get("type", -1))
 			_maybe_place(tile_type, x, z, rng)
+
+	_build_multimeshes()
 
 func _maybe_place(tile_type: int, x: int, z: int, rng: RandomNumberGenerator) -> void:
 	var roll: float = rng.randf()
@@ -97,28 +176,83 @@ func _maybe_place(tile_type: int, x: int, z: int, rng: RandomNumberGenerator) ->
 			return
 
 	if path.is_empty(): return
-	var packed: PackedScene = _scenes.get(path) as PackedScene
-	if packed == null: return
+	if not _scene_valid.get(path, false): return
 
-	var inst := packed.instantiate()
-	if not (inst is Node3D):
-		inst.queue_free()
-		return
-	var node := inst as Node3D
-
+	# NOTE: these rng calls must stay unconditional here (matching the old
+	# code's behaviour of always consuming them once a valid scene is found,
+	# even in the rare case the scene has no usable mesh) so that placement
+	# for every other tile stays bit-for-bit deterministic.
 	var ox: float = (rng.randf() - 0.5) * TILE_SIZE * 0.5
 	var oz: float = (rng.randf() - 0.5) * TILE_SIZE * 0.5
-	node.position = Vector3(
+	var rot_y: float = rng.randf() * TAU
+
+	var parts: Array = _mesh_defs.get(path, [])
+	if parts.is_empty(): return
+
+	var pos := Vector3(
 		(float(x) + 0.5) * TILE_SIZE + ox,
 		0.0,
 		(float(z) + 0.5) * TILE_SIZE + oz
 	)
-	node.rotation.y = rng.randf() * TAU
-	node.scale = Vector3(scale, scale, scale)
+	var basis := Basis(Vector3.UP, rot_y).scaled(Vector3(scale, scale, scale))
+	var xform := Transform3D(basis, pos)
 
-	# BrokenVector DAE trees have vertex colours baked in — no palette needed.
-	# Synty bushes/rocks need the palette applied.
-	if not is_dae_tree:
-		SyntyMaterial.apply_to(node, _synty_mat)
+	if not _pending.has(path):
+		_pending[path] = []
+	var arr: Array = _pending[path]
+	var idx: int = arr.size()
+	arr.append(xform)
 
-	add_child(node)
+	if is_dae_tree:
+		_tree_lookup["%d,%d" % [x, z]] = {"path": path, "idx": idx}
+
+# ---------------------------------------------------------------------------
+# Pass 2: now that every placement's prop path is known, allocate one
+# MultiMesh per mesh part per path and fill in the instance transforms.
+# ---------------------------------------------------------------------------
+
+func _build_multimeshes() -> void:
+	for path in _pending.keys():
+		var xforms: Array = _pending[path]
+		if xforms.is_empty(): continue
+		var parts: Array = _mesh_defs.get(path, [])
+		if parts.is_empty(): continue
+
+		var mm_list: Array = []
+		for part_idx in range(parts.size()):
+			var part: Dictionary = parts[part_idx]
+			var mesh: Mesh = part["mesh"]
+			var local_xform: Transform3D = part["xform"]
+
+			var mm := MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.mesh = mesh
+			mm.instance_count = xforms.size()
+			for i in range(xforms.size()):
+				var world_xform: Transform3D = xforms[i]
+				mm.set_instance_transform(i, world_xform * local_xform)
+
+			var mmi := MultiMeshInstance3D.new()
+			mmi.multimesh = mm
+			mmi.name = "%s_part%d" % [path.get_file(), part_idx]
+			add_child(mmi)
+			mm_list.append(mm)
+
+		_multimesh_by_path[path] = mm_list
+
+# ---------------------------------------------------------------------------
+# Runtime updates
+# ---------------------------------------------------------------------------
+
+# Agents cut trees down; hide that instance by collapsing its transform to a
+# zero scale (MultiMesh has no cheap way to delete a single instance).
+func remove_tree_at(x: int, z: int) -> void:
+	var key := "%d,%d" % [x, z]
+	if not _tree_lookup.has(key): return
+	var entry: Dictionary = _tree_lookup[key]
+	var path: String = entry["path"]
+	var idx: int = entry["idx"]
+	var mm_list: Array = _multimesh_by_path.get(path, [])
+	var degenerate := Transform3D(Basis().scaled(Vector3.ZERO), Vector3.ZERO)
+	for mm in mm_list:
+		(mm as MultiMesh).set_instance_transform(idx, degenerate)

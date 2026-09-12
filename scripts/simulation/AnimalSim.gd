@@ -70,7 +70,11 @@ func spawn_wildlife(world: World) -> void:
 	animals.clear()
 	_next_id = 0
 
-	var land_pts: Array = world.get_land_spawn_points(35)
+	# Wildlife density scales with the map. 35 animals was tuned for a 32x32
+	# world; on 128x128 that leaves the map empty.
+	var area_scale: float = float(world.width * world.height) / (32.0 * 32.0)
+	var land_count: int = clampi(int(35.0 * sqrt(area_scale) * 1.6), 35, 220)
+	var land_pts: Array = world.get_land_spawn_points(land_count)
 	for i in range(land_pts.size()):
 		var pt: Dictionary = land_pts[i]
 		var x: float = float(pt["x"]) + randf() * 0.6 + 0.2
@@ -82,14 +86,26 @@ func spawn_wildlife(world: World) -> void:
 		_next_id += 1
 		animals.append(a)
 
-	# Eagles always soar regardless of biome
-	for _i in range(4):
-		var ex: float = 4.0 + randf() * 24.0
-		var ez: float = 4.0 + randf() * 24.0
+	# Eagles always soar regardless of biome. Spread them over the whole map —
+	# the old fixed 4..28 range put every eagle in one corner of a large world.
+	var eagle_count: int = clampi(int(4.0 * sqrt(area_scale)), 4, 16)
+	for _i in range(eagle_count):
+		var ex: float = randf() * float(world.width)
+		var ez: float = randf() * float(world.height)
 		var eagle := Animal.new(_next_id, AnimalType.EAGLE, ex, ez)
 		_next_id += 1
 		eagle.state = AnimalState.SOAR
 		animals.append(eagle)
+
+# Spawns a single animal of the given type. Used by nesting sites hatching a
+# clutch and by PopulationManager reintroducing a locally extinct species.
+func spawn_one(t: int, x: float, z: float) -> Animal:
+	var a := Animal.new(_next_id, t, x, z)
+	_next_id += 1
+	if t == AnimalType.EAGLE:
+		a.state = AnimalState.SOAR
+	animals.append(a)
+	return a
 
 func _pick_type_for_biome(tile_type: int, idx: int) -> int:
 	var r: int = idx % 7

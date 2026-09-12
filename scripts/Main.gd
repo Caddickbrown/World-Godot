@@ -38,6 +38,9 @@ var spatial_grid          # SpatialGrid
 var history_log           # HistoryLog
 var achievements          # Achievements
 var audio_system          # AudioSystem
+var lineage_tracker       # LineageTracker
+var disease_system        # DiseaseSystem
+var population_manager    # PopulationManager
 
 # Camera
 var camera: Camera3D
@@ -188,6 +191,9 @@ func _init_world() -> void:
 	tile_items = TileItems.new()
 	spatial_grid = SpatialGrid.new()
 	animal_skill_system = AnimalSkillSystem.new()
+	lineage_tracker = LineageTracker.new()
+	disease_system = DiseaseSystem.new()
+	population_manager = PopulationManager.new()
 
 	game_over = false
 	selected_agent = null
@@ -220,6 +226,16 @@ func _process(delta: float) -> void:
 	world.update_resources(game_delta, season)
 	world.update_depletion(game_delta)
 	world.update_cut_trees(game_delta)
+	world.update_glaciers(game_delta, weather_system.temperature)
+	world.decay_trade_traffic(time_system.day)
+
+	# Ground-nesting fauna: nests that filled their clutch this tick become
+	# new animals.
+	for evt in world.update_nests(game_delta):
+		_spawn_from_nest(evt)
+
+	# Buildings nearby speed a nest's lay rate — the domestication feedback.
+	world.update_domestication(game_delta, _building_positions())
 
 	# Flora slow tick
 	world.flora_slow_timer += game_delta
@@ -253,7 +269,8 @@ func _process(delta: float) -> void:
 	for a in agents:
 		if a.health > 0.0 and not a.is_dead:
 			var w_mult := weather_system.energy_drain_mult_at(a.pos.x, a.pos.y)
-			a.tick(game_delta, world, agents, concept_graph, w_mult, item_defs, season, time_system)
+			a.tick(game_delta, world, agents, concept_graph, w_mult, item_defs, season,
+				   time_system, time_system.day, tile_items, settlement_system, spatial_grid)
 			if a.knowledge.has("organisation") and a.task.is_empty():
 				a.adopt_task(agents)
 
@@ -268,12 +285,29 @@ func _process(delta: float) -> void:
 
 	# Ecology, conflict, trading, crafting, settlements
 	ecology_system.tick(game_delta, world, agents, time_system.day, history_log)
-	conflict_system.tick(game_delta, agents, time_system.day, history_log)
-	trading_system.tick(game_delta, agents, item_defs, time_system.day, history_log)
+	conflict_system.tick(game_delta, agents, time_system.day, history_log, spatial_grid)
+	var was_outbreak: bool = disease_system.outbreak_active
+	disease_system.tick(game_delta, agents, time_system.day, history_log, settlement_system)
+	if disease_system.outbreak_active != was_outbreak:
+		if disease_system.outbreak_active:
+			_push_notification("A sickness is spreading!")
+		else:
+			_push_notification("The sickness has passed.")
+	trading_system.tick(game_delta, agents, item_defs, time_system.day, history_log, spatial_grid)
 	crafting_system.tick(game_delta, agents, item_defs, time_system.day, history_log)
-	settlement_system.tick(game_delta, agents, concept_graph, time_system.day, history_log)
+	settlement_system.tick(game_delta, agents, concept_graph, time_system.day, history_log, spatial_grid)
 	tile_items.tick_spoilage(game_delta, item_defs, disaster_system.get_spoilage_mult())
 	animal_skill_system.tick_passive(game_delta)
+
+	# Vocations: agents specialise as their settlement's knowledge allows.
+	# Checked on a slow cadence — it pools nearby agents' knowledge and is far
+	# too expensive to run for every agent every frame.
+	_vocation_timer += game_delta
+	if _vocation_timer >= VOCATION_INTERVAL:
+		_vocation_timer = 0.0
+		for a in agents:
+			if not a.is_dead and a.health > 0.0:
+				a.maybe_promote_vocation(agents)
 
 	# Achievements
 	var new_achievements: Array = achievements.tick(agents, concept_graph, time_system.day)
@@ -312,6 +346,10 @@ func _process(delta: float) -> void:
 
 	# Tick wildlife
 	animal_sim.tick(game_delta, world)
+	_tick_population(game_delta)
+
+	# Push any tile changes this frame into the chunked terrain mesh.
+	_flush_tile_changes()
 
 	# Rendering
 	agent_renderer.update()
@@ -368,6 +406,7 @@ func _handle_events() -> void:
 			var agent: Agent = _find_agent(int(evt["agent_id"]))
 			if agent:
 				agent.discovery_flash = 1.5
+				lineage_tracker.record(str(evt["concept_id"]), agent, time_system.day)
 				if evt["concept_id"] == "organisation":
 					agent.adopt_task(agents)
 
@@ -670,6 +709,89 @@ func _update_settlements() -> void:
 			settlement_tiles.append([int(parts[0]), int(parts[1])])
 
 	settlement_renderer.sync(settlement_tiles, era_idx)
+
+# ── New system helpers ────────────────────────────────────────────────────────
+
+const VOCATION_INTERVAL := 12.0
+var _vocation_timer: float = 0.0
+
+# Maps PopulationManager's species ids onto AnimalSim's type enum.
+const SPECIES_TO_TYPE := {
+	"deer":   AnimalSim.AnimalType.DEER,
+	"wolf":   AnimalSim.AnimalType.WOLF,
+	"sheep":  AnimalSim.AnimalType.SHEEP,
+	"horse":  AnimalSim.AnimalType.HORSE,
+	"rabbit": AnimalSim.AnimalType.RABBIT,
+	"fox":    AnimalSim.AnimalType.FOX,
+}
+
+# Settlement centres double as "buildings" for the domestication bonus.
+func _building_positions() -> Array:
+	var out: Array = []
+	if settlement_system == null:
+		return out
+	for st in settlement_system.get_settlements():
+		out.append(st.centre)
+	return out
+
+func _spawn_from_nest(evt: Dictionary) -> void:
+	var species := str(evt.get("species", ""))
+	if not SPECIES_TO_TYPE.has(species):
+		return
+	var tx := float(evt["x"]) + 0.5
+	var tz := float(evt["z"]) + 0.5
+	animal_sim.spawn_one(int(SPECIES_TO_TYPE[species]), tx, tz)
+	world.consume_nest_spawn(int(evt["x"]), int(evt["z"]))
+
+# Lotka-Volterra population dynamics. PopulationManager owns the maths and
+# returns spawn/cull requests; applying them to the live animals is our job.
+func _tick_population(game_delta: float) -> void:
+	var live_counts: Dictionary = {}
+	for species in SPECIES_TO_TYPE:
+		live_counts[species] = 0
+	for a in animal_sim.animals:
+		if a.health <= 0.0:
+			continue
+		for species in SPECIES_TO_TYPE:
+			if int(SPECIES_TO_TYPE[species]) == a.animal_type:
+				live_counts[species] = int(live_counts[species]) + 1
+				break
+
+	population_manager.tick(game_delta, world, time_system.day, live_counts, history_log)
+
+	for req in population_manager.get_spawn_requests():
+		var species := str(req["species"])
+		if not SPECIES_TO_TYPE.has(species):
+			continue
+		var positions: Array = req.get("positions", [])
+		for i in range(int(req["count"])):
+			var p: Vector2 = positions[i] if i < positions.size() else Vector2(-1, -1)
+			if p.x < 0.0:
+				continue
+			animal_sim.spawn_one(int(SPECIES_TO_TYPE[species]), p.x, p.y)
+
+	for req in population_manager.get_cull_requests():
+		var species := str(req["species"])
+		if not SPECIES_TO_TYPE.has(species):
+			continue
+		var want := int(req["count"])
+		for a in animal_sim.animals:
+			if want <= 0:
+				break
+			if a.health > 0.0 and a.animal_type == int(SPECIES_TO_TYPE[species]):
+				a.health = 0.0
+				want -= 1
+
+# Terrain is chunk-meshed, so changed tiles rebuild only their own chunk.
+# Felled trees also have to be removed from the prop MultiMesh.
+func _flush_tile_changes() -> void:
+	for c in world.drain_dirty_tiles():
+		var cell: Vector2i = c
+		terrain_renderer.rebuild_tile(cell.x, cell.y)
+		var tile := world.get_tile(cell.x, cell.y)
+		if not tile.is_empty() and bool(tile.get("tree_cut", false)):
+			environment_renderer.remove_tree_at(cell.x, cell.y)
+	terrain_renderer.flush_dirty()
 
 # ── Utility ───────────────────────────────────────────────────────────────────
 

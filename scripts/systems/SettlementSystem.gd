@@ -50,31 +50,44 @@ var _next_id: int = 0
 var _formation_timer: float = 0.0
 const FORMATION_INTERVAL: float = 30.0
 
+# Membership, tiers, temples and knowledge pooling each sweep every agent
+# against every settlement. None of them need frame resolution — a settlement's
+# roster does not meaningfully change 60 times a second — so they run on a
+# slower cadence. At a thousand agents this is the difference between ~36k
+# checks per frame and ~36k every two seconds.
+var _membership_timer: float = 0.0
+const MEMBERSHIP_INTERVAL: float = 2.0
+const MEMBERSHIP_RADIUS: float = 6.0
+
 # Tracks which agent_ids were in each settlement last tick (for join/leave logic)
 var _prev_members: Dictionary = {}  # settlement id → Array of agent_id
+
+# agent_id → Settlement. get_settlement_for_agent() is called per agent from
+# several systems every tick; without this it is a scan over every settlement's
+# member list, which is quadratic in population.
+var _settlement_by_agent: Dictionary = {}
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
-func tick(delta: float, agents: Array, concept_graph: ConceptGraph, day: int, history_log: HistoryLog) -> void:
+func tick(delta: float, agents: Array, concept_graph: ConceptGraph, day: int, history_log: HistoryLog,
+		  spatial_grid = null) -> void:
 	# 1. Formation check every 30 s
 	_formation_timer += delta
 	if _formation_timer >= FORMATION_INTERVAL:
 		_formation_timer = 0.0
 		_check_formation(agents, day, history_log)
 
-	# 2. Membership update
-	_update_membership(agents)
-
-	# 3. Tier upgrades
-	_check_tier_upgrades(agents, history_log, day)
-
-	# 4. Temple
-	_check_temple(agents)
-
-	# 5. Knowledge pool (join/leave events)
-	_sync_knowledge_pool(agents, concept_graph)
+	# 2-5. Roster-scale work, on a slower cadence than the frame.
+	_membership_timer += delta
+	if _membership_timer >= MEMBERSHIP_INTERVAL:
+		_membership_timer = 0.0
+		_update_membership(agents, spatial_grid)
+		_reindex_members()
+		_check_tier_upgrades(agents, history_log, day)
+		_check_temple(agents)
+		_sync_knowledge_pool(agents, concept_graph)
 
 	# 6. Resource stores
 	_tick_resources(delta)
@@ -87,10 +100,14 @@ func tick(delta: float, agents: Array, concept_graph: ConceptGraph, day: int, hi
 
 
 func get_settlement_for_agent(agent_id: int) -> RefCounted:
+	return _settlement_by_agent.get(agent_id, null)
+
+# Rebuilds the agent → settlement index. Called whenever membership changes.
+func _reindex_members() -> void:
+	_settlement_by_agent.clear()
 	for s: Settlement in settlements:
-		if s.member_ids.has(agent_id):
-			return s
-	return null
+		for id in s.member_ids:
+			_settlement_by_agent[int(id)] = s
 
 
 func get_settlements() -> Array:
@@ -100,6 +117,7 @@ func get_settlements() -> Array:
 func clear() -> void:
 	settlements.clear()
 	_prev_members.clear()
+	_settlement_by_agent.clear()
 	_next_id = 0
 	_formation_timer = 0.0
 
@@ -165,14 +183,22 @@ func _create_settlement(group: Array, centroid: Vector2, day: int, history_log: 
 # Membership
 # ---------------------------------------------------------------------------
 
-func _update_membership(agents: Array) -> void:
+func _update_membership(agents: Array, spatial_grid = null) -> void:
 	for s: Settlement in settlements:
 		var new_members: Array = []
-		for a: Agent in agents:
-			if a.is_dead:
-				continue
-			if a.pos.distance_to(s.centre) <= 6.0:
-				new_members.append(a.agent_id)
+		if spatial_grid != null:
+			# Only agents near the settlement centre can be members, so ask the
+			# grid rather than testing the whole population per settlement.
+			for entry in spatial_grid.get_nearby_agents(s.centre, MEMBERSHIP_RADIUS):
+				var a := entry as Agent
+				if a != null and not a.is_dead:
+					new_members.append(a.agent_id)
+		else:
+			for a: Agent in agents:
+				if a.is_dead:
+					continue
+				if a.pos.distance_to(s.centre) <= MEMBERSHIP_RADIUS:
+					new_members.append(a.agent_id)
 		s.member_ids = new_members
 
 # ---------------------------------------------------------------------------
@@ -259,6 +285,7 @@ func _sync_knowledge_pool(agents: Array, concept_graph: ConceptGraph) -> void:
 					s.knowledge_pool[str(k)] = true
 
 		_prev_members[s.id] = s.member_ids.duplicate()
+	_reindex_members()
 
 # ---------------------------------------------------------------------------
 # Resources
