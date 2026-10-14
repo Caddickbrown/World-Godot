@@ -17,6 +17,23 @@ const CHARACTER_PATH := "res://assets/characters/FantasyKingdom_Characters.fbx"
 const CHARACTER_SCALE := 0.008
 
 var agents: Array = []
+var world: World  # for ground height; set by Main
+
+## Observer readability. From the sky a 1.4 m person is a speck on a 256 m map,
+## so far views show a pin over each head; close views show names, and anyone
+## with something to say gets a speech bubble.
+var view_distance: float = 90.0       # camera distance, set by Main each frame
+var walker_pos: Vector3 = Vector3.INF # the walker, when walking among them
+## The person the walker is listening to: their thought shows as a bubble.
+## A view-only overlay; the agent never knows (the walker is unseen).
+var listening_id: int = -1
+const LABEL_VIEW_DISTANCE := 45.0     # names show when the camera is closer than this
+const LABEL_WALK_RADIUS := 14.0       # ...or when the walker is within this (world units)
+const PIN_VIEW_DISTANCE := 60.0       # pins show when the camera is further than this
+const HEAD_HEIGHT := 1.6
+var _pin_mesh: SphereMesh
+var _pin_mat: StandardMaterial3D
+var _pin_mat_selected: StandardMaterial3D
 var _agent_nodes: Dictionary = {}   # agent_id → { node, anim }
 
 var _male_scene: PackedScene        # EverydayMotion male
@@ -44,6 +61,17 @@ func _ready() -> void:
 	_mat_dead = StandardMaterial3D.new()
 	_mat_dead.albedo_color = Color(0.4, 0.4, 0.42)
 	_mat_dead.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	_pin_mesh = SphereMesh.new()
+	_pin_mesh.radius = 0.35
+	_pin_mesh.height = 0.7
+	_pin_mesh.radial_segments = 12
+	_pin_mesh.rings = 6
+	_pin_mat = StandardMaterial3D.new()
+	_pin_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_pin_mat.albedo_color = Color(1.0, 0.62, 0.30)
+	_pin_mat_selected = _pin_mat.duplicate() as StandardMaterial3D
+	_pin_mat_selected.albedo_color = Color(1.0, 0.95, 0.25)
 
 	_fallback_mesh = SphereMesh.new()
 	_fallback_mesh.radius = 0.18
@@ -112,7 +140,32 @@ func _add_node(agent: Agent) -> void:
 
 	root.scale = Vector3(CHARACTER_SCALE, CHARACTER_SCALE, CHARACTER_SCALE)
 	add_child(root)
-	_agent_nodes[agent.agent_id] = {"node": root, "anim": anim_player, "prev_state": -1}
+	# Overlays are siblings, not children: the model is scaled to 0.008.
+	var label := _make_label(40, Color(1, 1, 1))
+	var bubble := _make_label(36, Color(1.0, 0.96, 0.82))
+	var pin := MeshInstance3D.new()
+	pin.mesh = _pin_mesh
+	pin.material_override = _pin_mat
+	pin.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(pin)
+	_agent_nodes[agent.agent_id] = {"node": root, "anim": anim_player, "prev_state": -1,
+		"label": label, "bubble": bubble, "pin": pin}
+
+func _make_label(font_size: int, color: Color) -> Label3D:
+	var l := Label3D.new()
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.font_size = font_size
+	l.pixel_size = 0.006
+	l.outline_size = 10
+	l.outline_modulate = Color(0.08, 0.06, 0.04, 0.9)
+	l.modulate = color
+	l.visible = false
+	add_child(l)
+	return l
+
+## Agent nodes for tests and the capture tool.
+func get_overlay(agent_id: int, key: String) -> Node3D:
+	return (_agent_nodes.get(agent_id, {}) as Dictionary).get(key) as Node3D
 
 func _inject_anims(player: AnimationPlayer, female: bool) -> void:
 	var idle_scene: PackedScene = _anim_idle_f if female else _anim_idle_m
@@ -192,11 +245,12 @@ func update() -> void:
 
 		var tx: float = agent.pos.x * TILE_SIZE
 		var tz: float = agent.pos.y * TILE_SIZE
-		node.position = Vector3(tx, 0.0, tz)
+		var ty: float = world.surface_y(agent.pos.x, agent.pos.y) if world else 0.0
+		node.position = Vector3(tx, ty, tz)
 		node.visible = true
 
 		if agent.state != Agent.State.SLEEPING:
-			var target_pos := Vector3(float(agent.target.x) * TILE_SIZE, 0.0, float(agent.target.y) * TILE_SIZE)
+			var target_pos := Vector3(float(agent.target.x) * TILE_SIZE, ty, float(agent.target.y) * TILE_SIZE)
 			var diff := target_pos - node.position
 			if diff.length() > 0.1:
 				node.rotation.y = atan2(diff.x, diff.z)
@@ -213,13 +267,15 @@ func update() -> void:
 			node.rotation.x = deg_to_rad(90.0)
 		else:
 			node.rotation.x = 0.0
+		_update_overlays(entry, agent, node.position)
 
 	# Hide nodes for removed agents
 	for id in _agent_nodes:
 		if not active_ids.has(id):
 			var entry: Dictionary = _agent_nodes[id] as Dictionary
-			var node: Node3D = entry.get("node") as Node3D
-			if node: node.visible = false
+			for key in ["node", "label", "bubble", "pin"]:
+				var n: Node3D = entry.get(key) as Node3D
+				if n: n.visible = false
 
 func _set_anim(player: AnimationPlayer, state: int) -> void:
 	var name_to_try: String
@@ -237,3 +293,35 @@ func _set_anim(player: AnimationPlayer, state: int) -> void:
 		player.play(name_to_try)
 	else:
 		_play_first(player)
+
+func _update_overlays(entry: Dictionary, agent: Agent, feet: Vector3) -> void:
+	var alive: bool = not agent.is_dead and agent.health > 0.0
+	var near_walker: bool = walker_pos != Vector3.INF and feet.distance_to(walker_pos) < LABEL_WALK_RADIUS
+	var close: bool = view_distance < LABEL_VIEW_DISTANCE or near_walker
+
+	var label: Label3D = entry.get("label") as Label3D
+	if label:
+		label.visible = alive and (close or agent.selected)
+		if label.visible:
+			label.text = agent.agent_name
+			label.position = feet + Vector3(0, HEAD_HEIGHT + 0.25, 0)
+			label.modulate = Color(1.0, 0.95, 0.35) if agent.selected else Color(1, 1, 1)
+
+	var bubble: Label3D = entry.get("bubble") as Label3D
+	if bubble:
+		var listening: bool = agent.agent_id == listening_id
+		var line: String = AgentThoughts.thought(agent) if listening else agent.speech_bubble
+		bubble.visible = alive and not line.is_empty() and (close or agent.selected or listening)
+		if bubble.visible:
+			bubble.text = ("(" + line + ")") if listening else ("“" + line + "”")
+			bubble.modulate = Color(0.75, 0.9, 1.0) if listening else Color(1.0, 0.96, 0.82)
+			bubble.position = feet + Vector3(0, HEAD_HEIGHT + 0.75, 0)
+
+	var pin: MeshInstance3D = entry.get("pin") as MeshInstance3D
+	if pin:
+		pin.visible = alive and view_distance > PIN_VIEW_DISTANCE and walker_pos == Vector3.INF
+		if pin.visible:
+			var s: float = view_distance / 90.0 * (1.6 if agent.selected else 1.0)
+			pin.scale = Vector3(s, s, s)
+			pin.position = feet + Vector3(0, HEAD_HEIGHT + 0.6 * s, 0)
+			pin.material_override = _pin_mat_selected if agent.selected else _pin_mat

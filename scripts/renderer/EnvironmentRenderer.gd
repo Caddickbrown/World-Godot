@@ -45,7 +45,10 @@ var _tree_lookup: Dictionary = {}
 # path -> Array[MultiMesh]  (one MultiMesh per mesh part of that prop)
 var _multimesh_by_path: Dictionary = {}
 
+var _world: World
+
 func setup(world: World) -> void:
+	_world = world
 	clear()
 	_synty_mat = SyntyMaterial.make()
 	_mesh_defs.clear()
@@ -191,7 +194,7 @@ func _maybe_place(tile_type: int, x: int, z: int, rng: RandomNumberGenerator) ->
 
 	var pos := Vector3(
 		(float(x) + 0.5) * TILE_SIZE + ox,
-		0.0,
+		_world.surface_y(float(x) + 0.5, float(z) + 0.5) if _world else 0.0,
 		(float(z) + 0.5) * TILE_SIZE + oz
 	)
 	var basis := Basis(Vector3.UP, rot_y).scaled(Vector3(scale, scale, scale))

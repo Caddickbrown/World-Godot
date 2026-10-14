@@ -9,6 +9,9 @@ const WORLD_HEIGHT := 128
 # resolution can now carry.
 const NOISE_REFERENCE_SIZE := 32.0
 const TILE_SIZE := 2.0
+## World-space height per elevation unit. Everything that stands on the ground
+## (people, animals, props, the walker) uses surface_y() so it sits on the tile.
+const HEIGHT_SCALE := 0.3
 
 enum TileType {
 	DEEP_WATER,
@@ -66,6 +69,10 @@ var _depletion_stripe: int = 0
 # Carrying capacity needs a full scan, but the food-tile count only moves when
 # terrain changes. Recompute at most once per in-game day.
 var _capacity_cache: int = -1
+## Upper bound on people, whatever the land could feed. The game is watched
+## person by person, and past this the crowd stops being readable (the concept
+## piece defaulted to 100, settable 40-300).
+var max_population: int = 150
 var _capacity_cache_day: int = -1
 
 # Coordinate scale into the generator's reference space (1.0 at 32x32).
@@ -452,12 +459,14 @@ func traversal_cost(x: float, z: float, knowledge: Dictionary) -> float:
 	if tile["type"] == TileType.DESERT: return 1.5
 	return 1.0
 
+## Height of the ground (world units) under a tile-space point.
+func surface_y(x: float, z: float) -> float:
+	var tile := get_tile_f(x, z)
+	if tile.is_empty(): return 0.0
+	return float(tile["elevation"]) * HEIGHT_SCALE
+
 func get_season() -> String:
-	var day_of_year := (day - 1) % 365
-	if day_of_year < 91:  return "winter"
-	if day_of_year < 181: return "spring"
-	if day_of_year < 271: return "summer"
-	return "autumn"
+	return TimeSystem.season_for_day(day).to_lower()
 
 # ── Updates ─────────────────────────────────────────────────────────────────
 
@@ -730,7 +739,7 @@ func get_carrying_capacity() -> int:
 			var t: int = int(tiles[z][x]["type"])
 			if t == TileType.GRASS or t == TileType.WOODLAND or t == TileType.FOREST:
 				food_tiles += 1
-	_capacity_cache = maxi(40, int(25 + food_tiles * 0.18))
+	_capacity_cache = clampi(int(25 + food_tiles * 0.18), 40, max_population)
 	_capacity_cache_day = day
 	return _capacity_cache
 

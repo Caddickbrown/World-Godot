@@ -13,6 +13,8 @@ enum State {
 }
 
 const AGENT_SPEED    := 1.8   # tiles/sec
+const LIFESPAN_DAYS_MIN := 6.0
+const LIFESPAN_DAYS_SPREAD := 4.0
 const HUNGER_DRAIN   := 1.0 / 90.0
 const ENERGY_DRAIN   := 1.0 / 200.0
 const ENERGY_RECOVER := 1.0 / 20.0
@@ -58,6 +60,7 @@ var needs_check_timer: float = 0.0
 var speech_bubble_timer: float = 0.0
 var speech_bubble: String = ""
 var night_sleeping: bool = false
+var selected: bool = false  # picked in the observer view (Main sets it)
 
 # An agent holds ONE vocation, stored here. Tier 1 vocations unlock with
 # "organisation"; tier 2 are specialisations gated on a settlement knowing the
@@ -214,7 +217,10 @@ func _init(x: float, z: float) -> void:
 	personality["creativity"]      = 0.2 + randf() * 0.6
 	personality["caution"]         = 0.2 + randf() * 0.6
 
-	max_age = 180.0 + randf() * 180.0
+	# A life is LIFESPAN_DAYS in-game days (12-20 min at 1x): long enough to
+	# follow someone from childhood to old age in one sitting. It was 1.5-3 days,
+	# and every world died out of old age by day 4-7 (tools/balance.gd).
+	max_age = TimeSystem.DAY_LENGTH * (LIFESPAN_DAYS_MIN + randf() * LIFESPAN_DAYS_SPREAD)
 	reproduction_cooldown = 24.0 + randf() * 36.0
 	social_timer = randf() * SOCIAL_COOLDOWN
 	fire_cooldown = 20.0 + randf() * 20.0
@@ -889,6 +895,10 @@ func _pick_up_ground_items(world: World) -> void:
 				_tile_items.drop(tx, tz, item_id, leftover)
 
 # ── Family ───────────────────────────────────────────────────────────────────
+
+func say(line: String, seconds: float = 4.0) -> void:
+	speech_bubble = line
+	speech_bubble_timer = seconds
 
 func get_family(all_agents: Array) -> Dictionary:
 	var out := {"parents": [], "children": [], "partner": null}

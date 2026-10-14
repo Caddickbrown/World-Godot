@@ -42,18 +42,14 @@ var lineage_tracker       # LineageTracker
 var disease_system        # DiseaseSystem
 var population_manager    # PopulationManager
 
-# Camera
-var camera: Camera3D
-var _cam_target: Vector3
-var _cam_distance: float = 90.0
-var _cam_angle_h: float = 0.0         # horizontal orbit
-var _cam_angle_v: float = deg_to_rad(55.0) # vertical tilt
-var _pan_keys: Dictionary = {}
-const PAN_SPEED := 8.0
-const ZOOM_MIN := 8.0
-# The world is WORLD_WIDTH * TILE_SIZE units across, so the far limit has to
-# scale with it or you can never pull back far enough to see the whole map.
-const ZOOM_MAX := 340.0
+# Views: the observer's eye in the sky, and the wanderer on the ground.
+enum ViewMode { OBSERVE, WALK }
+var view_mode: ViewMode = ViewMode.OBSERVE
+var observer: ObserverCamera
+var wanderer: Wanderer
+var camera: Camera3D  # the observer's camera (used for picking)
+## How close (tiles) the wanderer must be to listen in on someone.
+const LISTEN_RADIUS := 2.5
 
 # Lighting
 var sun: DirectionalLight3D
@@ -75,11 +71,15 @@ func _setup_scene() -> void:
 	audio_system = AudioSystem.new()
 	add_child(audio_system)
 
-	# Camera
-	camera = Camera3D.new()
-	add_child(camera)
-	_cam_target = Vector3(WORLD_WIDTH * TILE_SIZE / 2.0, 0, WORLD_HEIGHT * TILE_SIZE / 2.0)
-	_update_camera()
+	observer = ObserverCamera.new()
+	observer.bounds = Vector2(WORLD_WIDTH * TILE_SIZE, WORLD_HEIGHT * TILE_SIZE)
+	observer.target = Vector3(observer.bounds.x / 2.0, 0, observer.bounds.y / 2.0)
+	add_child(observer)
+	camera = observer.camera
+	observer.clicked.connect(_handle_click)
+
+	wanderer = Wanderer.new()
+	add_child(wanderer)
 
 	# Directional light (sun)
 	sun = DirectionalLight3D.new()
@@ -126,9 +126,12 @@ func _load_data() -> void:
 
 	_init_world()
 
+## Fixed seed for reproducible worlds (capture tool, tests); -1 = random.
+var world_seed: int = -1
+
 func _init_world() -> void:
 	# Simulation
-	world = World.new()
+	world = World.new(world_seed)
 	time_system = TimeSystem.new()
 	weather_system = WeatherSystem.new()
 	concept_graph = ConceptGraph.new(concepts_data)
@@ -138,6 +141,9 @@ func _init_world() -> void:
 	var spawn_pts := world.get_spawn_points(AGENT_COUNT)
 	for p in spawn_pts:
 		var a := Agent.new(float(p["x"]), float(p["z"]))
+		# Founders arrive as young adults; born at age 0 they spent their first
+		# day as infants and nobody could pair up or teach.
+		a.age = a.max_age * (0.26 + randf() * 0.2)
 		agents.append(a)
 
 	# Terrain renderer
@@ -151,6 +157,7 @@ func _init_world() -> void:
 	if agent_renderer:
 		agent_renderer.queue_free()
 	agent_renderer = AgentRenderer.new()
+	agent_renderer.world = world
 	add_child(agent_renderer)
 	agent_renderer.setup(agents)
 
@@ -161,6 +168,7 @@ func _init_world() -> void:
 	animal_sim = AnimalSim.new()
 	animal_sim.spawn_wildlife(world)
 	animal_renderer = AnimalRenderer.new()
+	animal_renderer.world = world
 	add_child(animal_renderer)
 	animal_renderer.setup(animal_sim)
 
@@ -169,6 +177,7 @@ func _init_world() -> void:
 		settlement_renderer.clear()
 		settlement_renderer.queue_free()
 	settlement_renderer = SettlementRenderer.new()
+	settlement_renderer.world = world
 	add_child(settlement_renderer)
 
 	# Environment props (trees, bushes, rocks) — placed once at world init
@@ -188,6 +197,7 @@ func _init_world() -> void:
 	trading_system = TradingSystem.new()
 	crafting_system = CraftingSystem.new()
 	settlement_system = SettlementSystem.new()
+	conflict_system.settlement_system = settlement_system
 	tile_items = TileItems.new()
 	spatial_grid = SpatialGrid.new()
 	animal_skill_system = AnimalSkillSystem.new()
@@ -196,7 +206,10 @@ func _init_world() -> void:
 	population_manager = PopulationManager.new()
 
 	game_over = false
-	selected_agent = null
+	_select(null)
+	if view_mode == ViewMode.WALK:
+		set_view_mode(ViewMode.OBSERVE)
+	wanderer.world = world
 	birth_times.clear()
 
 	# Founders spawn as a cluster somewhere in the world, so open the camera on
@@ -213,11 +226,15 @@ func _init_world() -> void:
 # ── Process (game loop) ───────────────────────────────────────────────────────
 
 func _process(delta: float) -> void:
-	_handle_camera_pan(delta)
+	_update_view_overlays()
 	if game_over: return
 
 	var game_delta := time_system.update(delta)
 	if game_delta <= 0.0:
+		# Paused: the world stands still, but what you see (labels, pins, the
+		# inspector) still follows the camera and selection.
+		agent_renderer.update()
+		_update_hud()
 		return
 
 	var season := time_system.season.to_lower()
@@ -406,6 +423,7 @@ func _handle_events() -> void:
 			var agent: Agent = _find_agent(int(evt["agent_id"]))
 			if agent:
 				agent.discovery_flash = 1.5
+				agent.say(cname + "!", 4.0)
 				lineage_tracker.record(str(evt["concept_id"]), agent, time_system.day)
 				if evt["concept_id"] == "organisation":
 					agent.adopt_task(agents)
@@ -462,12 +480,37 @@ func _update_hud() -> void:
 			"era": _get_era(discovered.size()),
 			"concepts": discovered,
 			"selected_agent": selected_agent,
+			"selected_family": _family_line(selected_agent),
+			"selected_home": _home_line(selected_agent),
 			"disaster": disaster_system.label if disaster_system.current != 0 else "",
 			"history": history_log.get_recent(8),
 			"settlements": settlement_system.get_settlements().size(),
 			"speed": time_system.speed,
 			"unlocked_achievements": achievements.get_unlocked_list(),
 		})
+
+func _family_line(a: Agent) -> String:
+	if a == null:
+		return ""
+	var fam: Dictionary = a.get_family(agents)
+	var parts: Array = []
+	if fam["partner"]:
+		parts.append("Partner: " + (fam["partner"] as Agent).agent_name)
+	var kids: Array = (fam["children"] as Array).map(func(c): return c.agent_name)
+	if not kids.is_empty():
+		parts.append("Children: " + ", ".join(kids.slice(0, 4)) + (" +%d" % (kids.size() - 4) if kids.size() > 4 else ""))
+	var ps: Array = (fam["parents"] as Array).map(func(c): return c.agent_name)
+	if not ps.is_empty():
+		parts.append("Child of " + " and ".join(ps))
+	return "\n".join(parts) if not parts.is_empty() else "No family yet"
+
+func _home_line(a: Agent) -> String:
+	if a == null or settlement_system == null:
+		return ""
+	var st = settlement_system.get_settlement_for_agent(a.agent_id)
+	if st == null:
+		return "No settled home"
+	return "Lives at " + (st.name if not str(st.name).is_empty() else "a camp")
 
 func _get_era(n: int) -> String:
 	if n == 0:  return "Stone Age"
@@ -510,144 +553,106 @@ func _update_sun() -> void:
 		env.background_color = night_color.lerp(day_color, t)
 		env.ambient_light_energy = lerpf(0.15, 0.8, t)
 
-# ── Camera ────────────────────────────────────────────────────────────────────
+# ── Views and input ──────────────────────────────────────────────────────────
 
-func _update_camera() -> void:
-	var offset := Vector3(
-		sin(_cam_angle_h) * cos(_cam_angle_v),
-		sin(_cam_angle_v),
-		cos(_cam_angle_h) * cos(_cam_angle_v)
-	) * _cam_distance
-	camera.position = _cam_target + offset
-	camera.look_at(_cam_target, Vector3.UP)
+func set_view_mode(mode: ViewMode) -> void:
+	view_mode = mode
+	var walking := mode == ViewMode.WALK
+	if walking:
+		# Land where the observer was looking, or beside the person followed.
+		var p := observer.target / TILE_SIZE
+		wanderer.place_at(Vector2(p.x, p.z))
+		wanderer.cam_yaw = observer.angle_h
+	else:
+		observer.look_at_point(wanderer.world_position())
+	observer.release_keys()
+	if agent_renderer:
+		agent_renderer.listening_id = -1
+	observer.active = not walking
+	wanderer.active = walking
+	observer.camera.current = not walking
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if walking else Input.MOUSE_MODE_VISIBLE
 
-func _handle_camera_pan(delta: float) -> void:
-	var moved := false
-	var fwd := Vector3(sin(_cam_angle_h), 0, cos(_cam_angle_h))
-	var right := Vector3(cos(_cam_angle_h), 0, -sin(_cam_angle_h))
-	var speed := PAN_SPEED * (_cam_distance / 20.0)
+func _view_distance() -> float:
+	return wanderer.cam_distance if view_mode == ViewMode.WALK else observer.distance
 
-	if _pan_keys.get("w", false): _cam_target -= fwd * speed * delta; moved = true
-	if _pan_keys.get("s", false): _cam_target += fwd * speed * delta; moved = true
-	if _pan_keys.get("a", false): _cam_target -= right * speed * delta; moved = true
-	if _pan_keys.get("d", false): _cam_target += right * speed * delta; moved = true
+func _update_view_overlays() -> void:
+	if agent_renderer == null:
+		return
+	agent_renderer.view_distance = _view_distance()
+	agent_renderer.walker_pos = wanderer.world_position() if view_mode == ViewMode.WALK else Vector3.INF
+	if view_mode == ViewMode.WALK and time_system:
+		wanderer.set_lantern(1.0 - clampf(sin(time_system.time_of_day * PI) * 2.0 - 0.4, 0.0, 1.0))
+	var hud := get_node_or_null("HUD")
+	if hud and hud.has_method("set_prompt"):
+		var near := nearest_agent_to_wanderer() if view_mode == ViewMode.WALK else null
+		hud.set_prompt("E — listen in on " + near.agent_name if near else "")
+		hud.set_view_hint(view_mode == ViewMode.WALK, observer.is_following())
 
-	const ROT_SPEED := 1.8  # radians/sec
-	if _pan_keys.get("q", false): _cam_angle_h -= ROT_SPEED * delta; moved = true
-	if _pan_keys.get("e", false): _cam_angle_h += ROT_SPEED * delta; moved = true
+## The living person closest to the wanderer within LISTEN_RADIUS, or null.
+func nearest_agent_to_wanderer() -> Agent:
+	var best: Agent = null
+	var best_d := LISTEN_RADIUS
+	for a in agents:
+		if a.is_dead or a.health <= 0.0:
+			continue
+		var d: float = a.pos.distance_to(wanderer.tile_pos)
+		if d < best_d:
+			best_d = d
+			best = a
+	return best
 
-	_cam_target.x = clampf(_cam_target.x, 0, WORLD_WIDTH * TILE_SIZE)
-	_cam_target.z = clampf(_cam_target.z, 0, WORLD_HEIGHT * TILE_SIZE)
+## Listen in on someone: the inspector opens on them and their thought shows
+## over their head. The wanderer is unseen, so nothing in the world changes.
+func listen_to_nearest() -> Agent:
+	var a := nearest_agent_to_wanderer()
+	_select(a)
+	agent_renderer.listening_id = a.agent_id if a else -1
+	return a
 
-	if moved: _update_camera()
+func follow(agent: Agent) -> void:
+	_select(agent)
+	if agent == null:
+		observer.stop_following()
+		return
+	observer.follow_target_fn = func() -> Vector3:
+		if agent.is_dead or agent.health <= 0.0:
+			return Vector3.INF
+		return Vector3(agent.pos.x * TILE_SIZE, 0.0, agent.pos.y * TILE_SIZE)
 
-func _input(event: InputEvent) -> void:
-	if event is InputEventKey:
-		var e := event as InputEventKey
-		var k: Key = e.keycode
-		var down: bool = e.pressed
-		match k:
-			KEY_W: _pan_keys["w"] = down
-			KEY_S: _pan_keys["s"] = down
-			KEY_A: _pan_keys["a"] = down
-			KEY_D: _pan_keys["d"] = down
-			KEY_Q: _pan_keys["q"] = down
-			KEY_E: _pan_keys["e"] = down
-			KEY_R:
-				if down: _init_world()
-			KEY_H:
-				if down: _centre_on_agents()
-			KEY_SPACE:
-				if down: time_system.set_speed(0.0 if time_system.speed > 0.0 else 1.0)
-			KEY_1: if down: time_system.set_speed(1.0)
-			KEY_2: if down: time_system.set_speed(5.0)
-			KEY_3: if down: time_system.set_speed(20.0)
-
-	if event is InputEventMouseButton:
-		# Proportional zoom: a fixed step feels fine up close and glacial when
-		# pulled back across a 256-unit world.
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_cam_distance = clampf(_cam_distance * 0.88, ZOOM_MIN, ZOOM_MAX)
-			_update_camera()
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_cam_distance = clampf(_cam_distance / 0.88, ZOOM_MIN, ZOOM_MAX)
-			_update_camera()
-
-# ── Mouse drag state ─────────────────────────────────────────────────────────
-
-# Left drag: tumble (rotate + tilt). Also used for click-to-select when
-# the mouse barely moves (threshold check on release).
-var _left_press_pos: Vector2 = Vector2.ZERO
-var _left_pressed: bool = false
-var _left_is_drag: bool = false
-var _left_drag_angle_h: float = 0.0
-var _left_drag_angle_v: float = 0.0
-const LEFT_DRAG_THRESHOLD := 5.0  # pixels before motion becomes a drag
-
-# Middle / Alt+Left drag: pan
-var _pan_drag_start: Vector2 = Vector2.ZERO
-var _pan_drag_target: Vector3 = Vector3.ZERO
-var _is_pan_dragging: bool = false
+func _select(agent: Agent) -> void:
+	if selected_agent:
+		selected_agent.selected = false
+	selected_agent = agent
+	if selected_agent:
+		selected_agent.selected = true
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		var mb := event as InputEventMouseButton
-		match mb.button_index:
-			MOUSE_BUTTON_LEFT:
-				if mb.alt_pressed:
-					# Alt+Left = pan drag (same as middle mouse)
-					if mb.pressed:
-						_pan_drag_start = mb.position
-						_pan_drag_target = _cam_target
-						_is_pan_dragging = true
-					else:
-						_is_pan_dragging = false
-				else:
-					# Normal left = tumble drag OR click-to-select
-					if mb.pressed:
-						_left_press_pos = mb.position
-						_left_drag_angle_h = _cam_angle_h
-						_left_drag_angle_v = _cam_angle_v
-						_left_pressed = true
-						_left_is_drag = false
-					else:
-						if _left_pressed and not _left_is_drag:
-							_handle_click(mb.position)
-						_left_pressed = false
-						_left_is_drag = false
-			MOUSE_BUTTON_MIDDLE:
-				if mb.pressed:
-					_pan_drag_start = mb.position
-					_pan_drag_target = _cam_target
-					_is_pan_dragging = true
-				else:
-					_is_pan_dragging = false
-
-	if event is InputEventMouseMotion:
-		var em := event as InputEventMouseMotion
-
-		# Left drag: tumble (horizontal = orbit, vertical = tilt)
-		if _left_pressed:
-			if not _left_is_drag and em.position.distance_to(_left_press_pos) > LEFT_DRAG_THRESHOLD:
-				_left_is_drag = true
-			if _left_is_drag:
-				var delta_x: float = (em.position.x - _left_press_pos.x) * 0.005
-				var delta_y: float = (em.position.y - _left_press_pos.y) * 0.005
-				_cam_angle_h = _left_drag_angle_h - delta_x
-				_cam_angle_v = clampf(_left_drag_angle_v + delta_y, deg_to_rad(10.0), deg_to_rad(85.0))
-				_update_camera()
-
-		# Pan drag
-		if _is_pan_dragging:
-			var scale := _cam_distance / 400.0
-			var dx: float = (em.position.x - _pan_drag_start.x) * scale
-			var dz: float = (em.position.y - _pan_drag_start.y) * scale
-			var fwd  := Vector3(sin(_cam_angle_h), 0, cos(_cam_angle_h))
-			var right := Vector3(cos(_cam_angle_h), 0, -sin(_cam_angle_h))
-			_cam_target = _pan_drag_target - right * dx - fwd * dz
-			_cam_target.x = clampf(_cam_target.x, 0, WORLD_WIDTH * TILE_SIZE)
-			_cam_target.z = clampf(_cam_target.z, 0, WORLD_HEIGHT * TILE_SIZE)
-			_update_camera()
+	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	match (event as InputEventKey).keycode:
+		KEY_TAB:
+			set_view_mode(ViewMode.OBSERVE if view_mode == ViewMode.WALK else ViewMode.WALK)
+		KEY_ESCAPE:
+			if view_mode == ViewMode.WALK and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+			else:
+				follow(null)
+		KEY_E:
+			if view_mode == ViewMode.WALK: listen_to_nearest()
+		KEY_F:
+			if view_mode == ViewMode.OBSERVE:
+				if observer.is_following(): observer.stop_following()
+				elif selected_agent: follow(selected_agent)
+		KEY_R:
+			_init_world()
+		KEY_H:
+			if view_mode == ViewMode.OBSERVE: _centre_on_agents()
+		KEY_SPACE:
+			time_system.set_speed(0.0 if time_system.speed > 0.0 else 1.0)
+		KEY_1: time_system.set_speed(1.0)
+		KEY_2: time_system.set_speed(5.0)
+		KEY_3: time_system.set_speed(20.0)
 
 func _centre_on_agents() -> void:
 	var alive := agents.filter(func(a): return a.health > 0.0 and not a.is_dead)
@@ -657,14 +662,15 @@ func _centre_on_agents() -> void:
 	for a in alive:
 		cx += a.pos.x * TILE_SIZE
 		cz += a.pos.y * TILE_SIZE
-	_cam_target = Vector3(cx / alive.size(), 0, cz / alive.size())
-	_update_camera()
+	observer.stop_following()
+	observer.look_at_point(Vector3(cx / alive.size(), 0, cz / alive.size()))
 
 func _handle_click(screen_pos: Vector2) -> void:
 	var from := camera.project_ray_origin(screen_pos)
 	var dir  := camera.project_ray_normal(screen_pos)
 	if dir.y >= 0.0: return  # Ray going up, ignore
-	var t := -from.y / dir.y
+	# Pick against the ground under the cursor (~grass height), not y = 0.
+	var t := (0.04 - from.y) / dir.y
 	var world_pos := from + dir * t
 
 	# Find nearest agent to click
@@ -679,11 +685,8 @@ func _handle_click(screen_pos: Vector2) -> void:
 			best_dist = dist
 			best = a
 
-	if selected_agent:
-		selected_agent.selected = false
-	selected_agent = best
-	if selected_agent:
-		selected_agent.selected = true
+	# Picking someone follows them; clicking empty ground lets go.
+	follow(best)
 
 # ── Settlements ───────────────────────────────────────────────────────────────
 

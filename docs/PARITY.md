@@ -1,5 +1,8 @@
 # World → Godot: Feature Inventory
 
+> What the game *is* now lives in `docs/GAME_DESIGN.md` (observer, follow, unseen wisp) and how it
+> looks in `docs/ART_DIRECTION.md`. This file stays as the system-by-system record of the concept piece.
+
 The original **World** (`../World`, 18.2k lines of JS + Three.js) was a *concept piece*. It is
 a design document, not a reference implementation: it proves which systems are interesting and
 how they interact, but its structure was shaped by a browser canvas renderer, a Web Worker, and

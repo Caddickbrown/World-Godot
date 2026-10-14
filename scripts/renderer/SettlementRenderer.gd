@@ -36,6 +36,7 @@ const FIREPIT_PATH := "res://assets/props/SM_Prop_Camp_Firepit_01.fbx"
 # Synty models are in Unity units; 0.9 gives ~1 tile footprint for a house
 const BUILDING_SCALE := 0.9
 
+var world: World  # for ground height; set by Main
 var _mat: StandardMaterial3D
 var _scenes: Dictionary = {}         # path → PackedScene or null
 var _placed: Dictionary = {}         # settlement_key → { node, era, path }
@@ -107,7 +108,7 @@ func _place(tx: int, tz: int, key: String, path: String, era: int) -> void:
 	var root := Node3D.new()
 	root.position = Vector3(
 		(float(tx) + 0.5) * TILE_SIZE,
-		0.0,
+		world.surface_y(float(tx) + 0.5, float(tz) + 0.5) if world else 0.0,
 		(float(tz) + 0.5) * TILE_SIZE
 	)
 	# Vary rotation so not every building faces the same way

@@ -9,8 +9,15 @@ var _conflict_pairs: Dictionary = {}  # "id1:id2" → cooldown float
 # Public API
 # ---------------------------------------------------------------------------
 
+## Settlement membership decides who is "us". Agents with no settlement belong
+## to nobody's faction and never clash; nor do two members of one settlement.
+var settlement_system = null  # SettlementSystem, optional
+
+var _delta: float = 0.0
+
 func tick(delta: float, agents: Array, day: int, history_log: HistoryLog,
 		  spatial_grid = null) -> void:
+	_delta = delta
 	var alive: Array = []
 	for entry in agents:
 		var a := entry as Agent
@@ -94,8 +101,13 @@ func trigger_war(side_a: Array, side_b: Array, day: int, history_log: HistoryLog
 	history_log.add("war", msg, day)
 
 
+## -1 = no faction. Used to be agent_id % 2, which split every family down the
+## middle and had 40 founders "clashing" in the first minute of a new world.
 func get_faction(agent: Agent) -> int:
-	return agent.agent_id % 2
+	if settlement_system == null:
+		return -1
+	var s = settlement_system.get_settlement_for_agent(agent.agent_id)
+	return -1 if s == null else int(s.id)
 
 
 func is_in_conflict(agent: Agent) -> bool:
@@ -107,10 +119,20 @@ func is_in_conflict(agent: Agent) -> bool:
 
 # Maximum distance at which two agents can clash.
 const CONFLICT_RADIUS := 1.5
+## A hungry pair from rival settlements, side by side, clashes about once in
+## five seconds of game time (was 20% per frame, i.e. at once).
+const CLASH_CHANCE_PER_SEC := 0.2
+const HUNGRY_BELOW := 0.35
 
 func _check_agent_conflict(agent_a: Agent, agent_b: Agent, day: int, history_log: HistoryLog) -> void:
-	# Must be different factions
-	if get_faction(agent_a) == get_faction(agent_b):
+	# Must be members of two different settlements
+	var fa := get_faction(agent_a)
+	var fb := get_faction(agent_b)
+	if fa < 0 or fb < 0 or fa == fb:
+		return
+
+	# People fight over food, not for sport: one of them must be going hungry.
+	if minf(float(agent_a.needs.get("hunger", 1.0)), float(agent_b.needs.get("hunger", 1.0))) > HUNGRY_BELOW:
 		return
 
 	# Must be within CONFLICT_RADIUS tiles
@@ -127,7 +149,7 @@ func _check_agent_conflict(agent_a: Agent, agent_b: Agent, day: int, history_log
 	# and the caller must ensure tick() is called roughly once per second for the
 	# stated semantics to hold.  We expose the raw check so callers can pass
 	# delta-weighted probability if desired — here we use a simple constant roll.
-	if randf() > 0.20:
+	if randf() > CLASH_CHANCE_PER_SEC * _delta:
 		return
 
 	# Apply conflict effects

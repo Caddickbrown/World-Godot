@@ -9,7 +9,7 @@ const TILE_SIZE := World.TILE_SIZE
 const CHUNK_TILES := 16
 
 ## World-space height per elevation unit (kept identical to the old renderer).
-const HEIGHT_SCALE := 0.3
+const HEIGHT_SCALE := World.HEIGHT_SCALE
 
 ## How far below a border tile's own height the world-edge skirt extends,
 ## so you don't see under the world at a low camera angle.

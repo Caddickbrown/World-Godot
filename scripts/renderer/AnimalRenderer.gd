@@ -63,6 +63,8 @@ var _atlas_tex: Texture2D        # shared atlas; applied when FBX material is mi
 # Per-animal visual state: anim_id → { node, anim, prev_state }
 var _instances: Dictionary = {}
 
+var world: World  # for ground height; set by Main
+
 func setup(sim: AnimalSim) -> void:
 	_sim = sim
 	var tex := load("res://assets/textures/Atlas_COL_1k_LPAA.png")
@@ -104,7 +106,8 @@ func _update_instance(animal: AnimalSim.Animal) -> void:
 
 	var tx: float = animal.pos.x * TILE_SIZE
 	var tz: float = animal.pos.y * TILE_SIZE
-	var ty: float = EAGLE_HEIGHT if animal.animal_type == AnimalSim.AnimalType.EAGLE else 0.05
+	var ground: float = world.surface_y(animal.pos.x, animal.pos.y) if world else 0.0
+	var ty: float = EAGLE_HEIGHT if animal.animal_type == AnimalSim.AnimalType.EAGLE else ground + 0.05
 	node.position = Vector3(tx, ty, tz)
 	node.rotation.y = animal.facing
 

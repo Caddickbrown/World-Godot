@@ -30,6 +30,18 @@ extends CanvasLayer
 @onready var history_panel: Panel        = $HistoryPanel
 @onready var history_list: VBoxContainer = $HistoryPanel/VBox/HistoryList
 
+# Built in code (kept out of HUD.tscn): what they're thinking, family, home;
+# the walker's prompt; and a one-line reminder of the controls.
+var agent_doing_lbl: Label
+var agent_thought_lbl: Label
+var agent_family_lbl: Label
+var prompt_lbl: Label
+var hint_lbl: Label
+
+const HINT_OBSERVE := "Click someone to follow · F follow · Tab walk among them · WASD/QE/drag move · Space pause"
+const HINT_FOLLOW  := "Following · F or Esc to let go · Tab walk beside them"
+const HINT_WALK    := "Walking unseen · WASD move · Shift hurry · mouse look · E listen in · Tab back to the sky"
+
 const MAX_NOTIFS := 5
 var _notifs: Array = []
 var _main: Node = null  # reference to Main for speed buttons
@@ -43,6 +55,67 @@ func _ready() -> void:
 	if btn_1x:    btn_1x.pressed.connect(_on_1x)
 	if btn_5x:    btn_5x.pressed.connect(_on_5x)
 	if btn_20x:   btn_20x.pressed.connect(_on_20x)
+	_build_extras()
+
+func _build_extras() -> void:
+	if agent_panel:
+		# Below the stats panel (and its speed row), not centred over it.
+		agent_panel.anchor_top = 0.0
+		agent_panel.anchor_bottom = 0.0
+		agent_panel.offset_top = 352.0
+		agent_panel.offset_bottom = 690.0
+		($Panel as Panel).offset_bottom = 342.0
+		agent_panel.offset_right = 250.0
+		var vbox := agent_panel.get_node("VBox")
+		agent_doing_lbl = _small_label(Color(0.8, 0.9, 1.0))
+		vbox.add_child(agent_doing_lbl)
+		vbox.move_child(agent_doing_lbl, 2)
+		agent_thought_lbl = _small_label(Color(1.0, 0.95, 0.8))
+		vbox.add_child(agent_thought_lbl)
+		vbox.move_child(agent_thought_lbl, 3)
+		agent_family_lbl = _small_label(Color(0.85, 0.85, 0.85))
+		vbox.add_child(agent_family_lbl)
+
+	prompt_lbl = Label.new()
+	prompt_lbl.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	prompt_lbl.offset_left = -200.0
+	prompt_lbl.offset_right = 200.0
+	prompt_lbl.offset_top = -90.0
+	prompt_lbl.offset_bottom = -60.0
+	prompt_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prompt_lbl.add_theme_font_size_override("font_size", 20)
+	prompt_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	prompt_lbl.add_theme_constant_override("outline_size", 6)
+	add_child(prompt_lbl)
+
+	hint_lbl = Label.new()
+	hint_lbl.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	hint_lbl.offset_left = 10.0
+	hint_lbl.offset_top = -28.0
+	hint_lbl.offset_right = 900.0
+	hint_lbl.offset_bottom = -8.0
+	hint_lbl.add_theme_font_size_override("font_size", 12)
+	hint_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	hint_lbl.add_theme_constant_override("outline_size", 4)
+	hint_lbl.text = HINT_OBSERVE
+	add_child(hint_lbl)
+
+func _small_label(color: Color) -> Label:
+	var l := Label.new()
+	l.add_theme_font_size_override("font_size", 12)
+	l.add_theme_color_override("font_color", color)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(220, 0)
+	return l
+
+func set_prompt(text: String) -> void:
+	if prompt_lbl:
+		prompt_lbl.text = text
+		prompt_lbl.visible = not text.is_empty()
+
+func set_view_hint(walking: bool, following: bool) -> void:
+	if hint_lbl:
+		hint_lbl.text = HINT_WALK if walking else (HINT_FOLLOW if following else HINT_OBSERVE)
 
 func set_main(main: Node) -> void:
 	_main = main
@@ -99,13 +172,17 @@ func update(data: Dictionary) -> void:
 	if selected and is_instance_valid(selected) and selected.health > 0.0:
 		agent_panel.visible = true
 		agent_name_lbl.text  = selected.agent_name
-		agent_state_lbl.text = Agent.State.keys()[selected.state].capitalize()
+		agent_state_lbl.text = selected.life_stage.capitalize() + (" · " + selected.task.capitalize() if not selected.task.is_empty() else "")
+		if agent_doing_lbl: agent_doing_lbl.text = AgentThoughts.doing(selected).capitalize()
+		if agent_thought_lbl: agent_thought_lbl.text = "“" + AgentThoughts.thought(selected) + "”"
+		if agent_family_lbl: agent_family_lbl.text = str(data.get("selected_family", ""))
 		agent_hunger_bar.value = selected.needs.get("hunger", 0.0) * 100.0
 		agent_energy_bar.value = selected.needs.get("energy", 0.0) * 100.0
 		agent_age_lbl.text   = "Age: %d / %d" % [int(selected.age), int(selected.life_expectancy)]
-		agent_task_lbl.text  = selected.task.capitalize() if not selected.task.is_empty() else ""
-		var knows := ", ".join(selected.knowledge.keys().slice(0, 6))
-		agent_knows_lbl.text = knows if not knows.is_empty() else "—"
+		agent_task_lbl.text  = str(data.get("selected_home", ""))
+		var known: Array = selected.knowledge.keys()
+		agent_knows_lbl.text = ("Knows %d: " % known.size() + ", ".join(known.slice(maxi(0, known.size() - 5)))) if not known.is_empty() else "Knows nothing yet"
+		agent_knows_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	else:
 		if agent_panel: agent_panel.visible = false
 
