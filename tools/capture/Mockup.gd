@@ -1,7 +1,7 @@
 # Renders the art mockup (scripts/mockup/ArtMockup.gd). Positions are relative
 # to the founders' camp so every seed frames its own people.
 #   godot --path . res://tools/capture/Mockup.tscn -- --out=x.png [--seed=7] [--hour=10]
-#        [--cam=dx,dy,dz] [--look=dx,dy,dz] [--tilt=1] [--fov=40]
+#        [--cam=dx,dy,dz] [--look=dx,dy,dz] [--tilt=1] [--fov=40] [--style=storybook|naturalist]
 extends Node
 
 func _ready() -> void:
@@ -9,7 +9,7 @@ func _ready() -> void:
 	var mock := Node3D.new()
 	mock.set_script(load("res://scripts/mockup/ArtMockup.gd"))
 	add_child(mock)
-	mock.build(int(args.get("seed", "7")))
+	mock.build(int(args.get("seed", "7")), str(args.get("style", "storybook")))
 	mock.set_hour(float(args.get("hour", "10")))
 	var c: Vector3 = mock.camp_centre
 	var cam := c + _v(args.get("cam", "30,22,30"))

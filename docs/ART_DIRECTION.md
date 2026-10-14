@@ -4,6 +4,17 @@ Reference: the in-engine mockup (`scripts/mockup/ArtMockup.gd`, rendered by
 `tools/capture/mockup.sh`) and the UI design canvas ("World — Whimsy Redesign"). The current
 game's tiled look is being replaced; the mockup is the target.
 
+## Two options (undecided)
+
+| | A · Storybook | B · Field notes |
+|---|---|---|
+| World | Bright greens, turquoise sea, the odd orange tree | Same world graded to warm olive and earth; calmer sea; taller pines; less haze |
+| People | Big heads, dot eyes, bright tunics | Real-ish proportions, no eyes drawn, hide and plant-dyed cloth |
+| UI | Paper stickers, ink outlines, tilt, Fredoka + Patrick Hand | Dark glass panels, hairlines, no tilt, Alegreya Sans + Alegreya italic; moss `#7E9A6A`, ochre `#C9A04E`, rust `#B5674A`, bone `#ECE6D6` on `#1C2723` |
+| Shots | `docs/shots/mockup/m*.jpg` | `docs/shots/mockup/n*.jpg` (`--style=naturalist`) |
+
+The rest of this file describes A; B changes only the values in the table above.
+
 ## The look in one line
 
 **A storybook diorama you're peering into:** smooth hills, turquoise shallows, round trees, chunky

@@ -30,7 +30,24 @@ var camp_centre: Vector3
 var _rng := RandomNumberGenerator.new()
 var _fire_light: OmniLight3D
 
-func build(world_seed: int) -> void:
+## "storybook" (A: bright, chunky, cartoony) or "naturalist" (B: the same world
+## with the cartoon turned down: muted earth colours, real proportions, haze).
+var style := "storybook"
+var _nat := false
+
+## Colour grade for the naturalist style: pull saturation toward grey-green and
+## darken a touch, so nothing reads as a toy.
+func _g(c: Color) -> Color:
+	if not _nat:
+		return c
+	var grey := c.get_luminance()
+	# Toward a warm olive grey (not a cool one, which turns grass mint).
+	var muted := c.lerp(Color(grey * 1.04, grey, grey * 0.80), 0.32)
+	return muted.darkened(0.14)
+
+func build(world_seed: int, p_style: String = "storybook") -> void:
+	style = p_style
+	_nat = style == "naturalist"
 	_rng.seed = world_seed
 	world = World.new(world_seed)
 	size_m = World.WORLD_WIDTH * World.TILE_SIZE
@@ -159,7 +176,7 @@ func _ground_color(x: float, z: float, h: float, nrm: Vector3) -> Color:
 	var slope := 1.0 - nrm.y
 	c = c.lerp(C_ROCK_DARK, smoothstep(0.25, 0.55, slope))
 	c = c.lerp(C_SNOW, smoothstep(13.0, 17.0, h) * (1.0 - smoothstep(0.35, 0.6, slope)))
-	return c
+	return _g(c)
 
 # ── Terrain ─────────────────────────────────────────────────────────────────
 
@@ -212,6 +229,11 @@ func _build_water() -> void:
 	st.generate_normals()
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/mockup_water.gdshader")
+	if _nat:
+		mat.set_shader_parameter("shallow_color", Color(0.42, 0.62, 0.58))
+		mat.set_shader_parameter("mid_color", Color(0.18, 0.38, 0.45))
+		mat.set_shader_parameter("deep_color", Color(0.08, 0.17, 0.26))
+		mat.set_shader_parameter("foam_color", Color(0.86, 0.88, 0.85))
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
 	mi.material_override = mat
@@ -238,7 +260,7 @@ func _mm(mesh: Mesh, xforms: Array, colors: Array) -> void:
 	mm.instance_count = xforms.size()
 	for i in xforms.size():
 		mm.set_instance_transform(i, xforms[i])
-		mm.set_instance_color(i, colors[i])
+		mm.set_instance_color(i, _g(colors[i]))
 	var inst := MultiMeshInstance3D.new()
 	inst.multimesh = mm
 	var mat := StandardMaterial3D.new()
@@ -294,7 +316,7 @@ func _build_flora() -> void:
 			# Clumps: a slow noise decides where woods thicken.
 			var clump := sin(x * 0.11 + z * 0.07) * cos(z * 0.13 - x * 0.05) * 0.5 + 0.5
 			if t == World.TileType.FOREST and roll < 0.55 + clump * 0.3 and nrm.y > 0.8:
-				var s := _rng.randf_range(0.8, 1.35)
+				var s := _rng.randf_range(0.8, 1.35) * (1.25 if _nat else 1.0)
 				var tint := Color(0.16, 0.36, 0.20).lerp(Color(0.26, 0.45, 0.22), _rng.randf())
 				pine_lo.append(Transform3D(b.scaled(Vector3(s, s, s)), Vector3(x, h + 1.6 * s, z)))
 				pine_lo_c.append(tint)
@@ -307,7 +329,7 @@ func _build_flora() -> void:
 					continue
 				var s := _rng.randf_range(0.8, 1.3)
 				var tint := Color(0.36, 0.58, 0.24).lerp(Color(0.58, 0.68, 0.26), _rng.randf() * 0.6)
-				if _rng.randf() < 0.08:
+				if _rng.randf() < 0.08 and not _nat:
 					tint = Color(0.86, 0.55, 0.22)  # the odd tree turning early
 				trunks.append(Transform3D(b.scaled(Vector3(s, s * 1.4, s)), Vector3(x, h + 0.7 * s, z)))
 				trunks_c.append(trunk_col)
@@ -345,6 +367,8 @@ func _build_flora() -> void:
 
 const TRIBE := [Color(0.80, 0.42, 0.22), Color(0.88, 0.70, 0.30), Color(0.62, 0.30, 0.24), Color(0.92, 0.86, 0.70)]
 const SKIN := [Color(0.93, 0.76, 0.60), Color(0.78, 0.56, 0.40), Color(0.55, 0.37, 0.26), Color(0.98, 0.84, 0.70)]
+## Naturalist: undyed hide and plant-dyed cloth, not bright tunics.
+const TRIBE_NAT := [Color(0.48, 0.38, 0.28), Color(0.58, 0.50, 0.38), Color(0.42, 0.30, 0.24), Color(0.62, 0.58, 0.48)]
 const HAIR := [Color(0.16, 0.11, 0.08), Color(0.36, 0.22, 0.12), Color(0.62, 0.42, 0.22), Color(0.85, 0.82, 0.78)]
 
 func _build_camp() -> void:
@@ -353,13 +377,13 @@ func _build_camp() -> void:
 		var a := TAU * i / 8.0
 		_prop(_ball(0.22), Color(0.5, 0.48, 0.46), camp_centre + Vector3(cos(a) * 0.75, 0.1, sin(a) * 0.75))
 	var flame := MeshInstance3D.new()
-	flame.mesh = _cone(0.42, 1.1)
-	flame.position = camp_centre + Vector3(0, 0.6, 0)
+	flame.mesh = _cone(0.25, 0.6) if _nat else _cone(0.42, 1.1)
+	flame.position = camp_centre + Vector3(0, 0.35 if _nat else 0.6, 0)
 	var fmat := StandardMaterial3D.new()
 	fmat.albedo_color = Color(1.0, 0.62, 0.22)
 	fmat.emission_enabled = true
 	fmat.emission = Color(1.0, 0.45, 0.12)
-	fmat.emission_energy_multiplier = 4.0
+	fmat.emission_energy_multiplier = 7.0 if _nat else 4.0
 	fmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	flame.material_override = fmat
 	add_child(flame)
@@ -380,7 +404,7 @@ func _build_camp() -> void:
 		tent.mesh = _cone(1.5, 2.6, 6)
 		tent.position = p + Vector3(0, 1.3, 0)
 		var tm := StandardMaterial3D.new()
-		tm.albedo_color = Color(0.74, 0.60, 0.44).darkened(i * 0.05)
+		tm.albedo_color = _g(Color(0.74, 0.60, 0.44).darkened(i * 0.05 + (0.18 if _nat else 0.0)))
 		tm.roughness = 1.0
 		tent.material_override = tm
 		add_child(tent)
@@ -432,7 +456,7 @@ func _prop(mesh: Mesh, color: Color, pos: Vector3, scale_v: Vector3 = Vector3.ON
 	mi.position = pos
 	mi.scale = scale_v
 	var m := StandardMaterial3D.new()
-	m.albedo_color = color
+	m.albedo_color = _g(color)
 	m.roughness = 0.9
 	mi.material_override = m
 	add_child(mi)
@@ -448,32 +472,32 @@ func _person(feet: Vector3, yaw: float, pose: String, i: int) -> void:
 	var s := 0.65 if pose == "child" else 1.0
 	var sit := pose == "sit"
 	var tunic := StandardMaterial3D.new()
-	tunic.albedo_color = TRIBE[i % TRIBE.size()]
+	tunic.albedo_color = TRIBE_NAT[i % TRIBE_NAT.size()] if _nat else TRIBE[i % TRIBE.size()]
 	tunic.roughness = 0.9
 	var skin := StandardMaterial3D.new()
-	skin.albedo_color = SKIN[(i * 3) % SKIN.size()]
+	skin.albedo_color = _g(SKIN[(i * 3) % SKIN.size()])
 	var hair := StandardMaterial3D.new()
-	hair.albedo_color = HAIR[(i * 7 + 1) % HAIR.size()]
+	hair.albedo_color = _g(HAIR[(i * 7 + 1) % HAIR.size()])
 	var body := MeshInstance3D.new()
 	var cap := CapsuleMesh.new()
-	cap.radius = 0.28 * s
-	cap.height = (0.9 if sit else 1.15) * s
+	cap.radius = (0.22 if _nat else 0.28) * s
+	cap.height = (0.9 if sit else (1.3 if _nat else 1.15)) * s
 	body.mesh = cap
-	body.position.y = (0.45 if sit else 0.78) * s
+	body.position.y = (0.45 if sit else (0.9 if _nat else 0.78)) * s
 	body.material_override = tunic
 	root.add_child(body)
 	var head := MeshInstance3D.new()
 	var hs := SphereMesh.new()
-	hs.radius = 0.24 * s
-	hs.height = 0.48 * s
+	hs.radius = (0.15 if _nat else 0.24) * s
+	hs.height = hs.radius * 2.0
 	head.mesh = hs
-	head.position.y = (1.05 if sit else 1.55) * s
+	head.position.y = (1.05 if sit else (1.66 if _nat else 1.55)) * s
 	head.material_override = skin
 	root.add_child(head)
 	var hr := MeshInstance3D.new()
 	var hm := SphereMesh.new()
-	hm.radius = 0.26 * s
-	hm.height = 0.3 * s
+	hm.radius = hs.radius * 1.08
+	hm.height = hm.radius * 1.15
 	hm.is_hemisphere = true
 	hr.mesh = hm
 	hr.position.y = head.position.y + 0.03 * s
@@ -483,7 +507,7 @@ func _person(feet: Vector3, yaw: float, pose: String, i: int) -> void:
 	# Eyes: bigger than life, so they read from the observer's height.
 	var eye_mat := StandardMaterial3D.new()
 	eye_mat.albedo_color = Color(0.08, 0.06, 0.05)
-	for side in [-1.0, 1.0]:
+	for side in ([] if _nat else [-1.0, 1.0]):
 		var eye := MeshInstance3D.new()
 		var em := SphereMesh.new()
 		em.radius = 0.045 * s
@@ -522,14 +546,16 @@ func _build_environment() -> void:
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.ambient_light_energy = 0.9
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 0.92
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES if _nat else Environment.TONE_MAPPER_FILMIC
+	env.tonemap_exposure = 0.88 if _nat else 0.92
 	env.glow_enabled = true
 	env.glow_intensity = 0.4
 	env.glow_bloom = 0.05
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.74, 0.82, 0.90)
-	env.fog_density = 0.0016
+	env.fog_density = 0.0018 if _nat else 0.0016
+	if _nat:
+		env.fog_aerial_perspective = 0.35
 	env.fog_sun_scatter = 0.25
 	env.fog_aerial_perspective = 0.6
 	env.ssao_enabled = true
@@ -556,6 +582,9 @@ func set_hour(hour: float) -> void:
 	var sm := env.sky.sky_material as ProceduralSkyMaterial
 	sm.sky_horizon_color = Color(0.78, 0.84, 0.88).lerp(Color(0.98, 0.70, 0.50), warm)
 	sm.sky_top_color = Color(0.32, 0.55, 0.85).lerp(Color(0.30, 0.38, 0.62), warm)
+	if _nat:
+		sm.sky_horizon_color = sm.sky_horizon_color.lerp(Color(0.80, 0.80, 0.78), 0.35)
+		sm.sky_top_color = sm.sky_top_color.lerp(Color(0.45, 0.52, 0.60), 0.4)
 	env.fog_light_color = Color(0.74, 0.82, 0.90).lerp(Color(0.95, 0.72, 0.58), warm)
 	if _fire_light:
 		_fire_light.light_energy = lerpf(1.2, 4.0, warm)
