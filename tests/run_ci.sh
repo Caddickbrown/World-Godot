@@ -34,11 +34,19 @@ fi
 
 cat "$OUT"
 
-# The headless dummy renderer prints these for meshes/Label3D; never seen with a real renderer.
-FILTERED="$(grep -v -E 'Parameter "m" is null|mesh_get_surface_count|Parameter "material" is null|material_get_instance_shader_parameters' "$OUT")"
-if echo "$FILTERED" | grep -E -q '^(SCRIPT ERROR|ERROR:|FAIL:)|Parse Error'; then
+# Known engine noise, not project errors:
+# - the headless dummy renderer prints these for meshes/Label3D (never with a real renderer);
+# - a fresh import of the third-party FBX models logs the source textures their
+#   authors embedded paths to (.psd and _COL_2k.png files that were never shipped).
+#   The meshes import fine; nothing in the game loads those textures.
+NOISE='Parameter "m" is null|mesh_get_surface_count|Parameter "material" is null|material_get_instance_shader_parameters'
+NOISE="$NOISE|Resource file not found: res:// \(expected type: Texture2D\)"
+NOISE="$NOISE|Can't open file from path 'res://.*\.(psd|png|jpg|tga)'"
+FILTERED="$(grep -v -E "$NOISE" "$OUT")"
+ERRORS="$(grep -E '^(SCRIPT ERROR|ERROR:|FAIL:)|Parse Error' <<< "$FILTERED" || true)"
+if [ -n "$ERRORS" ]; then
   echo "!! errors found in output:"
-  echo "$FILTERED" | grep -E '^(SCRIPT ERROR|ERROR:|FAIL:)|Parse Error'
+  echo "$ERRORS"
   STATUS=1
 fi
 [ "$STATUS" -eq 0 ] && echo "== CI OK" || echo "== CI FAILED"
