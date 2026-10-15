@@ -23,6 +23,7 @@ const LABEL_VIEW_DISTANCE := 45.0     # names show when the camera is closer tha
 const LABEL_WALK_RADIUS := 14.0       # ...or when the wisp is within this (metres)
 const PIN_VIEW_DISTANCE := 60.0       # pins show when the camera is further than this
 const HEAD_HEIGHT := 1.7
+const SADDLE_HEIGHT := 1.0             # a rider's feet-origin above the ground (horse back ~1.2 m)
 const FOCUS_LABEL_RADIUS := 12.0      # following someone: only names this close to them (metres)
 const FOCUS_BUBBLE_RADIUS := 5.0      # ...and only speech this close
 const MAX_TAGS := 12                  # names/speech shown at once: the nearest to where you look
@@ -263,6 +264,10 @@ func update() -> void:
 		var e: Dictionary = _nodes[agent.agent_id]
 		var root: Node3D = e["root"]
 		var feet := Vector3(agent.pos.x * TILE_SIZE, world.surface_y(agent.pos.x, agent.pos.y) if world else 0.0, agent.pos.y * TILE_SIZE)
+		# On horseback: up in the saddle (AnimalMinds keeps the horse under them).
+		var mounted: bool = agent.riding_horse_id >= 0 and not agent.is_dead
+		if mounted:
+			feet.y += SADDLE_HEIGHT
 		root.position = feet
 		root.visible = true
 		_dress(e, agent)
@@ -278,10 +283,18 @@ func update() -> void:
 		if agent.is_dead:
 			root.rotation.x = deg_to_rad(88.0)
 			body_root.position.y = 0.0
+		elif mounted:
+			root.rotation.x = 0.0
+			body_root.position.y = -0.4   # seated, legs either side of the horse
+			for i in legs.size():
+				(legs[i] as Node3D).rotation.x = -0.35
+				(legs[i] as Node3D).rotation.z = 0.55 if i == 0 else -0.55
 		elif agent.state == Agent.State.SLEEPING or agent.at_fire:
 			root.rotation.x = 0.0
 			body_root.position.y = -0.45   # sitting, curled by the fire
-			for leg in legs: leg.rotation.x = -PI / 2.0
+			for leg in legs:
+				leg.rotation.x = -PI / 2.0
+				leg.rotation.z = 0.0
 		else:
 			root.rotation.x = 0.0
 			e["phase"] = float(e["phase"]) + dt * (9.0 if walking else 0.0)
@@ -289,6 +302,7 @@ func update() -> void:
 			body_root.position.y = absf(sin(ph)) * 0.06 if walking else 0.0
 			(legs[0] as Node3D).rotation.x = sin(ph) * 0.6 if walking else 0.0
 			(legs[1] as Node3D).rotation.x = -sin(ph) * 0.6 if walking else 0.0
+			for leg in legs: leg.rotation.z = 0.0
 		if agent.selected and not agent.is_dead:
 			_ring.visible = true
 			_ring.position = feet + Vector3(0, 0.05, 0)

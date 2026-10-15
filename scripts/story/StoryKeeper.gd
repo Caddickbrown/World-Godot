@@ -163,6 +163,33 @@ func on_forest(evt: Dictionary) -> void:
 			elif _plantings % 10 == 0:
 				add("people", "A planted grove is coming up round %s's home." % who.agent_name, pos, [who.agent_id], false)
 
+var _breaches := 0
+var _honey_eaters: Dictionary = {}   # agent_id -> true once it's in their story
+
+## AmbientLife events: {kind: breach|chorus|honey, pos (tile), agent_id?}.
+## Whales and frogs only unlock moments (the chronicle hears of the first
+## breach); honey is a person's doing, so it goes in their story.
+func on_wild(evt: Dictionary, agents: Array = []) -> void:
+	var pos: Vector2 = evt.get("pos", Vector2(-1, -1))
+	match str(evt.get("kind", "")):
+		"breach":
+			_breaches += 1
+			if _breaches == 1:
+				add("world", "A whale breached off the coast, the first anyone saw.", pos, [], false)
+			_try_moment("whale_breach", pos, [], "day %d" % day)
+		"chorus":
+			_try_moment("frog_chorus", pos, [], "day %d" % day)
+		"honey":
+			var id := int(evt.get("agent_id", -1))
+			var who: Agent = _find(agents, id)
+			if who == null or _honey_eaters.has(id):
+				return
+			_honey_eaters[id] = true
+			_event(who, "Ate wild honey from a bees' nest.", "people")
+			if _honey_eaters.size() == 1:
+				add("people", "%s found a bees' nest in the woods and ate the honey." % who.agent_name, pos, [id])
+			_try_moment("wild_honey", pos, [id], "%s, day %d" % [who.agent_name, day])
+
 func on_grief(mourner: Agent, dead: Agent, relation: String) -> void:
 	var what: String = {"partner": "their partner", "parent": "their parent", "child": "their child"}.get(relation, "someone close")
 	_event(mourner, "Lost %s, %s." % [what, dead.agent_name], "people")
@@ -300,6 +327,8 @@ const DEATH_PHRASES := {
 		"could not find enough to eat"],
 	"disease": ["was taken by fever", "fell sick and did not get up", "was carried off by the sickness"],
 	"conflict": ["fell in a quarrel between camps", "was killed in a fight over food"],
+	"wolf": ["was taken by a wolf, far from the fire", "went out alone and met a wolf"],
+	"bear": ["was killed by a bear", "met a bear in the dark and did not come home"],
 }
 
 static func _death_phrase(cause: String, who: int = 0) -> String:

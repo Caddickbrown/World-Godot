@@ -37,8 +37,8 @@ void fragment() {
 	float nz = cos(p.y * 1.2 - TIME * 0.9) * 0.5 + cos(p.y * 2.7 - p.x * 1.3 + TIME * 1.5) * 0.25;
 	NORMAL = normalize(mix(NORMAL, (VIEW_MATRIX * vec4(normalize(vec3(nx * 0.08, 1.0, nz * 0.08)), 0.0)).xyz, 0.8));
 	ALBEDO = col;
-	ROUGHNESS = 0.08 + foam * 0.8;
+	ROUGHNESS = 0.2 + foam * 0.7;   // 0.08 gave a blown-out sun glare under the bloom
 	METALLIC = 0.0;
-	SPECULAR = 0.6;
+	SPECULAR = 0.4;
 	ALPHA = mix(0.78, 0.97, smoothstep(0.0, depth_deep, d)) + foam * 0.2;
 }
