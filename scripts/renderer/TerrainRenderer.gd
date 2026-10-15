@@ -80,6 +80,11 @@ func flush_dirty() -> void:
 		_build_chunk(c)
 		done += 1
 
+## Everything waiting, now (captures and tests; the game spreads it over frames).
+func flush_all() -> void:
+	while not _dirty.is_empty():
+		flush_dirty()
+
 func _build_chunk(c: Vector2i) -> void:
 	if _chunks.has(c):
 		(_chunks[c] as Node).queue_free()

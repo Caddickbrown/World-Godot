@@ -474,6 +474,8 @@ func is_walkable(x: float, z: float) -> bool:
 	var tile := get_tile_f(x, z)
 	if tile.is_empty(): return false
 	var t: int = int(tile["type"])
+	if bool(tile.get("flooded", false)):   # under a flood (DisasterSystem)
+		return false
 	return t != TileType.WATER and t != TileType.DEEP_WATER and \
 		   t != TileType.MOUNTAIN and t != TileType.GLACIER and t != TileType.LAVA
 

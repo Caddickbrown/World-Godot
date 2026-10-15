@@ -153,7 +153,10 @@ func start(disaster_type: int, day: int, history_log: HistoryLog, world: World =
 	remaining_time = duration
 	_apply_timer = 0.0
 	centre = at if at.x >= 0.0 else _pick_centre(disaster_type, world)
-	_base_h = world.surface_y(centre.x, centre.y) if world else 0.0
+	# Floods rise from the sea (rivers burst first, being lower): measured from
+	# the centre's own ground, a centre at a hill's foot drowned everything
+	# below it, forest and all.
+	_base_h = 0.0
 	water_level = _base_h
 	if history_log:
 		history_log.add("disaster", _start_message(disaster_type), day)
