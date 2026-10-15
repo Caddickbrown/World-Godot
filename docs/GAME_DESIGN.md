@@ -99,20 +99,29 @@ Longer rhythms:
   in about two days, eight once the camp knows fermentation, so a preserving idea is what
   turns a good summer into a survivable winter.
 
-### Balance, as measured (tools/balance.gd, 14 days)
+### Balance, as measured (tools/balance.gd, 14 days, everything merged)
 
-| Seed | Ideas found | Ideas ever lost | Woods (start → end) | Felled / plantings | Camps / hamlets / towns |
-|---|---|---|---|---|---|
-| 1 | 47 | 0 | 1769 → 1884 | 126 / 14 | 0 / 3 / 5 |
-| 3 | 35 | 0 | 2190 → 2202 (149 young) | 129 / 0 | 3 / 4 / 5 |
-| 5 | 13 | 0 | 2942 → 3072 | 0 / 0 | 9 / 1 / 0 |
+| Seed | Ideas | Deaths: old age / starvation / predators | Woods start → end, felled, plantings | Camps / hamlets / towns |
+|---|---|---|---|---|
+| 1 | 49 | 43 / 6 / 2 | 1769 → 1882, 146, 28 | 2 / 5 / 4 |
+| 3 | 15 | 83 / 13 / 0 | 2190 → 2171, 0, 0 | 8 / 2 / 0 |
+| 5 | 39 | 46 / 5 / 1 | 2942 → 2919, 163, 13 | 2 / 8 / 4 |
 
-The stall in the mid-teens was stone tools: it could only be thought of standing on bare
-rock, where nobody goes, and shelter, housing, hunting and woodcutting all hang off it. It
-now comes to someone near rock. Several discovery conditions in `data/concepts.json`
-(adjacent_to, has_concept, tile_has_resource, near_bee_hive) were silently ignored by
-ConceptGraph, so e.g. sailing could be thought of inland; they're honoured now.
-Open: seed 5 still never reaches rock in 14 days; ideas are still never lost.
+Open: seed 3 never finds stone tools in 14 days (so no woodcutting, no towns); ideas are still
+never lost (open decision 0).
+
+## Built out from the prototype
+
+Every concept in the original browser prototype has been audited against this build and built
+out; each area has its notes (rules, numbers, what is still open):
+
+| Area | Notes | In short |
+|---|---|---|
+| Wild things | `docs/features/wildlife.md` | Whales, fish shoals (fishing follows them), frogs, bird flocks, robins, butterflies, midges, wild bees (honey) |
+| Animal minds | `docs/features/animals.md` | Packs and herds, fear of people, rare predator attacks on the weak, dogs, horses and riders, kept flocks, eagles on thermals, culls that stick |
+| Sky and seasons | `docs/features/sky.md` | Weather where you look, clouds, rain curtains, lightning, rainbows, stars, seasons on land and trees, droughts, floods, blight |
+| Ideas that matter | `docs/features/ideas.md` | Every idea effect and items.json key read by code (tested); firsts in the chronicle |
+| Places and maps | `docs/features/places.md` | Buildings from ideas, worn paths, discovery glow, minimap, inspect, Island screen, seed |
 
 ## Milestones
 

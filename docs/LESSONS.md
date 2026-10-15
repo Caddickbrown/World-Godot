@@ -109,3 +109,23 @@ One line of cause, one line of rule.
 - **Drawn once is frozen.** Flora scattered at load can't show a simulation that changes
   tiles: spread, fire and regrowth all happened invisibly. Anything the sim changes must be
   drawn from live state, with dirty marking so only what changed redraws.
+
+## Parallel build-out (five agents, one restart)
+
+- **Agents die with the container.** A restart killed all five mid-task; their work survived only
+  because it was on disk, uncommitted. Rule: parallel workers commit to their branch at every
+  working milestone, and the integrator salvages to `wip/*` branches before anything else.
+- **Built is not wired.** Three of five areas had real systems that nothing called (weather view,
+  season shaders, paths, history). Rule: a feature is done when Main ticks it, a test proves it,
+  and a capture shows it, not when the class exists.
+- **Names in asset files are not a contract.** The animal pack names clips every which way; exact
+  matching fell back to the first clip (deer attacked forever). Match by keyword and test the
+  choice with the real names.
+- **Check the frame of reference.** Walls were rotated along the radius; a flood measured from
+  its centre's height drowned every lowland. Both looked like art problems and were maths.
+- **A pending list that holds objects can hold a cycle.** Deeds kept the Agent that holds the
+  graph that held the deeds; the soak run leaked five scripts. Keep ids in queues.
+- **Data the code never reads (again).** None of 33 idea effect keys and a dozen item keys were
+  read. `tests/suites/40_ideas.gd` now fails on any unread key.
+- **Tests that leave a current camera behind steal the next scene's.** Remove test nodes from the
+  tree before freeing them.
