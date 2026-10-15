@@ -1,0 +1,82 @@
+class_name Moments
+extends RefCounted
+## The album: things you were there for. A moment unlocks only when its event
+## happens where you can see it (StoryKeeper asks Main), or, for world-wide
+## moments, while you're playing at all. Kept across worlds in a small save.
+
+## id: [name, hint, kind, needs_witness]
+const DEFS := {
+	"first_idea":    ["A first thought", "someone thinks of something new", "firsts", true],
+	"first_fire":    ["The first fire", "someone tames fire", "firsts", true],
+	"first_words":   ["First words", "someone invents language", "firsts", true],
+	"first_crossing":["The first crossing", "someone learns to sail", "firsts", true],
+	"first_harvest": ["First harvest", "someone works out farming", "firsts", true],
+	"first_story":   ["The first story", "someone starts an oral tradition", "firsts", true],
+	"pairing":       ["Two hearts", "two people pair up", "people", true],
+	"birth":         ["A new face", "a child is born", "people", true],
+	"long_life":     ["A long life", "someone dies of old age", "people", true],
+	"teacher":       ["The teacher", "someone teaches an idea to ten people", "people", true],
+	"last_founder":  ["The last founder", "the last of the first forty dies", "people", false],
+	"idea_lost":     ["Forgotten", "an idea dies with the last who knew it", "ideas", false],
+	"idea_refound":  ["Found again", "a lost idea is rediscovered", "ideas", true],
+	"ten_ideas":     ["Ten ideas", "the world holds ten ideas at once", "ideas", false],
+	"first_camp":    ["A camp", "people settle together", "world", true],
+	"hamlet":        ["A hamlet", "a camp grows and takes a name", "world", true],
+	"contact":       ["Strangers meet", "two settlements make contact", "world", true],
+	"storm_passed":  ["After the storm", "watch a storm blow through", "world", true],
+	"lightning":     ["Lightning", "see lightning strike the forest", "world", true],
+	"full_year":     ["A whole year", "watch the seasons turn once round", "world", false],
+	"hundred":       ["A hundred souls", "the population reaches a hundred", "world", false],
+	"whole_island":  ["The whole island", "pull right back and see it all", "world", false],
+	"night_watch":   ["Night watch", "watch the island at midnight", "world", false],
+	"walk":          ["Among them", "walk among them for the first time", "world", false],
+	"listen":        ["Eavesdropper", "listen in on someone", "people", false],
+}
+
+var save_path := "user://world_album.json"
+var unlocked: Dictionary = {}   # id -> {day, note}
+
+func load_album() -> void:
+	unlocked.clear()
+	if not FileAccess.file_exists(save_path):
+		return
+	var f := FileAccess.open(save_path, FileAccess.READ)
+	if f == null:
+		return
+	var data = JSON.parse_string(f.get_as_text())
+	if data is Dictionary and data.get("unlocked") is Dictionary:
+		unlocked = data["unlocked"]
+
+func save_album(extra: Dictionary = {}) -> void:
+	var f := FileAccess.open(save_path, FileAccess.WRITE)
+	if f == null:
+		return
+	var data := {"v": 1, "unlocked": unlocked}
+	data.merge(extra)
+	f.store_string(JSON.stringify(data))
+
+func needs_witness(id: String) -> bool:
+	return bool((DEFS.get(id, ["", "", "", true]) as Array)[3])
+
+## Returns true if this call unlocked it (first time).
+func unlock(id: String, day: int, note: String) -> bool:
+	if not DEFS.has(id) or unlocked.has(id):
+		return false
+	unlocked[id] = {"day": day, "note": note}
+	return true
+
+func is_unlocked(id: String) -> bool:
+	return unlocked.has(id)
+
+func name_of(id: String) -> String:
+	return str((DEFS.get(id, [id]) as Array)[0])
+
+## For the album screen: [{id, name, hint, kind, found, note}] in definition order.
+func entries() -> Array:
+	var out: Array = []
+	for id in DEFS:
+		var d: Array = DEFS[id]
+		var u: Dictionary = unlocked.get(id, {})
+		out.append({"id": id, "name": d[0], "hint": d[1], "kind": d[2], "found": not u.is_empty(),
+			"note": str(u.get("note", ""))})
+	return out

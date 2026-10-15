@@ -58,6 +58,16 @@ const FORMATION_INTERVAL: float = 30.0
 var _membership_timer: float = 0.0
 const MEMBERSHIP_INTERVAL: float = 2.0
 const MEMBERSHIP_RADIUS: float = 6.0
+## Fewer, bigger camps: a group of FOUNDING_GROUP agents forms one, and never
+## within FOUNDING_SPACING tiles of another (was 3 and 6: thirty camps of three).
+const FOUNDING_GROUP: int = 4
+const FOUNDING_SPACING: float = 12.0
+## A camp nobody has lived in for this many days is abandoned.
+const ABANDON_DAYS: int = 2
+## A hamlet needs writing AND this many people to become a town.
+const TOWN_SIZE: int = 10
+var _met_pairs: Dictionary = {}     # "lo:hi" settlement ids that have met
+var _empty_since: Dictionary = {}   # settlement id -> day it emptied
 
 # Tracks which agent_ids were in each settlement last tick (for join/leave logic)
 var _prev_members: Dictionary = {}  # settlement id → Array of agent_id
@@ -97,6 +107,8 @@ func tick(delta: float, agents: Array, concept_graph: ConceptGraph, day: int, hi
 
 	# 8. Inter-settlement contact
 	_tick_inter_contact(day, history_log)
+	# 9. Abandon camps nobody lives in any more
+	_abandon_empty(day, history_log)
 
 
 func get_settlement_for_agent(agent_id: int) -> RefCounted:
@@ -148,13 +160,13 @@ func _check_formation(agents: Array, day: int, history_log: HistoryLog) -> void:
 			if a_i.pos.distance_to(a_j.pos) <= 4.0:
 				group.append(free_agents[j])
 				used[j] = true
-		if group.size() < 3:
+		if group.size() < FOUNDING_GROUP:
 			continue
 		# Check no existing settlement centre within 6 tiles
 		var centroid: Vector2 = _find_centroid_agents(group)
 		var too_close: bool = false
 		for s: Settlement in settlements:
-			if s.centre.distance_to(centroid) <= 6.0:
+			if s.centre.distance_to(centroid) <= FOUNDING_SPACING:
 				too_close = true
 				break
 		if too_close:
@@ -174,10 +186,10 @@ func _create_settlement(group: Array, centroid: Vector2, day: int, history_log: 
 	for a: Agent in group:
 		s.member_ids.append(a.agent_id)
 	s.tier = 0
-	s.name = "Camp"
+	s.name = _unique_name()
 	settlements.append(s)
 	_prev_members[s.id] = s.member_ids.duplicate()
-	history_log.add("settlement", "New camp founded at (%.1f, %.1f) with %d members." % [centroid.x, centroid.y, group.size()], day)
+	history_log.add("settlement", "New camp founded at (%.1f, %.1f) with %d members: '%s'." % [centroid.x, centroid.y, group.size(), s.name], day)
 
 # ---------------------------------------------------------------------------
 # Membership
@@ -207,15 +219,14 @@ func _update_membership(agents: Array, spatial_grid = null) -> void:
 
 func _check_tier_upgrades(agents: Array, history_log: HistoryLog, day: int) -> void:
 	for s: Settlement in settlements:
+		# Names stick: a place keeps the name it was founded with as it grows.
 		if s.tier == 0 and s.member_ids.size() >= 5:
 			s.tier = 1
-			s.name = _generate_name(1, false)
 			history_log.add("settlement", "Camp has grown into hamlet '%s'." % s.name, day)
-		elif s.tier == 1:
+		elif s.tier == 1 and s.member_ids.size() >= TOWN_SIZE:
 			var any_writing: bool = _any_member_knows(s, agents, "writing")
 			if any_writing:
 				s.tier = 2
-				s.name = _generate_name(2, true)
 				history_log.add("settlement", "Hamlet elevated to named settlement '%s'." % s.name, day)
 
 func _any_member_knows(s: Settlement, agents: Array, concept_id: String) -> bool:
@@ -331,11 +342,40 @@ func _tick_inter_contact(day: int, history_log: HistoryLog) -> void:
 				s_b.knowledge_pool[concept] = true
 			s_a.last_contact_day = day
 			s_b.last_contact_day = day
-			history_log.add("settlement", "Settlements '%s' and '%s' made contact." % [s_a.name, s_b.name], day)
+			# Ideas keep flowing between neighbours, but they only *meet* once.
+			var key := "%d:%d" % [mini(s_a.id, s_b.id), maxi(s_a.id, s_b.id)]
+			if not _met_pairs.has(key):
+				_met_pairs[key] = true
+				history_log.add("settlement", "Settlements '%s' and '%s' made contact." % [s_a.name, s_b.name], day)
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+## A name no living settlement already has (hamlet style, then town style).
+func _unique_name() -> String:
+	var taken: Dictionary = {}
+	for s: Settlement in settlements:
+		taken[s.name] = true
+	for attempt in 40:
+		var n := _generate_name(1 if attempt < 20 else 2, false)
+		if not taken.has(n):
+			return n
+	return "Camp %d" % _next_id
+
+## Settlements nobody lives in fade away after ABANDON_DAYS.
+func _abandon_empty(day: int, history_log: HistoryLog) -> void:
+	for s: Settlement in settlements.duplicate():
+		if not s.member_ids.is_empty():
+			_empty_since.erase(s.id)
+			continue
+		if not _empty_since.has(s.id):
+			_empty_since[s.id] = day
+		elif day - int(_empty_since[s.id]) >= ABANDON_DAYS:
+			settlements.erase(s)
+			_empty_since.erase(s.id)
+			_prev_members.erase(s.id)
+			history_log.add("settlement", "'%s' was abandoned." % s.name, day)
 
 func _generate_name(tier: int, _has_writing: bool) -> String:
 	if tier <= 0:

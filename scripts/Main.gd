@@ -39,6 +39,13 @@ var history_log           # HistoryLog
 var achievements          # Achievements
 var audio_system          # AudioSystem
 var lineage_tracker       # LineageTracker
+## The player-facing story (chronicle, lives, ideas, moments, hunches). Reads
+## the simulation, never writes to it.
+var story: StoryKeeper
+## Where the album and glimmers are kept (tests point this elsewhere).
+var album_path := "user://world_album.json"
+var _history_seen := 0
+var _was_storm := false
 var disease_system        # DiseaseSystem
 var population_manager    # PopulationManager
 
@@ -205,6 +212,14 @@ func _init_world() -> void:
 	disease_system = DiseaseSystem.new()
 	population_manager = PopulationManager.new()
 
+	story = StoryKeeper.new()
+	story.witness_fn = _is_witnessed
+	story.setup(concept_graph, agents, album_path)
+	story.chronicle_added.connect(_on_chronicle)
+	story.moment_unlocked.connect(_on_moment)
+	_history_seen = 0
+	_was_storm = false
+
 	game_over = false
 	_select(null)
 	if view_mode == ViewMode.WALK:
@@ -350,6 +365,7 @@ func _process(delta: float) -> void:
 		if a.is_dead and not bool(a.get_meta("death_logged", false)):
 			a.set_meta("death_logged", true)
 			history_log.add("death", history_log.format_death(a.agent_name, a.death_cause), time_system.day)
+			story.on_death(a)
 			audio_system.play_death()
 
 	# Game over detection
@@ -367,6 +383,8 @@ func _process(delta: float) -> void:
 
 	# Push any tile changes this frame into the chunked terrain mesh.
 	_flush_tile_changes()
+
+	_feed_story(game_delta, alive_count)
 
 	# Rendering
 	agent_renderer.update()
@@ -407,6 +425,7 @@ func _handle_births() -> void:
 		agent_renderer.add_agent(child)
 		birth_times.append(time_system.game_time)
 		alive.append(child)
+		story.on_birth(child, _find_agent(int(evt.get("parent_a_id", -1))), _find_agent(int(evt.get("parent_b_id", -1))))
 		var birth_msg: String = str(evt.get("parent_name", "Someone")) + " has a child — " + child.agent_name
 		_push_notification(birth_msg)
 		history_log.add("birth", birth_msg, time_system.day)
@@ -414,7 +433,9 @@ func _handle_births() -> void:
 
 func _handle_events() -> void:
 	for evt in concept_graph.drain_events():
-		if evt["type"] == "discovery":
+		if evt["type"] == "spread":
+			story.on_spread(_find_agent(int(evt["agent_id"])), _find_agent(int(evt.get("teacher_id", -1))), str(evt["concept_id"]))
+		elif evt["type"] == "discovery":
 			var concept: Dictionary = concept_graph.concepts.get(str(evt["concept_id"]), {})
 			var cname: String = concept.get("name", str(evt["concept_id"]))
 			_push_notification(str(evt["agent_name"]) + " discovered " + cname + "!")
@@ -425,8 +446,93 @@ func _handle_events() -> void:
 				agent.discovery_flash = 1.5
 				agent.say(cname + "!", 4.0)
 				lineage_tracker.record(str(evt["concept_id"]), agent, time_system.day)
+				story.on_discovery(agent, str(evt["concept_id"]))
 				if evt["concept_id"] == "organisation":
 					agent.adopt_task(agents)
+
+# ── Story ────────────────────────────────────────────────────────────────────
+
+## Settlement, weather and other world news, forwarded from the history log
+## (the systems already write it) into the story, with the moment it unlocks.
+const WORLD_NEWS := {
+	"settlement": [["New camp founded", "first_camp"], ["grown into hamlet", "hamlet"],
+		["elevated to named", "hamlet"], ["made contact", "contact"]],
+	"fire": [["Lightning", "lightning"]],
+	"disease": [], "disaster": [], "trade": [], "war": [], "ecology": [], "craft": [],
+}
+
+func _feed_story(game_delta: float, alive_count: int) -> void:
+	var fresh: int = history_log.total_added - _history_seen
+	_history_seen = history_log.total_added
+	if fresh > 0:
+		for e in history_log.entries.slice(maxi(0, history_log.entries.size() - fresh)):
+			var t := str(e.get("type", ""))
+			if not WORLD_NEWS.has(t):
+				continue
+			var moment := ""
+			for rule in WORLD_NEWS[t]:
+				if str(e["msg"]).contains(rule[0]):
+					moment = rule[1]
+			story.on_world(_reword(str(e["msg"])), _news_pos(t), moment)
+	var storm: bool = weather_system.is_storm
+	if storm != _was_storm:
+		_was_storm = storm
+		story.on_world("A storm rolls in." if storm else "The storm has blown through.",
+			Vector2(-1, -1), "" if storm else "storm_passed")
+	if observer.distance > 280.0 and view_mode == ViewMode.OBSERVE:
+		story.on_player("whole_island")
+	story.tick(game_delta, agents, time_system.day, time_system.hour, alive_count)
+
+## The systems log in a terse voice; the chronicle speaks more warmly.
+static func _reword(msg: String) -> String:
+	var m := msg.trim_suffix(".")
+	var camp := RegEx.create_from_string("New camp founded at \\(.*\\) with (\\d+) members: '(.*)'").search(m)
+	if camp:
+		return "%s people settled down together and called the place %s." % [camp.get_string(1), camp.get_string(2)]
+	var grew := RegEx.create_from_string("Camp has grown into hamlet '(.*)'").search(m)
+	if grew:
+		return "%s has grown from a camp into a hamlet." % grew.get_string(1)
+	var town := RegEx.create_from_string("Hamlet elevated to named settlement '(.*)'").search(m)
+	if town:
+		return "%s has writing now, and has become a town." % town.get_string(1)
+	var met := RegEx.create_from_string("Settlements '(.*)' and '(.*)' made contact").search(m)
+	if met:
+		return "The people of %s and %s have met." % [met.get_string(1), met.get_string(2)]
+	m = m.replace("Lightning struck a forest at", "Lightning set the forest alight near")
+	return m + "."
+
+func _news_pos(t: String) -> Vector2:
+	if t == "fire" and fire_system.lightning_fire_pos != Vector2(-1, -1):
+		return fire_system.lightning_fire_pos
+	if t == "settlement":
+		var all: Array = settlement_system.get_settlements()
+		if not all.is_empty():
+			return all[-1].centre
+	return Vector2(-1, -1)
+
+## Could the player see this? Following someone involved always counts; an
+## unknown place counts; otherwise it has to be on screen and close enough to
+## make out (or near the wisp).
+func _is_witnessed(tile_pos: Vector2, agent_ids: Array) -> bool:
+	if selected_agent and selected_agent.agent_id in agent_ids:
+		return true
+	if tile_pos.x < 0.0:
+		return true
+	var p := Vector3(tile_pos.x * TILE_SIZE, world.surface_y(tile_pos.x, tile_pos.y) + 1.0, tile_pos.y * TILE_SIZE)
+	if view_mode == ViewMode.WALK:
+		return p.distance_to(wanderer.world_position()) < WITNESS_WALK_RANGE
+	return observer.distance < WITNESS_SKY_RANGE and camera.is_position_in_frustum(p)
+
+const WITNESS_SKY_RANGE := 200.0
+const WITNESS_WALK_RANGE := 40.0
+
+func _on_chronicle(entry: Dictionary) -> void:
+	var hud := get_node_or_null("HUD")
+	if hud and hud.has_method("on_chronicle"):
+		hud.on_chronicle(entry)
+
+func _on_moment(_id: String, title: String) -> void:
+	_push_notification("Witnessed: " + title)
 
 func _handle_campfires(delta: float) -> void:
 	for evt in world.campfire_events:
@@ -563,6 +669,7 @@ func set_view_mode(mode: ViewMode) -> void:
 		var p := observer.target / TILE_SIZE
 		wanderer.place_at(Vector2(p.x, p.z))
 		wanderer.cam_yaw = observer.angle_h
+		if story: story.on_player("walk")
 	else:
 		observer.look_at_point(wanderer.world_position())
 	observer.release_keys()
@@ -608,6 +715,7 @@ func listen_to_nearest() -> Agent:
 	var a := nearest_agent_to_wanderer()
 	_select(a)
 	agent_renderer.listening_id = a.agent_id if a else -1
+	if a: story.on_player("listen", a.agent_name)
 	return a
 
 func follow(agent: Agent) -> void:

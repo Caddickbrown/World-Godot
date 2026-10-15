@@ -20,6 +20,9 @@ func _ready() -> void:
 	_test_conflict_needs_rival_settlements_and_hunger()
 	_test_thoughts()
 	_test_wanderer_movement()
+	_test_idea_ledger()
+	_test_story_keeper()
+	_test_hunches()
 	print("== integration")
 	await _test_main_views()
 	print("== %d checks, %d failures" % [_checks, _failures])
@@ -154,10 +157,131 @@ func _test_wanderer_movement() -> void:
 		check("placing in the sea lands on dry ground", w.is_walkable(wand.tile_pos.x, wand.tile_pos.y))
 	wand.queue_free()
 
+const TEST_ALBUM := "user://test_album.json"
+
+func _adult(x: float = 10.0, z: float = 10.0) -> Agent:
+	var a := Agent.new(x, z)
+	a.age = a.max_age * 0.4
+	a._update_life_stage()
+	a.is_adult = true
+	return a
+
+func _graph() -> ConceptGraph:
+	var f := FileAccess.open("res://data/concepts.json", FileAccess.READ)
+	return ConceptGraph.new(JSON.parse_string(f.get_as_text()))
+
+func _test_idea_ledger() -> void:
+	var g := _graph()
+	var ledger := IdeaLedger.new()
+	ledger.setup(g.concepts)
+	var people: Array = []
+	for i in 10:
+		people.append(_adult())
+	ledger.recount(people, 1)
+	check("an idea nobody has is a seed", ledger.stage_of("fire") == IdeaLedger.Stage.SEED)
+	people[0].knowledge["fire"] = true
+	ledger.recount(people, 1)
+	check("one holder in ten: sprouting", ledger.stage_of("fire") == IdeaLedger.Stage.SPROUT)
+	for i in 5:
+		people[i].knowledge["fire"] = true
+	ledger.recount(people, 2)
+	check("half the world: in bloom", ledger.stage_of("fire") == IdeaLedger.Stage.BLOOM)
+	people[0].knowledge["herbalism"] = true
+	ledger.recount(people, 2)
+	people[0].is_dead = true
+	people[0].health = 0.0
+	var changes: Array = ledger.recount(people, 3, [people[0]])
+	check("the last holder dying wilts the idea", ledger.stage_of("herbalism") == IdeaLedger.Stage.WILTED)
+	var named := changes.filter(func(c): return c["id"] == "herbalism")
+	check("...and the ledger names who took it with them", not named.is_empty() and named[0]["last_holder"] == people[0].agent_name)
+	check("the dead don't count as holders", int(ledger.ideas["fire"]["holders"]) == 4)
+	var how: Dictionary = ledger.note_discovery("herbalism", "Pip", 5)
+	check("finding a lost idea counts as rediscovery", how["refound"] and not how["first"])
+
+func _test_story_keeper() -> void:
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_ALBUM))
+	var g := _graph()
+	var a := _adult(10, 10)
+	var b := _adult(11, 10)
+	var people: Array = [a, b]
+	var keeper := StoryKeeper.new()
+	var seen := [false]
+	keeper.witness_fn = func(_p, _ids): return seen[0]
+	keeper.setup(g, people, TEST_ALBUM)
+	check("a new world opens the chronicle", keeper.chronicle.size() == 1)
+
+	# Read-only: a full tick must leave everyone exactly as they were.
+	a.bonded_partner_id = b.agent_id
+	b.bonded_partner_id = a.agent_id
+	a.knowledge["fire"] = true
+	var snap := func(x: Agent) -> Array:
+		return [x.pos, x.target, x.state, x.needs.duplicate(), x.knowledge.duplicate(), x.bonded_partner_id,
+			x.health, x.age, x.speech_bubble, x.get_meta_list()]
+	var before := [snap.call(a), snap.call(b)]
+	keeper.tick(StoryKeeper.RECOUNT_INTERVAL + 0.1, people, 2, 10.0, 2)
+	check("the story never changes the people it watches", [snap.call(a), snap.call(b)] == before)
+	var pair_lines := keeper.chronicle.filter(func(e): return e["text"].contains("paired up"))
+	check("a pairing is noticed once", pair_lines.size() == 1)
+	keeper.tick(0.1, people, 2, 10.0, 2)
+	check("...and not told twice", keeper.chronicle.filter(func(e): return e["text"].contains("paired up")).size() == 1)
+	check("both lives remember the partner", keeper.life_of(a).partner == b.agent_name and keeper.life_of(b).partner == a.agent_name)
+	check("unwatched pairing isn't in the album", not keeper.moments.is_unlocked("pairing"))
+
+	seen[0] = true
+	keeper.on_discovery(a, "honey_gathering")
+	check("a first discovery is told", keeper.chronicle[-1]["text"].contains("first to think of"))
+	check("...goes in their life story", "honey_gathering" in keeper.life_of(a).firsts)
+	check("...and, watched, unlocks a moment", keeper.moments.is_unlocked("first_idea"))
+	keeper.on_discovery(b, "honey_gathering")
+	check("a second discoverer isn't 'first'", not keeper.chronicle[-1]["text"].contains(b.agent_name + " was the first"))
+
+	for i in StoryKeeper.TEACHER_THRESHOLD:
+		keeper.on_spread(_adult(), a, "honey_gathering")
+	check("teaching ten people is a moment", keeper.moments.is_unlocked("teacher"))
+	check("...and counted in their life", keeper.life_of(a).total_taught() == StoryKeeper.TEACHER_THRESHOLD)
+
+	a.is_dead = true
+	a.death_cause = "old_age"
+	keeper.on_death(a)
+	var line: String = keeper.life_of(a).last_line
+	check("a life ends on a line naming what they're remembered for (%s)" % line,
+		line.begins_with(a.agent_name + ", who first thought of") and line.contains("died old"))
+	check("the dead keep their story", not keeper.life_of(a).alive() and keeper.lives.has(a.agent_id))
+
+	# The album persists across worlds.
+	var again := StoryKeeper.new()
+	again.setup(g, [], TEST_ALBUM)
+	check("the album survives a new world", again.moments.is_unlocked("first_idea") and again.moments.is_unlocked("teacher"))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_ALBUM))
+
+func _test_hunches() -> void:
+	var g := _graph()
+	var ledger := IdeaLedger.new()
+	ledger.setup(g.concepts)
+	var people: Array = []
+	for i in 6:
+		var p := _adult()
+		p.knowledge["fire"] = true   # cooking, pottery... become possible
+		people.append(p)
+	ledger.recount(people, 1)
+	var h := Hunches.new()
+	var made: Array = h.offer(people, ledger, g.concepts, 1)
+	var first_to := made.filter(func(x): return x["kind"] == "first_to")
+	check("the game asks who'll think of something first", not first_to.is_empty())
+	if first_to.is_empty():
+		return
+	var q: Dictionary = first_to[0]
+	check("...offering real candidates and 'someone else'", (q["options"] as Array).size() == 4 and Hunches.SOMEONE_ELSE in q["options"])
+	h.pick(int(q["id"]), q["options"][0])
+	var done: Array = h.on_discovery(q["concept"], q["options"][0], false, true, 2)
+	check("a right call adds a glimmer", done.size() == 1 and done[0]["correct"] and h.glimmers == 1)
+	check("open hunches are capped", h.offer(people, ledger, g.concepts, 2).size() + h.open.size() <= Hunches.MAX_OPEN)
+
 # ── Integration ──────────────────────────────────────────────────────────────
 
 func _test_main_views() -> void:
 	var main: Node = load("res://scenes/Main.tscn").instantiate()
+	main.album_path = TEST_ALBUM
 	add_child(main)
 	for i in 5:
 		await get_tree().process_frame
@@ -185,12 +309,14 @@ func _test_main_views() -> void:
 	check("...and the observer stops listening", not main.observer.active)
 	check("the wanderer stands on dry land",
 		main.world.is_walkable(main.wanderer.tile_pos.x, main.wanderer.tile_pos.y))
-	# Stand right beside them and listen in.
-	who.pos = main.wanderer.tile_pos + Vector2(0.8, 0)
+	# Stand right beside them and listen in. Others may wander close too, so
+	# the one we hear is whoever is nearest; it must be them, and untouched.
+	who.pos = main.wanderer.tile_pos + Vector2(0.3, 0)
 	who.target = who.pos + Vector2(3, 0)
 	who.state = Agent.State.WANDERING
 	var near: Agent = main.nearest_agent_to_wanderer()
 	check("someone beside you is in reach", near != null)
+	who = near
 	var before := [who.pos, who.target, who.state, who.facing, who.speech_bubble, who.needs.duplicate()]
 	var heard: Agent = main.listen_to_nearest()
 	check("listening in selects them", heard == who and main.selected_agent == who)
@@ -217,6 +343,14 @@ func _test_main_views() -> void:
 	var far_label: Label3D = main.agent_renderer.get_overlay(other.agent_id, "label") as Label3D
 	check("...and names are hidden", far_label != null and not far_label.visible)
 
+	# Let the world run: the story fills in from the real simulation.
+	main.time_system.set_speed(20.0)
+	for i in 240:
+		main._process(1.0 / 30.0)
+	main.time_system.set_speed(1.0)
+	check("the chronicle fills as the world runs (%d entries)" % main.story.chronicle.size(), main.story.chronicle.size() > 5)
+	check("every founder has a life story", main.agents.slice(0, main.AGENT_COUNT).all(func(a): return main.story.lives.has(a.agent_id)))
+
 	# A reset mid-walk must not leave the wanderer in charge of a dead camera.
 	main.set_view_mode(main.ViewMode.WALK)
 	main._init_world()
@@ -224,3 +358,4 @@ func _test_main_views() -> void:
 	check("reset returns to the observer", main.view_mode == main.ViewMode.OBSERVE and main.observer.active)
 	main.queue_free()
 	await get_tree().process_frame
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_ALBUM))

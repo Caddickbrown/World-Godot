@@ -1,0 +1,294 @@
+class_name StoryKeeper
+extends RefCounted
+## Turns what happens in the simulation into the things the player collects:
+## the chronicle, a story for every life, the idea ledger, moments and hunches.
+##
+## Pillar 1: this only READS the simulation. Main calls the on_* hooks with
+## events it already handles; tick() looks at agents but never writes to them.
+## The one outward call is witness_fn, which asks Main whether the player could
+## see a place (to unlock moments).
+
+signal chronicle_added(entry: Dictionary)
+signal moment_unlocked(id: String, title: String)
+
+const KINDS := ["people", "ideas", "world"]
+const RECOUNT_INTERVAL := 2.0   # game seconds between living-holder recounts
+const TEACHER_THRESHOLD := 10
+const MAX_CHRONICLE := 300
+
+var chronicle: Array = []       # {day, hour, kind, text, pos, agent_ids}
+var lives: Dictionary = {}      # agent_id -> life record (see _life)
+var ledger := IdeaLedger.new()
+var moments := Moments.new()
+var hunches := Hunches.new()
+var concepts: Dictionary = {}
+
+## Callable(tile_pos: Vector2, agent_ids: Array) -> bool. Unset = always seen.
+var witness_fn: Callable = Callable()
+var day := 1
+var hour := 8.0
+
+var _recount_timer := 0.0
+var _recently_dead: Array = []
+var _partner_seen: Dictionary = {}   # agent_id -> partner id we've already told
+var _founders: Dictionary = {}       # agent_id -> true
+var _founders_left := 0
+var _seen_year := false
+
+func setup(concept_graph: ConceptGraph, agents: Array, album_path: String = "user://world_album.json") -> void:
+	concepts = concept_graph.concepts
+	ledger.setup(concepts)
+	moments.save_path = album_path
+	moments.load_album()
+	var saved := _load_extra()
+	hunches.glimmers = int(saved.get("glimmers", 0))
+	hunches.called = int(saved.get("called", 0))
+	for a in agents:
+		_founders[a.agent_id] = true
+		_life(a).founder = true
+	_founders_left = agents.size()
+	add("people", "%d strangers woke on the shore." % agents.size(), Vector2(-1, -1), [])
+
+# ── Hooks from Main ──────────────────────────────────────────────────────────
+
+func on_birth(child: Agent, parent_a: Agent, parent_b: Agent) -> void:
+	var life := _life(child)
+	var pnames: Array = []
+	for p in [parent_a, parent_b]:
+		if p:
+			pnames.append(p.agent_name)
+			var pl := _life(p)
+			pl.children.append(child.agent_name)
+			_event(p, "%s was born." % child.agent_name, "people")
+	life.parents = pnames
+	life.events.append({"day": day, "text": "Born to %s." % " and ".join(pnames) if not pnames.is_empty() else "Born.", "kind": "people"})
+	var who := " and ".join(pnames) if not pnames.is_empty() else "Someone"
+	add("people", "%s had a child, %s." % [who, child.agent_name], child.pos, [child.agent_id] + _ids([parent_a, parent_b]), false)
+	_try_moment("birth", child.pos, [child.agent_id], "%s, born day %d" % [child.agent_name, day])
+
+func on_death(a: Agent) -> void:
+	var life := _life(a)
+	life.died_day = day
+	life.cause = a.death_cause
+	life.last_line = last_line(a)
+	life.events.append({"day": day, "text": _death_phrase(a.death_cause).capitalize() + ".", "kind": "people"})
+	_recently_dead.append(a)
+	add("people", life.last_line, a.pos, [a.agent_id], not life.firsts.is_empty() or life.total_taught() >= 5 or _founders_left <= 1)
+	if a.death_cause == "old_age":
+		_try_moment("long_life", a.pos, [a.agent_id], life.last_line)
+	if _founders.has(a.agent_id):
+		_founders_left -= 1
+		if _founders_left == 0:
+			_try_moment("last_founder", a.pos, [a.agent_id], "%s, day %d" % [a.agent_name, day])
+
+func on_discovery(a: Agent, concept_id: String) -> void:
+	var how := ledger.note_discovery(concept_id, a.agent_name, day)
+	var cname := ledger.name_of(concept_id)
+	var life := _life(a)
+	if how["first"]:
+		life.firsts.append(concept_id)
+		_event(a, "Was the first to think of %s." % cname, "ideas")
+		add("ideas", "%s was the first to think of %s." % [a.agent_name, cname], a.pos, [a.agent_id])
+		_try_moment("first_idea", a.pos, [a.agent_id], "%s: %s" % [a.agent_name, cname])
+		var special := {"fire": "first_fire", "language": "first_words", "sailing": "first_crossing",
+			"agriculture": "first_harvest", "oral_tradition": "first_story"}
+		if special.has(concept_id):
+			_try_moment(special[concept_id], a.pos, [a.agent_id], "%s, day %d" % [a.agent_name, day])
+	elif how["refound"]:
+		_event(a, "Found %s again, long after it was lost." % cname, "ideas")
+		add("ideas", "%s is known again: %s worked it out anew." % [cname, a.agent_name], a.pos, [a.agent_id])
+		ledger.ideas[concept_id]["stage"] = IdeaLedger.Stage.SPROUT
+		_try_moment("idea_refound", a.pos, [a.agent_id], "%s, by %s" % [cname, a.agent_name])
+	else:
+		_event(a, "Worked out %s." % cname, "ideas")
+	for h in hunches.on_discovery(concept_id, a.agent_name, how["refound"], how["first"], day):
+		_tell_hunch(h)
+
+func on_spread(learner: Agent, teacher: Agent, concept_id: String) -> void:
+	ledger.note_taught(concept_id)
+	if teacher == null:
+		return
+	var tl := _life(teacher)
+	tl.taught[concept_id] = int(tl.taught.get(concept_id, 0)) + 1
+	var n: int = tl.taught[concept_id]
+	if n == TEACHER_THRESHOLD:
+		var cname := ledger.name_of(concept_id)
+		_event(teacher, "Has taught %s to %d people." % [cname, n], "ideas")
+		add("ideas", "%s has taught %s to %d people." % [teacher.agent_name, cname, n], teacher.pos, [teacher.agent_id])
+		_try_moment("teacher", teacher.pos, [teacher.agent_id], "%s: %s" % [teacher.agent_name, cname])
+	if learner and tl.taught.size() == 1 and n == 1:
+		_event(teacher, "Taught %s to %s, the first idea they passed on." % [ledger.name_of(concept_id), learner.agent_name], "ideas")
+
+## World events (weather, fire, settlements). moment: optional moment id.
+func on_world(text: String, pos: Vector2 = Vector2(-1, -1), moment: String = "") -> void:
+	add("world", text, pos, [])
+	if moment != "":
+		_try_moment(moment, pos, [], "day %d: %s" % [day, text])
+
+## Player-side moments (zoomed out, walked, listened).
+func on_player(moment: String, note: String = "") -> void:
+	_try_moment(moment, Vector2(-1, -1), [], note if note != "" else "day %d" % day)
+
+## Called every frame with the simulated delta; reads agents only.
+func tick(game_delta: float, agents: Array, p_day: int, p_hour: float, alive: int) -> void:
+	var new_day := p_day != day
+	day = p_day
+	hour = p_hour
+	# Pairings: the sim sets bonded_partner_id silently; notice it once.
+	for a in agents:
+		if a.is_dead or a.bonded_partner_id < 0:
+			continue
+		if int(_partner_seen.get(a.agent_id, -1)) == a.bonded_partner_id:
+			continue
+		_partner_seen[a.agent_id] = a.bonded_partner_id
+		if a.agent_id > a.bonded_partner_id:
+			continue  # tell each pair once, from the lower id
+		var b: Agent = _find(agents, a.bonded_partner_id)
+		if b == null:
+			continue
+		_partner_seen[b.agent_id] = a.agent_id
+		_life(a).partner = b.agent_name
+		_life(b).partner = a.agent_name
+		_event(a, "Paired up with %s." % b.agent_name, "people")
+		_event(b, "Paired up with %s." % a.agent_name, "people")
+		add("people", "%s and %s have paired up." % [a.agent_name, b.agent_name], a.pos, [a.agent_id, b.agent_id], false)
+		_try_moment("pairing", a.pos, [a.agent_id, b.agent_id], "%s and %s" % [a.agent_name, b.agent_name])
+
+	_recount_timer += game_delta
+	if _recount_timer >= RECOUNT_INTERVAL:
+		_recount_timer = 0.0
+		for c in ledger.recount(agents, day, _recently_dead):
+			if int(c["to"]) == IdeaLedger.Stage.WILTED:
+				var cname := ledger.name_of(c["id"])
+				var who: String = c["last_holder"]
+				add("ideas", ("%s is forgotten: %s was the last who knew it." % [cname, who]) if who != ""
+					else "%s is forgotten. No one alive remembers it." % cname, Vector2(-1, -1), [])
+				_try_moment("idea_lost", Vector2(-1, -1), [], cname)
+		_recently_dead.clear()
+		if ledger.count_in(IdeaLedger.Stage.BLOOM) + ledger.count_in(IdeaLedger.Stage.SPROUT) >= 10:
+			_try_moment("ten_ideas", Vector2(-1, -1), [], "day %d" % day)
+		hunches.offer(agents, ledger, concepts, day)
+	if alive >= 100:
+		_try_moment("hundred", Vector2(-1, -1), [], "day %d" % day)
+	if day > TimeSystem.SEASON_DAYS * 4 and not _seen_year:
+		_seen_year = true
+		_try_moment("full_year", Vector2(-1, -1), [], "day %d" % day)
+	if hour >= 23.5 or hour < 0.5:
+		_try_moment("night_watch", Vector2(-1, -1), [], "day %d" % day)
+	if new_day:
+		for h in hunches.on_day(day):
+			_tell_hunch(h)
+
+# ── Chronicle and lives ──────────────────────────────────────────────────────
+
+## major: worth telling everyone (firsts, lost ideas, new places, notable
+## lives). Minor entries (ordinary births, pairings, deaths) still go in the
+## chronicle and in lives, but the HUD only shows them for people you follow.
+func add(kind: String, text: String, pos: Vector2, agent_ids: Array, major: bool = true) -> Dictionary:
+	var entry := {"day": day, "hour": hour, "kind": kind, "text": text, "pos": pos, "agent_ids": agent_ids, "major": major}
+	chronicle.append(entry)
+	if chronicle.size() > MAX_CHRONICLE:
+		chronicle.pop_front()
+	chronicle_added.emit(entry)
+	return entry
+
+## Newest first. focus_id: also include minor entries about this person.
+func recent(kind: String = "all", count: int = 6, focus_id: int = -1) -> Array:
+	var out: Array = []
+	for i in range(chronicle.size() - 1, -1, -1):
+		var e: Dictionary = chronicle[i]
+		if not (bool(e.get("major", true)) or focus_id in (e["agent_ids"] as Array)):
+			continue
+		if kind == "all" or e["kind"] == kind:
+			out.append(e)
+			if out.size() >= count:
+				break
+	return out
+
+func life_of(a: Agent) -> LifeRecord:
+	return _life(a)
+
+## The line a life ends on: "Orulen, who first thought of honey, died old."
+func last_line(a: Agent) -> String:
+	var life := _life(a)
+	var epithet := ""
+	if not life.firsts.is_empty():
+		epithet = "who first thought of %s" % ledger.name_of(life.firsts[0]).to_lower()
+	else:
+		var best := ""
+		var most := 0
+		for id in life.taught:
+			if int(life.taught[id]) > most:
+				most = int(life.taught[id])
+				best = id
+		if most >= 3:
+			epithet = "who taught %s to %d people" % [ledger.name_of(best).to_lower(), most]
+		elif life.children.size() >= 2:
+			epithet = "parent of %d" % life.children.size()
+		elif life.partner != "":
+			epithet = "%s's partner" % life.partner
+		elif life.founder:
+			epithet = "one of the first forty"
+	var head := a.agent_name + (", " + epithet + "," if epithet != "" else "")
+	return "%s %s." % [head, _death_phrase(a.death_cause)]
+
+static func _death_phrase(cause: String) -> String:
+	match cause:
+		"old_age": return "died old, in the warmth of the camp"
+		"starvation": return "starved in a hungry season"
+		"disease": return "was taken by fever"
+		"conflict": return "fell in a quarrel between camps"
+	return "is gone"
+
+func _life(a: Agent) -> LifeRecord:
+	if not lives.has(a.agent_id):
+		var l := LifeRecord.new()
+		l.agent_id = a.agent_id
+		l.name = a.agent_name
+		l.born_day = day
+		lives[a.agent_id] = l
+	return lives[a.agent_id]
+
+func _event(a: Agent, text: String, kind: String) -> void:
+	_life(a).events.append({"day": day, "text": text, "kind": kind})
+
+# ── Moments, hunches ─────────────────────────────────────────────────────────
+
+func _try_moment(id: String, pos: Vector2, agent_ids: Array, note: String) -> void:
+	if moments.is_unlocked(id):
+		return
+	if moments.needs_witness(id) and witness_fn.is_valid() and not bool(witness_fn.call(pos, agent_ids)):
+		return
+	if moments.unlock(id, day, note):
+		moment_unlocked.emit(id, moments.name_of(id))
+		_save()
+
+func _tell_hunch(h: Dictionary) -> void:
+	if str(h.get("pick", "")) == "":
+		return
+	var verdict := "You called it" if h["correct"] else "Not this time"
+	add("world", "%s: %s (%s)." % [verdict, h["question"], h["answer"]], Vector2(-1, -1), [])
+	_save()
+
+func _save() -> void:
+	moments.save_album({"glimmers": hunches.glimmers, "called": hunches.called})
+
+func _load_extra() -> Dictionary:
+	if not FileAccess.file_exists(moments.save_path):
+		return {}
+	var f := FileAccess.open(moments.save_path, FileAccess.READ)
+	var data = JSON.parse_string(f.get_as_text()) if f else null
+	return data if data is Dictionary else {}
+
+static func _ids(people: Array) -> Array:
+	var out: Array = []
+	for p in people:
+		if p:
+			out.append(p.agent_id)
+	return out
+
+static func _find(agents: Array, id: int) -> Agent:
+	for a in agents:
+		if a.agent_id == id:
+			return a
+	return null

@@ -4,11 +4,14 @@ extends RefCounted
 const MAX_ENTRIES := 200
 
 var entries: Array = []
+## Entries ever added (entries is capped), so readers can tell what's new.
+var total_added: int = 0
 
 
 func add(type: String, msg: String, day: int) -> void:
 	var entry: Dictionary = { "type": type, "msg": msg, "day": day }
 	entries.append(entry)
+	total_added += 1
 	if entries.size() > MAX_ENTRIES:
 		entries.pop_front()
 

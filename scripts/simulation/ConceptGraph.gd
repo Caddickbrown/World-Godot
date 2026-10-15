@@ -5,6 +5,13 @@ var known_by: Dictionary = {}   # id → Array of agent ids
 var events: Array = []          # consumed by Main each frame
 var birth_events: Array = []    # { x, z, parent_name, parent_a_id, parent_b_id, ... }
 
+## World pacing. With the data's raw rates, 57 of 82 ideas were found by day 12
+## and writing on day 3, so a world's story was spent in half an hour, and no
+## idea was ever lost because everything spread too fast for anyone to die the
+## last holder. Measured with tools/balance.gd; see the commit that set them.
+static var discovery_pace := 0.35
+static var spread_pace := 0.45
+
 func _init(concepts_data: Array) -> void:
 	for c in concepts_data:
 		concepts[c["id"]] = c
@@ -19,7 +26,7 @@ func check_discovery(agent: Agent, tile: Dictionary, delta: float, world: World,
 		if not _prerequisites_met(agent, concept): continue
 		if not _conditions_met(agent, tile, concept, world, all_agents): continue
 
-		var prob: float = float(concept.get("discovery_probability", 0.0001)) * agent.curiosity * delta
+		var prob: float = float(concept.get("discovery_probability", 0.0001)) * agent.curiosity * delta * discovery_pace
 		if agent.knowledge.has("curiosity_culture"): prob *= 1.2
 		if agent.task == "scout": prob *= 1.15
 
@@ -89,7 +96,7 @@ func try_spread(agent_a: Agent, agent_b: Agent, delta_time: float = 5.0) -> void
 		var learner: Agent = agent_b if a_knows else agent_a
 		var teacher: Agent = agent_a if a_knows else agent_b
 
-		var spread_rate: float = float(concept.get("spread_rate", 0.01)) * delta_time
+		var spread_rate: float = float(concept.get("spread_rate", 0.01)) * delta_time * spread_pace
 		if teacher.knowledge.has("language"): spread_rate *= 2.0
 		if teacher.knowledge.has("writing"):  spread_rate *= 1.5
 		if teacher.task == "teacher":         spread_rate *= 1.1
