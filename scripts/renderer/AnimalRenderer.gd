@@ -9,7 +9,7 @@ const MESH_PATHS: Dictionary = {
 	0: "res://assets/animals/Deer/SKM_Deer_Animations.fbx",
 	1: "res://assets/animals/Wolf/SKM_Wolf_Animations.fbx",
 	2: "res://assets/animals/Sheep/SKM_Sheep_Animations.fbx",
-	3: "res://assets/animals/Horse/SKM_Horse_Animations.fbx",
+	3: "res://assets/animals/Deer/SKM_Deer_Animations.fbx",  # the horse FBX has no mesh: a deer's body, horse-coloured
 	4: "res://assets/animals/Cow/SKM_Cow_Animations.fbx",
 	5: "res://assets/animals/Rabbit/SKM_Rabbit_Rig.fbx",
 	6: "res://assets/animals/Eagle/SKM_Eagle_Animations.fbx",
@@ -196,7 +196,7 @@ func _type_prefix(t: int) -> String:
 		AnimalSim.AnimalType.DEER:   return "Deer"
 		AnimalSim.AnimalType.WOLF:   return "Wolf"
 		AnimalSim.AnimalType.SHEEP:  return "Sheep"
-		AnimalSim.AnimalType.HORSE:  return "Horse"
+		AnimalSim.AnimalType.HORSE:  return "Deer"   # wears the deer model
 		AnimalSim.AnimalType.COW:    return "Cow"
 		AnimalSim.AnimalType.RABBIT: return "Rabbit"
 		AnimalSim.AnimalType.EAGLE:  return "Eagle"
@@ -215,6 +215,9 @@ func _find_anim_player(node: Node) -> AnimationPlayer:
 		if result:
 			return result
 	return null
+
+## Species drawn in a flat coat even if their model has a texture.
+const FLAT_COAT := [3]   # HORSE (borrowing the deer's body)
 
 ## Some files hold several bodies on top of each other; show just one.
 const SHOW_ONLY: Dictionary = {
@@ -248,7 +251,7 @@ func _matte_of(src: Material, animal_type: int) -> StandardMaterial3D:
 		return _matte[key]
 	var m := StandardMaterial3D.new()
 	var tex: Texture2D = (src as BaseMaterial3D).albedo_texture if src is BaseMaterial3D else null
-	if tex:
+	if tex and not (animal_type in FLAT_COAT):
 		m.albedo_texture = tex
 		m.albedo_color = LookStyle.g(Color(1, 1, 1))
 	else:

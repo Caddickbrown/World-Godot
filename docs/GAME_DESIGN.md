@@ -90,6 +90,19 @@ Longer rhythms:
   in about two days, eight once the camp knows fermentation, so a preserving idea is what
   turns a good summer into a survivable winter.
 
+### Balance, as measured (tools/balance.gd, 14 days, after the double-tick fix)
+
+| Seed | Ideas found | Ideas ever lost | Population |
+|---|---|---|---|
+| 1 | 32 | 0 | 52 → cap 150 by day 8 |
+| 3 | 16 | 0 | 49 → 150 by day 8 |
+| 5 | 15 | 0 | 48 → 150 by day 9 |
+
+Open: two of three worlds stall in the mid-teens, and ideas are still never lost (open
+decision 0). Discovery pace barely matters; each discovery needs its prerequisites held by
+one person, so spreading and craft teaching are the gate. Next probe: craft_pace and the
+population cap together, over 3+ seeds.
+
 ## Milestones
 
 | # | Name | Done when |

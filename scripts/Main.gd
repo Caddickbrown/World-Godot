@@ -702,6 +702,7 @@ func _update_view_overlays() -> void:
 		return
 	agent_renderer.view_distance = _view_distance()
 	agent_renderer.walker_pos = wanderer.world_position() if view_mode == ViewMode.WALK else Vector3.INF
+	agent_renderer.look_point = wanderer.world_position() if view_mode == ViewMode.WALK else observer.target
 	if view_mode == ViewMode.WALK and time_system:
 		wanderer.set_lantern(1.0 - clampf(sin(time_system.time_of_day * PI) * 2.0 - 0.4, 0.0, 1.0))
 	var hud := get_node_or_null("HUD")

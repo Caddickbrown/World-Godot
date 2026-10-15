@@ -25,6 +25,7 @@ const PIN_VIEW_DISTANCE := 60.0       # pins show when the camera is further tha
 const HEAD_HEIGHT := 1.7
 const FOCUS_LABEL_RADIUS := 12.0      # following someone: only names this close to them (metres)
 const FOCUS_BUBBLE_RADIUS := 5.0      # ...and only speech this close
+const MAX_TAGS := 12                  # names/speech shown at once: the nearest to where you look
 
 var _nodes: Dictionary = {}           # agent_id -> {root, body, legs, label, bubble, pin, tribe, phase}
 var _pin_mesh: SphereMesh
@@ -33,6 +34,8 @@ var _pin_mat_selected: StandardMaterial3D
 var _ring: MeshInstance3D
 var _time := 0.0
 var _focus_pos := Vector3.INF         # whoever is selected, this frame
+var look_point := Vector3.INF         # where the camera looks (set by Main)
+var _tagged: Dictionary = {}          # agent_id -> true: may show a name this frame
 var _mats: Dictionary = {}
 
 func _ready() -> void:
@@ -206,6 +209,38 @@ func update() -> void:
 	for agent in agents:
 		if agent.selected and not agent.is_dead:
 			_focus_pos = Vector3(agent.pos.x * TILE_SIZE, 0.0, agent.pos.y * TILE_SIZE)
+	# A crowd (forty founders on one beach) would pile its names into a heap:
+	# only the nearest few to where you're looking get a tag.
+	_tagged.clear()
+	var centre := _focus_pos if _focus_pos != Vector3.INF else look_point
+	if centre != Vector3.INF:
+		var near: Array = []
+		for agent in agents:
+			if not agent.is_dead and agent.health > 0.0:
+				var d := Vector2(agent.pos.x * TILE_SIZE - centre.x, agent.pos.y * TILE_SIZE - centre.z).length_squared()
+				near.append([d, agent.agent_id])
+		near.sort_custom(func(x, y): return x[0] < y[0])
+		# ...and never two on top of each other (the gap grows as you pull back).
+		var gap := view_distance * 0.11
+		var placed: Array = []
+		var by_id := {}
+		for agent in agents:
+			by_id[agent.agent_id] = agent
+		for pair in near:
+			if placed.size() >= MAX_TAGS:
+				break
+			var a: Agent = by_id[pair[1]]
+			var p := Vector2(a.pos.x, a.pos.y) * TILE_SIZE
+			var clear := a.selected or a.agent_id == listening_id
+			if not clear:
+				clear = true
+				for q in placed:
+					if absf(q.x - p.x) < gap * 1.6 and absf(q.y - p.y) < gap * 0.7:
+						clear = false
+						break
+			if clear:
+				placed.append(p)
+				_tagged[pair[1]] = true
 	for agent in agents:
 		active[agent.agent_id] = true
 		if not _nodes.has(agent.agent_id):
@@ -267,8 +302,10 @@ func _update_overlays(entry: Dictionary, agent: Agent, feet: Vector3) -> void:
 	var close: bool = view_distance < LABEL_VIEW_DISTANCE or near_walker
 	# Following someone in a crowd: the tags round them, not the whole camp's.
 	var flat := Vector3(feet.x, 0.0, feet.z)
-	var near_focus: bool = _focus_pos == Vector3.INF or flat.distance_to(_focus_pos) < FOCUS_LABEL_RADIUS
-	var speech_near_focus: bool = _focus_pos == Vector3.INF or flat.distance_to(_focus_pos) < FOCUS_BUBBLE_RADIUS
+	var near_focus: bool = (_focus_pos == Vector3.INF or flat.distance_to(_focus_pos) < FOCUS_LABEL_RADIUS) \
+		and (_tagged.is_empty() or _tagged.has(agent.agent_id))
+	var speech_near_focus: bool = (_focus_pos == Vector3.INF or flat.distance_to(_focus_pos) < FOCUS_BUBBLE_RADIUS) \
+		and (_tagged.is_empty() or _tagged.has(agent.agent_id))
 
 	var label: Label3D = entry.get("label") as Label3D
 	if label:
