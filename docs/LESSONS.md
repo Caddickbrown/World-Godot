@@ -68,3 +68,16 @@ One line of cause, one line of rule.
   fixed screen size, and near-camera flora dithers away in the walk view.
 - **The headless renderer keeps no MultiMesh data.** Rule: renderers keep their own state
   for tests to read (`trees_shown_on`), not the GPU's.
+
+## Simulation build-out
+
+- **The wildlife lived in one corner, mostly in the sea.** Wander and flee targets were clamped
+  to (31, 31), from the 32x32 map, and nothing kept animals off water. Rule: no world-size
+  numbers in code; take bounds from `World`, and keep land animals on walkable tiles (tested).
+- **Concepts that did nothing.** "Hunting" changed no behaviour and settlement food stores
+  filled and were never spent. Rule: when you read a system, check that each idea it names
+  changes something you could watch; if not, either build it or list it as a gap.
+- **Membership by radius can't survive a move.** A camp that moves at night would drop its
+  sleeping members. Rule: anything that relocates a group keeps the group until it arrives.
+- **Make randomness certain in tests** (`ConceptGraph.spread_pace = 1000`) to test the rules
+  ("who can teach whom") rather than the dice.

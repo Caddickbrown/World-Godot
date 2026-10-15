@@ -67,6 +67,24 @@ over their head (in brackets, to say it's unspoken) and opens their card. That's
 - **Conflict.** Only between members of different settlements, and only when someone is going
   hungry. Strangers don't fight for no reason.
 
+## A day in the life (what the simulation does, so there's something to watch)
+
+| When | What people do | Why it's there |
+|---|---|---|
+| Dawn | Hungry people go foraging; hunters stalk deer and rabbits | The day starts with purpose |
+| Day | Gather, fish, hunt, wander, meet; children stay near a parent; parents feed hungry children | Families read as families from the sky |
+| Dusk | Settled people walk home and sit in a ring round their hearth | The best moment to watch: faces in firelight |
+| Evening | Stories round the fire spread ideas twice as fast | Knowledge has a place it lives |
+| Night | Sleep where they sat | The camp at night is a picture |
+
+Longer rhythms:
+- **Teaching.** Simple ideas (fire, swimming) anyone can copy; crafts (era 2+) must be taught
+  by an adult, more slowly, and children learn best from their parents. A craft held by a few
+  can die with them; that's how the Idea Garden wilts.
+- **Moving on.** When the land round a hearth stays stripped for two days, the camp packs up and
+  walks to better ground, 10–28 tiles away.
+- **Grief.** When someone dies, their partner, children and parents mourn for half a day.
+
 ## Milestones
 
 | # | Name | Done when |
