@@ -362,9 +362,10 @@ func _process(delta: float) -> void:
 		story.on_hunt(kill["hunter"], int(kill["prey_type"]), int(kill["shared"]))
 	# Firsts people did (the first boat, climb, cooked meal...): told once.
 	for d in concept_graph.drain_deeds():
-		var who: Agent = d["who"]
-		story.add("people", str(d["text"]), who.pos, [who.agent_id], true)
-		story.life_of(who).events.append({"day": time_system.day, "text": str(d["text"]), "kind": "people"})
+		story.add("people", str(d["text"]), d["pos"], [int(d["id"])], true)
+		var who: Agent = _find_agent(int(d["id"]))
+		if who:
+			story.life_of(who).events.append({"day": time_system.day, "text": str(d["text"]), "kind": "people"})
 	for evt in forest_system.tick(game_delta, world, agents, settlement_system, season, time_system.day):
 		story.on_forest(evt)
 	crafting_system.tick(game_delta, agents, item_defs, time_system.day, history_log)

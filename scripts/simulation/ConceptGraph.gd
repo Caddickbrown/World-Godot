@@ -185,14 +185,16 @@ func get_discovered_concepts() -> Array:
 # ── Deeds ────────────────────────────────────────────────────────────────────
 ## Firsts people do (the first boat, the first climb, the first cooked meal),
 ## told once per world. Agents note them; Main passes them to the story.
-var deeds: Array = []              # [{key, text, who}]
+## Kept by id, not the Agent: an Agent holds this graph, so holding the
+## Agent back made a cycle that was never freed.
+var deeds: Array = []              # [{key, text, id, pos}]
 var _deeds_done: Dictionary = {}
 
 func note_deed(key: String, text: String, who) -> void:
 	if _deeds_done.has(key):
 		return
 	_deeds_done[key] = true
-	deeds.append({"key": key, "text": text, "who": who})
+	deeds.append({"key": key, "text": text, "id": int(who.agent_id), "pos": who.pos})
 
 func drain_deeds() -> Array:
 	var out := deeds
