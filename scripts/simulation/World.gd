@@ -31,7 +31,9 @@ var width: int = WORLD_WIDTH
 var height: int = WORLD_HEIGHT
 var seed_val: int
 var tiles: Array = []          # tiles[z][x] = Dictionary
-var cut_trees: Dictionary = {} # "x,z" → countdown float
+var cut_trees: Dictionary = {} # "x,z" → seconds until the stump sprouts
+const STUMP_SECONDS := 120.0     # about a day as a stump
+const SAPLING_GROWTH := 0.05
 var natural_fires: Dictionary = {} # "x,z" → { end_time }
 var campfire_events: Array = []
 var cows: Array = []
@@ -43,6 +45,9 @@ var flora_slow_timer: float = 0.0
 # chunk-meshed, so a changed tile has to name itself rather than the renderer
 # rescanning 16k tiles to find out what moved.
 var dirty_tiles: Array = []   # Array of Vector2i
+## Tiles whose trees changed (grew a size, felled, burnt, planted) but whose
+## ground didn't: only the flora redraws them, not the terrain mesh.
+var flora_dirty: Dictionary = {}  # Vector2i -> true
 
 # "x,z" → { x, z, melt } for every GLACIER tile. melt is 0 (full ice) to 1 (fully melted).
 var glacier_data: Dictionary = {}
@@ -184,7 +189,10 @@ func _generate() -> void:
 				"depletion_level": 0.0 if gatherable else -1.0,
 				"tree_age": init_tree_age if is_forest else -1.0,
 				"tree_stage": tree_stage,
-				"tree_cut": false,
+				"tree_cut": false,             # felled: a stump until a sapling comes up
+				"growth": 1.0 if t == TileType.FOREST or t == TileType.WOODLAND else -1.0,  # 0 seedling .. 1 grown
+				"burnt": 0.0,                  # seconds left as charred snags after a fire
+				"planted": false,              # someone put this wood here
 				"river": false,
 				"cave": false,
 				"is_shelter": false,
@@ -430,6 +438,21 @@ func update_glaciers(delta: float, temperature: float) -> void:
 func mark_tile_dirty(x: int, z: int) -> void:
 	dirty_tiles.append(Vector2i(x, z))
 
+func mark_flora_dirty(x: int, z: int) -> void:
+	flora_dirty[Vector2i(x, z)] = true
+
+func drain_flora_dirty() -> Array:
+	if flora_dirty.is_empty():
+		return []
+	var out := flora_dirty.keys()
+	flora_dirty = {}
+	return out
+
+## Trees on a tile: FOREST and WOODLAND grow them (meadow trees are scenery).
+static func has_woods(tile: Dictionary) -> bool:
+	var t := int(tile.get("type", -1))
+	return t == TileType.FOREST or t == TileType.WOODLAND
+
 func drain_dirty_tiles() -> Array:
 	if dirty_tiles.is_empty():
 		return []
@@ -538,8 +561,11 @@ func update_cut_trees(delta: float) -> void:
 		var parts: PackedStringArray = key.split(",")
 		var tile := get_tile(int(parts[0]), int(parts[1]))
 		if not tile.is_empty():
+			# A stump sends up a sapling, which then has to grow (ForestSystem).
 			tile["tree_cut"] = false
+			tile["growth"] = SAPLING_GROWTH
 			mark_tile_dirty(int(tile["x"]), int(tile["z"]))
+			mark_flora_dirty(int(tile["x"]), int(tile["z"]))
 
 func cut_tree(x: int, z: int) -> bool:
 	var tile := get_tile(x, z)
@@ -548,9 +574,23 @@ func cut_tree(x: int, z: int) -> bool:
 	var key := "%d,%d" % [tile["x"], tile["z"]]
 	if cut_trees.has(key): return false
 	tile["tree_cut"] = true
-	cut_trees[key] = 90.0 + randf() * 60.0
+	tile["growth"] = 0.0
+	cut_trees[key] = STUMP_SECONDS * (0.8 + randf() * 0.4)
 	mark_tile_dirty(int(tile["x"]), int(tile["z"]))
+	mark_flora_dirty(int(tile["x"]), int(tile["z"]))
 	return true
+
+## Replant a felled tile at once (forestry): the stump becomes a sapling.
+func replant(x: int, z: int) -> void:
+	var tile := get_tile(x, z)
+	if tile.is_empty():
+		return
+	cut_trees.erase("%d,%d" % [x, z])
+	tile["tree_cut"] = false
+	tile["growth"] = SAPLING_GROWTH
+	tile["planted"] = true
+	mark_tile_dirty(x, z)
+	mark_flora_dirty(x, z)
 
 # ── Nesting sites (generalised ground-nesting fauna) ─────────────────────────
 #

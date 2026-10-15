@@ -72,6 +72,7 @@ var speech_bubble: String = ""
 var night_sleeping: bool = false
 var selected: bool = false  # picked in the observer view (Main sets it)
 var at_fire: bool = false   # sitting at the evening hearth
+var chore: String = ""             # set by ForestSystem: "felling a tree", "planting a tree"
 var carrying_food: float = 0.0   # surplus gathered once full, carried home to the camp store
 var fed_children: int = 0   # times they fed a hungry child (the story reads it)
 ## Grief: after a partner, child or parent dies, for MOURNING_DAYS they move

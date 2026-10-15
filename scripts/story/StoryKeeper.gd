@@ -124,6 +124,10 @@ func on_spread(learner: Agent, teacher: Agent, concept_id: String) -> void:
 	if learner and tl.taught.size() == 1 and n == 1:
 		_event(teacher, "Taught %s to %s, the first idea they passed on." % [ledger.name_of(concept_id).to_lower(), learner.agent_name], "ideas")
 
+var _fellings := 0
+var _plantings := 0
+var _replanted := false
+
 func on_hunt(hunter: Agent, prey_type: int, shared: int) -> void:
 	var prey := HuntingSystem.prey_name(prey_type)
 	var line := "Brought down %s%s." % [prey, (" and shared it with %d" % shared) if shared > 0 else ""]
@@ -134,6 +138,30 @@ func on_hunt(hunter: Agent, prey_type: int, shared: int) -> void:
 		_try_moment("first_hunt", hunter.pos, [hunter.agent_id], "%s, day %d" % [hunter.agent_name, day])
 	else:
 		add("people", "%s brought down %s%s." % [hunter.agent_name, prey, (", and %d ate well" % shared) if shared > 1 else ""], hunter.pos, [hunter.agent_id], false)
+
+## ForestSystem events: {kind: felled|replanted|planted, who, tile}.
+func on_forest(evt: Dictionary) -> void:
+	var who: Agent = evt["who"]
+	var t: Vector2i = evt["tile"]
+	var pos := Vector2(t.x + 0.5, t.y + 0.5)
+	match str(evt["kind"]):
+		"felled", "replanted":
+			_event(who, "Felled a tree for timber%s." % (" and planted another" if evt["kind"] == "replanted" else ""), "people")
+			_fellings += 1
+			if _fellings == 1:
+				add("people", "%s felled a tree for timber: the first axe in the woods." % who.agent_name, pos, [who.agent_id])
+				_try_moment("first_felling", pos, [who.agent_id], "%s, day %d" % [who.agent_name, day])
+			if evt["kind"] == "replanted" and not _replanted:
+				_replanted = true
+				add("people", "%s felled a tree and planted a sapling in its place." % who.agent_name, pos, [who.agent_id])
+		"planted":
+			_event(who, "Planted a tree near home.", "people")
+			_plantings += 1
+			if _plantings == 1:
+				add("people", "%s planted a tree they may never sit under." % who.agent_name, pos, [who.agent_id])
+				_try_moment("planted", pos, [who.agent_id], "%s, day %d" % [who.agent_name, day])
+			elif _plantings % 10 == 0:
+				add("people", "A planted grove is coming up round %s's home." % who.agent_name, pos, [who.agent_id], false)
 
 func on_grief(mourner: Agent, dead: Agent, relation: String) -> void:
 	var what: String = {"partner": "their partner", "parent": "their parent", "child": "their child"}.get(relation, "someone close")

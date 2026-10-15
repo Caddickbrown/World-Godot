@@ -14,6 +14,7 @@ const LIGHTNING_CHANCE   := 0.001  # per second during storms (0.1 %)
 const SOIL_QUALITY_BOOST := 0.1
 # World.TileType.GRASS=3, WOODLAND=4, FOREST=5 — stored as ints to avoid cross-class const eval
 const FIRE_BURNOUT_TYPE  := 3
+const BURNT_SECONDS := 120.0   # about a day of black snags before they fall
 var _flammable_types: Array = [5, 4, 3]  # FOREST, WOODLAND, GRASS
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -113,13 +114,22 @@ func _extinguish(
 	if tile.is_empty():
 		return
 
-	# FOREST → GRASS conversion on burnout.
-	if int(tile.get("type", -1)) == 5:  # World.TileType.FOREST
+	# Burnt woods: charred snags for a while, then grass that the woods
+	# around will seed again (ForestSystem / EcologySystem).
+	var t := int(tile.get("type", -1))
+	if t == 5 or t == 4:  # World.TileType.FOREST, WOODLAND
 		tile["type"]     = FIRE_BURNOUT_TYPE
 		tile["tree_cut"] = false
 		tile["resource"] = 0.2
 		tile["tree_age"]   = -1.0
 		tile["tree_stage"] = ""
+		tile["growth"]   = -1.0
+		tile["planted"]  = false
+		tile["burnt"]    = BURNT_SECONDS
+		tile["burnt_once"] = true
+		world.cut_trees.erase(key)
+		world.mark_tile_dirty(tx, tz)
+		world.mark_flora_dirty(tx, tz)
 
 	# Boost soil quality (capped at 1.0).
 	var current_soil: float = float(tile.get("soil_quality", 1.0))

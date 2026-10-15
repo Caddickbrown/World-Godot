@@ -25,6 +25,11 @@ func _initialize() -> void:
 		root.add_child(main)
 		await process_frame
 		main.time_system.set_speed(speed)
+		var w0 := 0
+		for row in main.world.tiles:
+			for t in row:
+				if World.has_woods(t): w0 += 1
+		main.set_meta("woods_start", w0)
 		var line := "seed %4s:" % s
 		var last_day := 1
 		var guard := 0
@@ -59,6 +64,20 @@ func _initialize() -> void:
 		for id in main.story.ledger.ideas:
 			lost += int(main.story.ledger.ideas[id]["times_lost"])
 		print("  ideas lost (ever): ", lost)
+		var woods := 0
+		var young := 0
+		var planted := 0
+		for row in main.world.tiles:
+			for t in row:
+				if World.has_woods(t):
+					woods += 1
+					if float(t.get("growth", 1.0)) < 0.8: young += 1
+					if bool(t.get("planted", false)): planted += 1
+		var tiers := [0, 0, 0]
+		for st in main.settlement_system.get_settlements():
+			tiers[clampi(int(st.tier), 0, 2)] += 1
+		print("  woods: %d tiles (start %d), %d young, %d planted; felled %d, planted %d; camps/hamlets/towns %s" % [
+			woods, int(main.get_meta("woods_start", -1)), young, planted, main.forest_system.felled, main.forest_system.planted, str(tiers)])
 		main.queue_free()
 		await process_frame
 	quit()

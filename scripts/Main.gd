@@ -40,6 +40,7 @@ var achievements          # Achievements
 var audio_system          # AudioSystem
 var lineage_tracker       # LineageTracker
 var hunting_system: HuntingSystem
+var forest_system: ForestSystem
 ## The player-facing story (chronicle, lives, ideas, moments, hunches). Reads
 ## the simulation, never writes to it.
 var story: StoryKeeper
@@ -197,6 +198,7 @@ func _init_world() -> void:
 	conflict_system.settlement_system = settlement_system
 	settlement_system.world = world
 	hunting_system = HuntingSystem.new()
+	forest_system = ForestSystem.new()
 	agent_renderer.settlement_system = settlement_system
 	tile_items = TileItems.new()
 	spatial_grid = SpatialGrid.new()
@@ -321,6 +323,8 @@ func _process(delta: float) -> void:
 	trading_system.tick(game_delta, agents, item_defs, time_system.day, history_log, spatial_grid)
 	for kill in hunting_system.tick(game_delta, agents, animal_sim, spatial_grid):
 		story.on_hunt(kill["hunter"], int(kill["prey_type"]), int(kill["shared"]))
+	for evt in forest_system.tick(game_delta, world, agents, settlement_system, season, time_system.day):
+		story.on_forest(evt)
 	crafting_system.tick(game_delta, agents, item_defs, time_system.day, history_log)
 	settlement_system.tick(game_delta, agents, concept_graph, time_system.day, history_log, spatial_grid)
 	tile_items.tick_spoilage(game_delta, item_defs, disaster_system.get_spoilage_mult())
@@ -472,8 +476,9 @@ const WORLD_NEWS := {
 	"settlement": [["New camp founded", "first_camp"], ["grown into hamlet", "hamlet"],
 		["elevated to named", "hamlet"], ["made contact", "contact"], ["packed up and moved", "camp_moves"],
 		["the first larder", "larder"]],
+	"ecology": [["where the woods burned", "woods_return"]],
 	"fire": [["Lightning", "lightning"]],
-	"disease": [], "disaster": [], "trade": [], "war": [], "ecology": [], "craft": [],
+	"disease": [], "disaster": [], "trade": [], "war": [], "craft": [],
 }
 
 func _feed_story(game_delta: float, alive_count: int) -> void:
@@ -526,6 +531,8 @@ static func _reword(msg: String) -> String:
 func _news_pos(t: String) -> Vector2:
 	if t == "fire" and fire_system.lightning_fire_pos != Vector2(-1, -1):
 		return fire_system.lightning_fire_pos
+	if t == "ecology" and ecology_system.return_pos != Vector2(-1, -1):
+		return ecology_system.return_pos
 	if t == "settlement":
 		var all: Array = settlement_system.get_settlements()
 		if not all.is_empty():
@@ -928,8 +935,13 @@ func _flush_tile_changes() -> void:
 	for c in world.drain_dirty_tiles():
 		var cell: Vector2i = c
 		terrain_renderer.rebuild_tile(cell.x, cell.y)
-		environment_renderer.refresh_tile(cell.x, cell.y)  # felled or regrown
+		environment_renderer.mark_dirty(cell.x, cell.y)
 	terrain_renderer.flush_dirty()
+	# Trees that grew a size, were felled, planted or burnt: their chunks redraw
+	# a few at a time.
+	for c in world.drain_flora_dirty():
+		environment_renderer.mark_dirty(c.x, c.y)
+	environment_renderer.flush()
 
 # ── Utility ───────────────────────────────────────────────────────────────────
 

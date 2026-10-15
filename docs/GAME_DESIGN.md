@@ -85,6 +85,15 @@ Longer rhythms:
   walks to better ground, 10–28 tiles away.
 - **Grief.** When someone dies, their partner, children and parents mourn for half a day.
   The body lies where they fell for half a day, then is buried (the Lives screen keeps them).
+- **Living woods.** Trees have a size: seedlings reach full height in about three days of
+  spring or summer and barely grow in winter. Woods creep into the meadows next to them as
+  seedlings; grown woodland beside forest slowly turns to pine. Once people know
+  woodcutting they fell grown trees near camp (stumps, then a sapling a day later), and
+  timber is what turns a camp of tents into a hamlet of huts (12) and a town (30). The hearth
+  burns a little each night. Forestry (a new idea, after woodcutting and plant lore)
+  replants what is felled and plants groves on bare ground round home. Fire leaves black
+  snags for a day, then open ground that the woods around seed again. Moments: "The first
+  axe", "A tree for later", "The woods come back".
 - **The larder.** What a forager gathers beyond their own fill they carry home to the camp
   store; whoever comes home hungry (most often at the evening fire) eats from it. Stores spoil
   in about two days, eight once the camp knows fermentation, so a preserving idea is what

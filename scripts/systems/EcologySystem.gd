@@ -14,6 +14,7 @@ const DAY_LENGTH               := 120.0   # seconds per in-game day (matches Tim
 # Forest spread / revert daily probabilities.
 const SPREAD_CHANCE_PER_DAY    := 0.02
 const REVERT_CHANCE_PER_DAY    := 0.002
+const SUCCESSION_CHANCE_PER_DAY := 0.01   # grown woodland next to forest becomes forest
 
 # Overgrazing thresholds.
 const OVERGRAZE_AGENT_THRESH   := 3       # agents on tile at once
@@ -49,7 +50,7 @@ func tick(delta: float, world: World, agents: Array, day: int, history_log: Hist
 	_forest_timer += delta
 	if _forest_timer >= FOREST_SPREAD_INTERVAL:
 		_forest_timer -= FOREST_SPREAD_INTERVAL
-		_do_forest_spread(world)
+		_do_forest_spread(world, day, history_log)
 
 	_graze_timer += delta
 	if _graze_timer >= GRAZE_CHECK_INTERVAL:
@@ -61,12 +62,16 @@ func tick(delta: float, world: World, agents: Array, day: int, history_log: Hist
 
 # ── Forest spread ─────────────────────────────────────────────────────────────
 
-func _do_forest_spread(world: World) -> void:
+var return_pos := Vector2(-1, -1)   # where the burnt woods first came back (for the story)
+var _told_return := false
+
+func _do_forest_spread(world: World, day: int = 0, history_log: HistoryLog = null) -> void:
 	# Convert seconds-elapsed to a per-tick probability.
 	# P(event in interval) = 1 - (1-daily_chance)^(interval/day_length)
 	# For small daily chances: approx = daily_chance * (interval / day_length)
 	var spread_prob: float = SPREAD_CHANCE_PER_DAY * (FOREST_SPREAD_INTERVAL / DAY_LENGTH)
 	var revert_prob: float = REVERT_CHANCE_PER_DAY * (FOREST_SPREAD_INTERVAL / DAY_LENGTH)
+	var succession_prob: float = SUCCESSION_CHANCE_PER_DAY * (FOREST_SPREAD_INTERVAL / DAY_LENGTH)
 
 	var dirs: Array = [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]
 
@@ -87,10 +92,18 @@ func _do_forest_spread(world: World) -> void:
 					var ntile: Dictionary = world.get_tile(nx, nz)
 					if ntile.is_empty():
 						continue
-					if int(ntile.get("type", -1)) == World.TileType.GRASS:
+					if int(ntile.get("type", -1)) == World.TileType.GRASS and float(ntile.get("burnt", 0.0)) <= 0.0:
 						if randf() < spread_prob:
+							# Seeded from the wood next door: it starts as seedlings.
 							ntile["type"] = World.TileType.WOODLAND
+							ntile["growth"] = 0.0
+							ntile["tree_cut"] = false
 							world.mark_tile_dirty(nx, nz)
+							world.mark_flora_dirty(nx, nz)
+							if bool(ntile.get("burnt_once", false)) and not _told_return and history_log:
+								_told_return = true
+								return_pos = Vector2(nx + 0.5, nz + 0.5)
+								history_log.add("ecology", "Seedlings are coming up where the woods burned.", day)
 							if randf() < HERB_SPAWN_CHANCE:
 								ntile["herbs"] = 1.0
 
@@ -107,9 +120,20 @@ func _do_forest_spread(world: World) -> void:
 						has_forest_neighbour = true
 						break
 				if not has_forest_neighbour:
-					if randf() < revert_prob:
+					# Planted groves are tended; only wild ones fade back to grass.
+					if randf() < revert_prob and not bool(tile.get("planted", false)):
 						tile["type"] = World.TileType.GRASS
+						tile["growth"] = -1.0
 						world.mark_tile_dirty(x, z)
+						world.mark_flora_dirty(x, z)
+				elif float(tile.get("growth", 1.0)) >= 0.95 and not bool(tile.get("tree_cut", false)) \
+						and randf() < succession_prob:
+					# Grown woodland beside forest: pines come up through it.
+					tile["type"] = World.TileType.FOREST
+					tile["growth"] = 0.5
+					tile["tree_age"] = 0.0
+					world.mark_tile_dirty(x, z)
+					world.mark_flora_dirty(x, z)
 
 # ── Overgrazing ───────────────────────────────────────────────────────────────
 

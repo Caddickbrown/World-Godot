@@ -29,6 +29,7 @@ func _ready() -> void:
 	_test_families_and_fire()
 	_test_teaching_hunting_moving_grief()
 	_test_larder()
+	_test_living_woods()
 	print("== integration")
 	await _test_main_views()
 	print("== %d checks, %d failures" % [_checks, _failures])
@@ -489,6 +490,133 @@ func _test_teaching_hunting_moving_grief() -> void:
 	var births := g.birth_events.size()
 	widow._try_reproduce(other, g)
 	check("...and nobody starts a family while grieving", g.birth_events.size() == births)
+
+func _first_tile(w: World, types: Array, need_trees: bool = false, env: EnvironmentRenderer = null) -> Vector2i:
+	for z in range(4, w.height - 4):
+		for x in range(4, w.width - 4):
+			var t := w.get_tile(x, z)
+			if int(t["type"]) in types and (not need_trees or env.tree_count_on(x, z) > 0):
+				return Vector2i(x, z)
+	return Vector2i(-1, -1)
+
+func _test_living_woods() -> void:
+	var w := World.new(7)
+	w.heightfield = Heightfield.new().build(w)
+	var fs := ForestSystem.new()
+
+	# Growth: a seedling grows with the season, and fastest in spring.
+	var wood := _first_tile(w, [World.TileType.WOODLAND])
+	var wt := w.get_tile(wood.x, wood.y)
+	wt["growth"] = 0.0
+	w.drain_flora_dirty()
+	for i in ForestSystem.STRIPE_COUNT:
+		fs._grow(TimeSystem.DAY_LENGTH * 0.5 / ForestSystem.STRIPE_COUNT, w, "spring")
+	var spring_g: float = wt["growth"]
+	check("a seedling grows (%.2f after half a spring day)" % spring_g, spring_g > 0.2 and spring_g < 0.5)
+	check("...and the flora is told it changed size", w.flora_dirty.has(wood))
+	wt["growth"] = 0.0
+	for i in ForestSystem.STRIPE_COUNT:
+		fs._grow(TimeSystem.DAY_LENGTH * 0.5 / ForestSystem.STRIPE_COUNT, w, "winter")
+	check("...barely at all in winter (%.3f)" % wt["growth"], float(wt["growth"]) < 0.05)
+	wt["growth"] = 1.0
+
+	# Felling: a woodcutter from a camp short of timber fells a grown tree.
+	var forest := _first_tile(w, [World.TileType.FOREST])
+	var ft := w.get_tile(forest.x, forest.y)
+	var axe := _adult(forest.x + 0.5, forest.y + 0.5)
+	axe.knowledge["woodcutting"] = true
+	axe.needs["hunger"] = 0.9
+	var ss := SettlementSystem.new()
+	var camp := SettlementSystem.Settlement.new()
+	camp.id = 4
+	camp.centre = Vector2(forest.x + 2.5, forest.y + 0.5)
+	var idle := _adult(forest.x + 0.5, forest.y + 0.5)
+	idle.needs["hunger"] = 0.9
+	camp.member_ids = [axe.agent_id, idle.agent_id]
+	ss.settlements = [camp]
+	ss._reindex_members()
+	check("no one fells a tree without the idea", fs.tick(0.1, w, [idle], ss, "summer", 1).is_empty())
+	var evts: Array = fs.tick(0.1, w, [axe], ss, "summer", 1)
+	if evts.is_empty():
+		evts = fs.tick(0.1, w, [axe], ss, "summer", 1)
+	check("a woodcutter fells a grown tree near camp", not evts.is_empty() and str(evts[0]["kind"]) == "felled")
+	check("...leaving a stump", bool(ft["tree_cut"]) and float(ft["growth"]) == 0.0)
+	check("...and timber at the camp (%.0f)" % camp.wood_store, camp.wood_store >= ForestSystem.TIMBER_PER_TREE)
+	w.update_cut_trees(World.STUMP_SECONDS * 1.3)
+	check("the stump sends up a sapling, not a grown tree", not bool(ft["tree_cut"]) and float(ft["growth"]) < 0.1)
+
+	# Forestry: fell and replant; plant a grove on bare ground near home.
+	ft["growth"] = 1.0
+	camp.wood_store = 0.0
+	axe.knowledge["forestry"] = true
+	fs._rest.clear()
+	evts = fs.tick(0.1, w, [axe], ss, "summer", 1)
+	if evts.is_empty():
+		evts = fs.tick(0.1, w, [axe], ss, "summer", 1)
+	var fell_tile: Vector2i = evts[0]["tile"] if not evts.is_empty() else Vector2i(-1, -1)
+	var rt := w.get_tile(fell_tile.x, fell_tile.y)
+	check("someone who knows forestry replants what they fell",
+		not evts.is_empty() and str(evts[0]["kind"]) == "replanted" and not bool(rt["tree_cut"]) and bool(rt["planted"]))
+	var meadow := _first_tile(w, [World.TileType.GRASS])
+	for dz in range(-8, 9):
+		for dx in range(-8, 9):
+			var t := w.get_tile(meadow.x + dx, meadow.y + dz)
+			if not t.is_empty() and int(t["type"]) in [World.TileType.WOODLAND, World.TileType.FOREST]:
+				t["type"] = World.TileType.GRASS
+	camp.centre = Vector2(meadow.x + 0.5, meadow.y + 0.5)
+	camp.wood_store = 999.0
+	var planter := _adult(meadow.x + 4.5, meadow.y + 0.5)
+	planter.knowledge["forestry"] = true
+	planter.needs["hunger"] = 0.9
+	camp.member_ids = [planter.agent_id]
+	ss._reindex_members()
+	var planted := false
+	for i in 4:
+		for e in fs.tick(0.1, w, [planter], ss, "summer", 1):
+			if str(e["kind"]) == "planted":
+				var pt := w.get_tile(e["tile"].x, e["tile"].y)
+				planted = int(pt["type"]) == World.TileType.WOODLAND and bool(pt["planted"]) and float(pt["growth"]) < 0.1
+		if planted: break
+		var job: Dictionary = fs._job.get(planter.agent_id, {})
+		if not job.is_empty():
+			planter.pos = Vector2(job["tile"].x + 0.5, job["tile"].y + 0.5)
+	check("...and plants a grove on bare ground near home", planted)
+
+	# Timber builds hamlets.
+	var hamlet := SettlementSystem.Settlement.new()
+	hamlet.member_ids = [1, 2, 3, 4, 5]
+	ss.settlements = [hamlet]
+	var hist := HistoryLog.new()
+	ss._check_tier_upgrades([], hist, 1)
+	check("a camp without timber stays tents", hamlet.tier == 0)
+	hamlet.wood_store = SettlementSystem.HAMLET_TIMBER + 1.0
+	ss._check_tier_upgrades([], hist, 1)
+	check("...and with it builds huts, spending the timber", hamlet.tier == 1 and hamlet.wood_store < 2.0)
+
+	# Fire: a wood burns to snags, which fall a day later.
+	var env := EnvironmentRenderer.new()
+	add_child(env)
+	env.setup(w)
+	var burn := _first_tile(w, [World.TileType.FOREST], true, env)
+	var fire := FireSystem.new()
+	var bkey := "%d,%d" % [burn.x, burn.y]
+	fire._fires[bkey] = 0.0
+	fire._extinguish(bkey, w, 0.0, 1, HistoryLog.new())
+	var bt := w.get_tile(burn.x, burn.y)
+	env.refresh_tile(burn.x, burn.y)
+	check("a burnt wood stands as black snags", float(bt["burnt"]) > 0.0 and env.snags_shown_on(burn.x, burn.y) > 0 \
+		and not env.trees_shown_on(burn.x, burn.y))
+	for i in ForestSystem.STRIPE_COUNT:
+		fs._grow(FireSystem.BURNT_SECONDS * 1.2 / ForestSystem.STRIPE_COUNT, w, "summer")
+	env.refresh_tile(burn.x, burn.y)
+	check("...which fall, leaving open ground for the woods to seed", float(bt["burnt"]) == 0.0 and env.snags_shown_on(burn.x, burn.y) == 0)
+
+	# The flora draws what the tile is now: stumps, and seedlings small.
+	var stump := _first_tile(w, [World.TileType.FOREST], true, env)
+	w.cut_tree(stump.x, stump.y)
+	env.refresh_tile(stump.x, stump.y)
+	check("a felled tile shows stumps, not trees", env.stumps_shown_on(stump.x, stump.y) > 0 and not env.trees_shown_on(stump.x, stump.y))
+	env.queue_free()
 
 func _test_larder() -> void:
 	var a := _adult(40, 40)

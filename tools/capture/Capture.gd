@@ -13,6 +13,8 @@
 # --listen        (with --walk) listen in on the nearest person
 # --yaw=RAD       (with --walk) turn the walker's camera; --cam-distance=D its distance
 # --weather=W     clear | rain | storm (set after the sim, cloud fully drawn in)
+# --teach=A,B     give every founder these ideas before the sim (to show what they do)
+# --camp          look at the biggest settlement (after --sim)
 # --animal=T      look at the nearest living animal of type T (deer, wolf, rabbit, ...)
 # --no-hud        hide the HUD
 # --style=S       UI look: storybook | fieldnotes
@@ -41,6 +43,10 @@ func _ready() -> void:
 	await get_tree().process_frame
 	_mark("first frame")
 
+	if args.has("teach"):
+		for a in main.agents:
+			for id in str(args["teach"]).split(","):
+				a.knowledge[id] = true
 	if args.has("sim"):
 		main.time_system.set_speed(20.0)
 		var steps := int(float(args["sim"]) / 20.0 * 30.0)
@@ -77,6 +83,14 @@ func _ready() -> void:
 	if who and (args.has("follow") or args.has("walk")):
 		main.follow(who)
 		obs.look_at_point(Vector3(who.pos.x, 0, who.pos.y) * World.TILE_SIZE)
+	if args.has("camp"):
+		var big = null
+		for st in main.settlement_system.get_settlements():
+			if big == null or st.member_ids.size() > big.member_ids.size():
+				big = st
+		if big:
+			obs.look_at_point(Vector3(big.centre.x, 0, big.centre.y) * World.TILE_SIZE)
+			print("[Capture] camp %s: %d people, tier %d, timber %.0f" % [big.name, big.member_ids.size(), big.tier, big.wood_store])
 	if args.has("animal"):
 		var want := str(args["animal"]).to_upper()
 		var pick = null

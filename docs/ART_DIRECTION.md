@@ -30,7 +30,7 @@ your desk.
 | Water | Depth-coloured: turquoise shallows → teal → ink blue. A broken foam line breathes along the shore |
 | Sky and air | Procedural sky, a real sun with soft shadows, light haze into the distance, filmic tonemap. Dusk goes peach, never brown |
 | Weather | Rain and storms grey the sky, flatten the sun and thicken the haze (`SkyLook.overcast`, eased, never a cut); rain is streaks in a box over where you're looking. Shot `8_storm` |
-| Flora | Two tree families: pines (stacked cones, cool greens) on high ground, broadleaf (clustered balls, warm greens, the odd orange one) lower. Grouped by a slow noise into woods and clearings. Per-tree colour variation |
+| Flora | Two tree families: pines (stacked cones, cool greens) on high ground, broadleaf (clustered balls, warm greens, the odd orange one) lower. Grouped by a slow noise into woods and clearings. Per-tree colour variation. Trees are drawn at their size (seedling sprigs are paler), felled ones as stumps, burnt ones as black snags on ash-dark ground; each tree's spot is fixed by the seed so a wood regrows in place |
 | Camps | Hide tents (cones), a stone fire ring with a real light, trampled earth painted into the ground (never a decal slab) |
 
 ## People

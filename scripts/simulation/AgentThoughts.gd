@@ -27,6 +27,8 @@ static func doing(a: Agent) -> String:
 		return "on a trading journey"
 	if a.trader_state == "returning":
 		return "heading home from trading"
+	if a.chore != "" and a.state == Agent.State.GATHERING:
+		return a.chore
 	return str(DOING.get(a.state, "wandering"))
 
 ## One first-person line: the most pressing thing on their mind.
@@ -40,6 +42,10 @@ static func thought(a: Agent) -> String:
 		return "Zzz…"
 	if a.mourning > 0.0 and a.mourning_for != "":
 		return "I keep looking for %s by the fire." % a.mourning_for
+	if a.chore == "planting a tree" and a.state == Agent.State.GATHERING:
+		return "Someone will sit in the shade of this one."
+	if a.chore == "felling a tree" and a.state == Agent.State.GATHERING:
+		return "Timber for the huts. It'll grow back."
 	if a.infected:
 		return "I feel feverish. I should keep away from the little ones."
 	if hunger < 0.2:

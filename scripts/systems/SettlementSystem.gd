@@ -244,16 +244,23 @@ func _update_membership(agents: Array, spatial_grid = null) -> void:
 # Tier upgrades
 # ---------------------------------------------------------------------------
 
+const HAMLET_TIMBER := 12.0   # three felled trees
+const TOWN_TIMBER := 30.0
+
 func _check_tier_upgrades(agents: Array, history_log: HistoryLog, day: int) -> void:
 	for s: Settlement in settlements:
 		# Names stick: a place keeps the name it was founded with as it grows.
-		if s.tier == 0 and s.member_ids.size() >= 5:
+		# Huts and houses are built of timber (ForestSystem fells it), so a
+		# camp stays tents until it has felled enough.
+		if s.tier == 0 and s.member_ids.size() >= 5 and s.wood_store >= HAMLET_TIMBER:
 			s.tier = 1
+			s.wood_store -= HAMLET_TIMBER
 			history_log.add("settlement", "Camp has grown into hamlet '%s'." % s.name, day)
-		elif s.tier == 1 and s.member_ids.size() >= TOWN_SIZE:
+		elif s.tier == 1 and s.member_ids.size() >= TOWN_SIZE and s.wood_store >= TOWN_TIMBER:
 			var any_writing: bool = _any_member_knows(s, agents, "writing")
 			if any_writing:
 				s.tier = 2
+				s.wood_store -= TOWN_TIMBER
 				history_log.add("settlement", "Hamlet elevated to named settlement '%s'." % s.name, day)
 
 func _any_member_knows(s: Settlement, agents: Array, concept_id: String) -> bool:
@@ -333,6 +340,7 @@ func _sync_knowledge_pool(agents: Array, concept_graph: ConceptGraph) -> void:
 ## Now it holds what members carry home beyond their own fill, feeds members
 ## who come home hungry, and spoils: in about two days, or eight once the camp
 ## knows fermentation (or salting/pottery, if those are ever thought of).
+const DEADWOOD_PER_MEMBER := 0.0015   # per second: a five-person camp gathers a hut's worth in ~13 days
 const STORE_RADIUS := 6.0          # tiles from the hearth to drop off or eat from the store
 const STORE_PER_MEMBER := 2.0      # cap
 const STORE_HUNGRY_BELOW := 0.3
@@ -349,7 +357,8 @@ func _tick_resources(delta: float, agents: Array = [], history_log: HistoryLog =
 		by_id[a.agent_id] = a
 	for s: Settlement in settlements:
 		var cap: float = float(s.member_ids.size()) * STORE_PER_MEMBER
-		s.wood_store = minf(s.wood_store + float(s.member_ids.size()) * 0.005 * delta, float(s.member_ids.size()) * 100.0)
+		# Fallen branches: a trickle anyone can pick up. Felling is the real supply.
+		s.wood_store = minf(s.wood_store + float(s.member_ids.size()) * DEADWOOD_PER_MEMBER * delta, float(s.member_ids.size()) * 100.0)
 		for id in s.member_ids:
 			var a = by_id.get(id)
 			if a == null or a.is_dead or a.pos.distance_to(s.centre) > STORE_RADIUS:

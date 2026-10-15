@@ -13,6 +13,7 @@ const MEADOW := Color(0.42, 0.62, 0.26)
 const MEADOW_DRY := Color(0.62, 0.64, 0.32)
 const WOOD := Color(0.30, 0.52, 0.22)
 const FOREST := Color(0.18, 0.38, 0.17)
+const ASH := Color(0.20, 0.18, 0.16)
 const DESERT := Color(0.86, 0.68, 0.42)
 const ROCK := Color(0.55, 0.52, 0.50)
 const ROCK_DARK := Color(0.40, 0.38, 0.38)
@@ -56,6 +57,8 @@ static func ground(nv: float, h: float, nrm: Vector3, tile: Dictionary, wobble: 
 			c = c.lerp(BARREN, clampf(float(tile["depletion_level"]), 0.0, 1.0) * 0.7)
 		if bool(tile.get("tree_cut", false)):
 			c = c.lerp(BARREN, 0.35)
+		if float(tile.get("burnt", 0.0)) > 0.0:
+			c = c.lerp(ASH, 0.75)
 		if bool(tile.get("river", false)):
 			c = c.lerp(RIVER, 0.75)
 	# Sand is a height band (smooth), never the tile type (which steps).

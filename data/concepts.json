@@ -844,7 +844,7 @@
     "name": "Woodcutting",
     "era": 1,
     "icon": "🪓",
-    "description": "Felling trees with stone tools yields timber for fires and shelters. The forest grows back, but slowly.",
+    "description": "Felling trees with stone tools yields timber for huts and the hearth. A stump sprouts again, but a felled wood takes days to come back.",
     "prerequisites": [
       "stone_tools"
     ],
@@ -862,6 +862,32 @@
     "spread_rate": 0.05,
     "effects": {
       "wood_gathering": true
+    }
+  },
+  {
+    "id": "forestry",
+    "name": "Forestry",
+    "era": 2,
+    "icon": "🌳",
+    "description": "Planting what you fell, and planting where nothing grows: a wood near home that feeds the hearth and the cooking pot for good.",
+    "prerequisites": [
+      "woodcutting",
+      "plant_lore"
+    ],
+    "discovery_conditions": [
+      {
+        "type": "tile_type",
+        "value": "WOODLAND"
+      },
+      {
+        "type": "has_concept",
+        "value": "woodcutting"
+      }
+    ],
+    "discovery_probability": 0.0003,
+    "spread_rate": 0.05,
+    "effects": {
+      "replants": true
     }
   },
   {
