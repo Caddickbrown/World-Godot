@@ -84,6 +84,11 @@ Longer rhythms:
 - **Moving on.** When the land round a hearth stays stripped for two days, the camp packs up and
   walks to better ground, 10–28 tiles away.
 - **Grief.** When someone dies, their partner, children and parents mourn for half a day.
+  The body lies where they fell for half a day, then is buried (the Lives screen keeps them).
+- **The larder.** What a forager gathers beyond their own fill they carry home to the camp
+  store; whoever comes home hungry (most often at the evening fire) eats from it. Stores spoil
+  in about two days, eight once the camp knows fermentation, so a preserving idea is what
+  turns a good summer into a survivable winter.
 
 ## Milestones
 
@@ -93,7 +98,7 @@ Longer rhythms:
 | M1 | Three views ✅ | Sky, follow and wisp views; follow card, almanac bar, chronicle in the new UI (both looks, T to switch) |
 | M2 | New look ✅ (first pass) | Island, smooth terrain, sea, sky, flora, people and settlements per `docs/ART_DIRECTION.md`. Next: animals in the same style, grass and flowers, weather (rain, rainbow) |
 | M3 | Stories ✅ (first pass) | Chronicle voice, life records and last lines, the Lives screen. Next: family twig drawing, "press a life" into the album |
-| M4 | Collecting ✅ (first pass) | Album of 25 moments (witness rule: on screen within 200 m, or following), the Idea Garden, hunches and glimmers. Next: more moments, ideas actually being lost (see open decisions) |
+| M4 | Collecting ✅ (first pass) | Album of 29 moments (witness rule: on screen within 200 m, or following), the Idea Garden, hunches and glimmers. Next: more moments, ideas actually being lost (see open decisions) |
 | M5 | Postcards and polish | Seed postcards, save/continue, sound, settings, controller, a minimap |
 
 Each milestone ends with the standard shots (`tools/capture/shots.sh`), an independent review

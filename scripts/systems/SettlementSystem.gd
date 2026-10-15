@@ -16,6 +16,7 @@ class Settlement extends RefCounted:
 	var knowledge_pool: Dictionary = {}  # concept_id → true
 	var dialect: float = 0.0             # 0–1, cultural drift
 	var food_store: float = 0.0
+	var meals_served: int = 0        # times the store fed a hungry member
 	var wood_store: float = 0.0
 	var last_contact_day: int = 0
 	var founding_day: int = 0
@@ -111,7 +112,7 @@ func tick(delta: float, agents: Array, concept_graph: ConceptGraph, day: int, hi
 		_sync_knowledge_pool(agents, concept_graph)
 
 	# 6. Resource stores
-	_tick_resources(delta)
+	_tick_resources(delta, agents, history_log, day)
 
 	# 7. Cultural drift
 	_tick_dialect(delta, day)
@@ -328,11 +329,45 @@ func _sync_knowledge_pool(agents: Array, concept_graph: ConceptGraph) -> void:
 # Resources
 # ---------------------------------------------------------------------------
 
-func _tick_resources(delta: float) -> void:
+## The larder. It used to fill itself from nothing and was never eaten.
+## Now it holds what members carry home beyond their own fill, feeds members
+## who come home hungry, and spoils: in about two days, or eight once the camp
+## knows fermentation (or salting/pottery, if those are ever thought of).
+const STORE_RADIUS := 6.0          # tiles from the hearth to drop off or eat from the store
+const STORE_PER_MEMBER := 2.0      # cap
+const STORE_HUNGRY_BELOW := 0.3
+const STORE_MEAL := 0.4
+const SPOIL_DAYS := 2.0
+const SPOIL_DAYS_PRESERVED := 8.0
+const PRESERVING := ["fermentation", "pottery", "salting"]
+
+func _tick_resources(delta: float, agents: Array = [], history_log: HistoryLog = null, day: int = 0) -> void:
+	var by_id: Dictionary = {}
+	for a in agents:
+		by_id[a.agent_id] = a
 	for s: Settlement in settlements:
-		var cap: float = float(s.member_ids.size()) * 100.0
-		s.food_store = minf(s.food_store + float(s.member_ids.size()) * 0.01 * delta, cap)
-		s.wood_store = minf(s.wood_store + float(s.member_ids.size()) * 0.005 * delta, cap)
+		var cap: float = float(s.member_ids.size()) * STORE_PER_MEMBER
+		s.wood_store = minf(s.wood_store + float(s.member_ids.size()) * 0.005 * delta, float(s.member_ids.size()) * 100.0)
+		for id in s.member_ids:
+			var a = by_id.get(id)
+			if a == null or a.is_dead or a.pos.distance_to(s.centre) > STORE_RADIUS:
+				continue
+			if a.carrying_food > 0.0:
+				s.food_store = minf(cap, s.food_store + a.carrying_food)
+				a.carrying_food = 0.0
+			if a.needs["hunger"] < STORE_HUNGRY_BELOW and s.food_store > 0.05:
+				var meal := minf(STORE_MEAL, s.food_store)
+				s.food_store -= meal
+				a.needs["hunger"] = minf(1.0, a.needs["hunger"] + meal)
+				s.meals_served += 1
+				if s.meals_served == 1 and history_log:
+					history_log.add("settlement", "Food put by in '%s' fed someone hungry: the first larder." % s.name, day)
+		var days := SPOIL_DAYS
+		for k in PRESERVING:
+			if s.knowledge_pool.has(k):
+				days = SPOIL_DAYS_PRESERVED
+				break
+		s.food_store *= exp(-delta / (days * TimeSystem.DAY_LENGTH))
 
 # ---------------------------------------------------------------------------
 # Cultural drift

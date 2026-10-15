@@ -25,6 +25,7 @@ const DEFS := {
 	"first_camp":    ["A camp", "people settle together", "world", true],
 	"hamlet":        ["A hamlet", "a camp grows and takes a name", "world", true],
 	"contact":       ["Strangers meet", "two settlements make contact", "world", true],
+	"larder":        ["Put by", "a camp's stored food feeds someone hungry", "world", true],
 	"camp_moves":    ["Moving on", "a camp leaves stripped land for better", "world", true],
 	"storm_passed":  ["After the storm", "watch a storm blow through", "world", true],
 	"lightning":     ["Lightning", "see lightning strike the forest", "world", true],

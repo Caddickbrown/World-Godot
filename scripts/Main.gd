@@ -468,7 +468,8 @@ func _handle_events() -> void:
 ## (the systems already write it) into the story, with the moment it unlocks.
 const WORLD_NEWS := {
 	"settlement": [["New camp founded", "first_camp"], ["grown into hamlet", "hamlet"],
-		["elevated to named", "hamlet"], ["made contact", "contact"], ["packed up and moved", "camp_moves"]],
+		["elevated to named", "hamlet"], ["made contact", "contact"], ["packed up and moved", "camp_moves"],
+		["the first larder", "larder"]],
 	"fire": [["Lightning", "lightning"]],
 	"disease": [], "disaster": [], "trade": [], "war": [], "ecology": [], "craft": [],
 }
@@ -510,6 +511,9 @@ static func _reword(msg: String) -> String:
 	var moved := RegEx.create_from_string("The people of '(.*)' packed up and moved (.*), to better land").search(m)
 	if moved:
 		return "The land round %s was stripped bare, so its people packed up and walked %s to better ground." % [moved.get_string(1), moved.get_string(2)]
+	var larder := RegEx.create_from_string("Food put by in '(.*)' fed someone hungry").search(m)
+	if larder:
+		return "At %s, food put by on good days fed someone on a lean one." % larder.get_string(1)
 	var met := RegEx.create_from_string("Settlements '(.*)' and '(.*)' made contact").search(m)
 	if met:
 		return "The people of %s and %s have met." % [met.get_string(1), met.get_string(2)]

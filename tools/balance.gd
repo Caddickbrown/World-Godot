@@ -34,9 +34,11 @@ func _initialize() -> void:
 				last_day = main.time_system.day
 				line += " %d" % main.agents.filter(func(a): return not a.is_dead and a.health > 0.0).size()
 		var causes := {}
-		for a in main.agents:
-			if a.is_dead:
-				causes[a.death_cause] = int(causes.get(a.death_cause, 0)) + 1
+		# The dead are buried (dropped from main.agents); the story remembers them.
+		for id in main.story.lives:
+			var life: LifeRecord = main.story.lives[id]
+			if not life.alive():
+				causes[life.cause] = int(causes.get(life.cause, 0)) + 1
 		print(line, "  | ended day ", main.time_system.day, " discoveries ",
 			main.concept_graph.get_discovered_concepts().size(), " deaths ", causes)
 		if args.has("chronicle"):

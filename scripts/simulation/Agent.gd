@@ -25,6 +25,7 @@ const FEED_CHILD_AMOUNT := 0.2
 const LIFESPAN_DAYS_MIN := 6.0
 const LIFESPAN_DAYS_SPREAD := 4.0
 const HUNGER_DRAIN   := 1.0 / 90.0
+const MAX_CARRY      := 0.6       # food one person can carry home
 const ENERGY_DRAIN   := 1.0 / 200.0
 const ENERGY_RECOVER := 1.0 / 20.0
 const SOCIAL_COOLDOWN := 4.0
@@ -71,6 +72,7 @@ var speech_bubble: String = ""
 var night_sleeping: bool = false
 var selected: bool = false  # picked in the observer view (Main sets it)
 var at_fire: bool = false   # sitting at the evening hearth
+var carrying_food: float = 0.0   # surplus gathered once full, carried home to the camp store
 var fed_children: int = 0   # times they fed a hungry child (the story reads it)
 ## Grief: after a partner, child or parent dies, for MOURNING_DAYS they move
 ## slowly, don't pair or have children, and think of who they lost.
@@ -502,7 +504,10 @@ func _on_arrival(world: World, all_agents: Array, concept_graph: ConceptGraph) -
 			if knowledge.has("agriculture") and tile["type"] == World.TileType.GRASS: tool_mult *= 1.35
 			var cook_mult := 1.6 if knowledge.has("cooking") else 1.0
 			var yield_val: float = maxf(0.15, float(tile["resource"]))
-			needs["hunger"] = minf(1.0, needs["hunger"] + 0.60 * tool_mult * cook_mult * yield_val)
+			var gained: float = 0.60 * tool_mult * cook_mult * yield_val
+			# What they can't eat they carry home (SettlementSystem puts it by).
+			carrying_food = minf(MAX_CARRY, carrying_food + maxf(0.0, needs["hunger"] + gained - 1.0))
+			needs["hunger"] = minf(1.0, needs["hunger"] + gained)
 			tile["resource"] = maxf(0.0, tile["resource"] - 0.28 / tool_mult)
 			if tile.get("depletion_level", -1.0) >= 0.0:
 				tile["depletion_level"] = minf(1.0, tile.get("depletion_level", 0.0) + 0.1 / tool_mult)

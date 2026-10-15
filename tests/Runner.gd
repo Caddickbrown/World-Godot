@@ -28,6 +28,7 @@ func _ready() -> void:
 	_test_wildlife_stays_on_land()
 	_test_families_and_fire()
 	_test_teaching_hunting_moving_grief()
+	_test_larder()
 	print("== integration")
 	await _test_main_views()
 	print("== %d checks, %d failures" % [_checks, _failures])
@@ -488,6 +489,42 @@ func _test_teaching_hunting_moving_grief() -> void:
 	var births := g.birth_events.size()
 	widow._try_reproduce(other, g)
 	check("...and nobody starts a family while grieving", g.birth_events.size() == births)
+
+func _test_larder() -> void:
+	var a := _adult(40, 40)
+	var b := _adult(41, 40)
+	var ss := SettlementSystem.new()
+	var camp := SettlementSystem.Settlement.new()
+	camp.id = 3
+	camp.name = "Testhold"
+	camp.centre = Vector2(40, 40)
+	camp.member_ids = [a.agent_id, b.agent_id]
+	ss.settlements = [camp]
+	var hist := HistoryLog.new()
+	ss._tick_resources(1.0, [a, b], hist, 1)
+	check("a camp's store doesn't fill itself", camp.food_store == 0.0)
+	a.needs["hunger"] = 0.9
+	a.carrying_food = 0.5
+	b.needs["hunger"] = 0.9
+	ss._tick_resources(0.01, [a, b], hist, 1)
+	check("surplus carried home goes into the store", is_equal_approx(a.carrying_food, 0.0) and camp.food_store > 0.45)
+	b.needs["hunger"] = 0.1
+	ss._tick_resources(0.01, [a, b], hist, 1)
+	check("someone hungry at home eats from it", b.needs["hunger"] > 0.45 and camp.food_store < 0.15)
+	check("...and the chronicle notices the first larder", hist.entries.any(func(e): return str(e["msg"]).contains("first larder")))
+	b.pos = Vector2(60, 60)
+	b.needs["hunger"] = 0.1
+	camp.food_store = 1.0
+	ss._tick_resources(0.01, [a, b], hist, 1)
+	check("...but only when they're home", b.needs["hunger"] < 0.15)
+	camp.food_store = 1.0
+	ss._tick_resources(TimeSystem.DAY_LENGTH * 2.0, [], hist, 1)
+	var plain := camp.food_store
+	camp.food_store = 1.0
+	camp.knowledge_pool["fermentation"] = true
+	ss._tick_resources(TimeSystem.DAY_LENGTH * 2.0, [], hist, 1)
+	check("stores spoil (%.2f left after two days), slower with fermentation (%.2f)" % [plain, camp.food_store],
+		plain < 0.45 and camp.food_store > 0.7)
 
 # ── Integration ──────────────────────────────────────────────────────────────
 
