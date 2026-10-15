@@ -3,7 +3,6 @@
     "id": "berries",
     "name": "Berries",
     "category": "food",
-    "icon": "🫐",
     "weight": 0.2,
     "stackSize": 10,
     "effects": {
@@ -21,13 +20,13 @@
         3
       ],
       "knowledge": []
-    }
+    },
+    "seasonPreference": "Summer"
   },
   {
     "id": "fish",
     "name": "Fish",
     "category": "food",
-    "icon": "🐟",
     "weight": 0.5,
     "stackSize": 5,
     "effects": {
@@ -56,7 +55,6 @@
     "id": "cooked_fish",
     "name": "Cooked Fish",
     "category": "food",
-    "icon": "🍖",
     "weight": 0.5,
     "stackSize": 5,
     "effects": {
@@ -68,7 +66,6 @@
     "id": "meat",
     "name": "Raw Meat",
     "category": "food",
-    "icon": "🥩",
     "weight": 0.8,
     "stackSize": 5,
     "effects": {
@@ -95,7 +92,6 @@
     "id": "cooked_meat",
     "name": "Cooked Meat",
     "category": "food",
-    "icon": "🥩",
     "weight": 0.6,
     "stackSize": 5,
     "effects": {
@@ -107,7 +103,6 @@
     "id": "herbs",
     "name": "Herbs",
     "category": "food",
-    "icon": "🌿",
     "weight": 0.1,
     "stackSize": 10,
     "effects": {
@@ -134,7 +129,6 @@
     "id": "medicine",
     "name": "Medicine",
     "category": "medicine",
-    "icon": "💊",
     "weight": 0.2,
     "stackSize": 5,
     "effects": {
@@ -154,7 +148,6 @@
     "id": "wood",
     "name": "Wood",
     "category": "material",
-    "icon": "🪵",
     "weight": 1.5,
     "stackSize": 5,
     "gatherSource": {
@@ -173,7 +166,6 @@
     "id": "stone",
     "name": "Stone",
     "category": "material",
-    "icon": "🪨",
     "weight": 2.0,
     "stackSize": 5,
     "gatherSource": {
@@ -192,7 +184,6 @@
     "id": "hide",
     "name": "Hide",
     "category": "material",
-    "icon": "🟫",
     "weight": 1.0,
     "stackSize": 5,
     "spoilRate": 0.001,
@@ -214,7 +205,6 @@
     "id": "ore",
     "name": "Ore",
     "category": "material",
-    "icon": "⛏️",
     "weight": 2.5,
     "stackSize": 3,
     "spoilRate": 0,
@@ -229,7 +219,7 @@
         1
       ],
       "knowledge": [
-        "metal_tools"
+        "mining"
       ]
     }
   },
@@ -237,7 +227,6 @@
     "id": "stone_tool",
     "name": "Stone Tool",
     "category": "tool",
-    "icon": "🪓",
     "weight": 1.5,
     "stackSize": 1,
     "craftFrom": [
@@ -260,7 +249,6 @@
     "id": "fishing_rod",
     "name": "Fishing Rod",
     "category": "tool",
-    "icon": "🎣",
     "weight": 1.0,
     "stackSize": 1,
     "craftFrom": [
@@ -280,7 +268,6 @@
     "id": "rope",
     "name": "Rope",
     "category": "tool",
-    "icon": "🪢",
     "weight": 0.5,
     "stackSize": 3,
     "spoilRate": 0,
@@ -288,7 +275,7 @@
       "plant_fibre"
     ],
     "knowledge": [
-      "weaving"
+      "rope_making"
     ],
     "effects": {
       "activities": [
@@ -298,22 +285,9 @@
     }
   },
   {
-    "id": "raw_meat",
-    "name": "Raw Meat",
-    "category": "food",
-    "icon": "🥩",
-    "weight": 0.8,
-    "stackSize": 5,
-    "effects": {
-      "hunger": 0.25
-    },
-    "spoilRate": 0.015
-  },
-  {
     "id": "mushrooms",
     "name": "Mushrooms",
     "category": "food",
-    "icon": "🍄",
     "weight": 0.3,
     "stackSize": 8,
     "effects": {
@@ -323,7 +297,7 @@
     "poisonEffect": {
       "health": -0.25
     },
-    "spoilRate": 0.010,
+    "spoilRate": 0.01,
     "seasonPreference": "Autumn",
     "gatherSource": {
       "tileTypes": [
@@ -341,7 +315,6 @@
     "id": "wild_grain",
     "name": "Wild Grain",
     "category": "food",
-    "icon": "🌾",
     "weight": 0.3,
     "stackSize": 10,
     "effects": {
@@ -360,16 +333,15 @@
       "knowledge": [
         "agriculture"
       ]
-    }
+    },
+    "seasonPreference": "Autumn"
   },
   {
     "id": "flour",
     "name": "Flour",
-    "category": "food",
-    "icon": "🫙",
+    "category": "material",
     "weight": 0.4,
     "stackSize": 5,
-    "effects": {},
     "spoilRate": 0.001,
     "craftFrom": [
       "wild_grain",
@@ -384,7 +356,6 @@
     "id": "bread",
     "name": "Bread",
     "category": "food",
-    "icon": "🍞",
     "weight": 0.5,
     "stackSize": 5,
     "effects": {
@@ -395,7 +366,7 @@
       "flour"
     ],
     "knowledge": [
-      "fire_making",
+      "cooking",
       "agriculture"
     ]
   },
@@ -403,7 +374,6 @@
     "id": "medicinal_herb",
     "name": "Medicinal Herb",
     "category": "food",
-    "icon": "🌱",
     "weight": 0.1,
     "stackSize": 10,
     "effects": {
@@ -428,7 +398,6 @@
     "id": "plant_fibre",
     "name": "Plant Fibre",
     "category": "material",
-    "icon": "🌾",
     "weight": 0.2,
     "stackSize": 20,
     "spoilRate": 0,
@@ -450,7 +419,6 @@
     "id": "milk",
     "name": "Milk",
     "category": "food",
-    "icon": "🥛",
     "weight": 0.5,
     "stackSize": 5,
     "effects": {
@@ -468,7 +436,7 @@
         2
       ],
       "knowledge": [
-        "animal_domestication"
+        "dairy"
       ]
     }
   },
@@ -476,7 +444,6 @@
     "id": "eggs",
     "name": "Eggs",
     "category": "food",
-    "icon": "🥚",
     "weight": 0.3,
     "stackSize": 6,
     "effects": {
@@ -495,15 +462,25 @@
         2
       ],
       "knowledge": [
-        "animal_domestication"
+        "coop"
       ]
     }
+  },
+  {
+    "id": "cooked_eggs",
+    "name": "Cooked Eggs",
+    "category": "food",
+    "weight": 0.3,
+    "stackSize": 6,
+    "effects": {
+      "hunger": 0.3
+    },
+    "spoilRate": 0.003
   },
   {
     "id": "campfire_kit",
     "name": "Campfire Kit",
     "category": "material",
-    "icon": "🔥",
     "weight": 1.0,
     "stackSize": 3,
     "spoilRate": 0,
@@ -517,5 +494,31 @@
     "knowledge": [
       "fire"
     ]
+  },
+  {
+    "id": "honey",
+    "name": "Honey",
+    "category": "food",
+    "weight": 0.3,
+    "stackSize": 5,
+    "effects": {
+      "hunger": 0.2,
+      "health": 0.02
+    },
+    "spoilRate": 0,
+    "gatherSource": {
+      "tileTypes": [
+        "WOODLAND",
+        "FOREST"
+      ],
+      "activity": "foraging",
+      "baseYield": [
+        1,
+        1
+      ],
+      "knowledge": [
+        "honey_gathering"
+      ]
+    }
   }
 ]

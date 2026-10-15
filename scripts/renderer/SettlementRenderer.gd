@@ -32,6 +32,12 @@ const BUILDINGS := {
 	"walls":      {"ideas": ["masonry", "architecture"], "tier": 2, "name": "Walls"},   # towns only
 	"docks":      {"ideas": ["boat_building", "sailing", "seafaring"], "tier": 0, "name": "Jetty"},
 }
+## ConceptEffects "builds" names -> the building drawn for them.
+const _BUILDS_AS := {
+	"shrine": ["shrine"], "temple": ["temple"], "church": ["church"], "granary": ["barn"],
+	"fields": ["fields"], "workshop": ["workshop", "forge", "kiln"], "well": ["ditches"],
+	"coop": ["coop"], "pen": ["pens"], "tree_house": ["tree_houses"], "walls": ["walls"],
+}
 ## Order the civic ring is filled in (the rest have places of their own).
 const CIVIC := ["temple", "church", "granary", "workshop", "well", "coop", "pen"]
 const CIVIC_RING := 14.0      # metres from the hearth
@@ -66,6 +72,7 @@ func restyle() -> void:
 ## Which buildings a settlement's knowledge (and size) puts up, in a fixed order.
 static func buildings_for(s) -> Array:
 	var out: Array = []
+	var fx_builds: Dictionary = ConceptEffects.settlement_fx(s)["builds"]
 	for kind in BUILDINGS:
 		var b: Dictionary = BUILDINGS[kind]
 		if int(s.tier) < int(b["tier"]):
@@ -76,6 +83,10 @@ static func buildings_for(s) -> Array:
 				ok = true
 				break
 		if kind == "shrine" and s.has_temple:
+			ok = true
+		# Ideas name what they build (ConceptEffects "builds"), so a new idea
+		# can put a building up without this table knowing its id.
+		if not ok and _BUILDS_AS.get(kind, []).any(func(n): return fx_builds.has(n)):
 			ok = true
 		if ok:
 			out.append(kind)
@@ -141,7 +152,7 @@ func _build_settlement(s, count: int, kinds: Array, season: String) -> Node3D:
 		if world and not world.is_walkable(tx, tz):
 			continue
 		p.y = (world.surface_y(tx, tz) if world else 0.0)
-		var d := _dwelling(int(s.tier), rng)
+		var d := _dwelling(int(s.tier), rng, bool(ConceptEffects.settlement_fx(s)["unlocks_stone_buildings"]))
 		d.position = p
 		d.rotation.y = atan2(-p.x, -p.z)  # doors face the hearth
 		root.add_child(d)
@@ -640,7 +651,7 @@ func _channel(k: PropKit, c: Vector3, from: Vector3, to: Vector3) -> void:
 
 # ── Dwellings (as before) ────────────────────────────────────────────────────
 
-func _dwelling(tier: int, rng: RandomNumberGenerator) -> Node3D:
+func _dwelling(tier: int, rng: RandomNumberGenerator, stone: bool = false) -> Node3D:
 	var d := Node3D.new()
 	match tier:
 		0:  # hide tent
@@ -676,7 +687,8 @@ func _dwelling(tier: int, rng: RandomNumberGenerator) -> Node3D:
 			bm.size = Vector3(3.0, 1.8, 2.4)
 			box.mesh = bm
 			box.position.y = 0.9
-			box.material_override = _mat(Color(0.86, 0.80, 0.68))
+			# Architecture: towns build in stone.
+			box.material_override = _mat(Color(0.70, 0.68, 0.64) if stone else Color(0.86, 0.80, 0.68))
 			d.add_child(box)
 			var roof := MeshInstance3D.new()
 			var pm := PrismMesh.new()

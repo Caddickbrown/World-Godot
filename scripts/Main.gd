@@ -335,7 +335,7 @@ func _process(delta: float) -> void:
 			var w_mult := weather_system.energy_drain_mult_at(a.pos.x, a.pos.y)
 			a.tick(game_delta, world, agents, concept_graph, w_mult, item_defs, season,
 				   time_system, time_system.day, tile_items, settlement_system, spatial_grid)
-			if a.knowledge.has("organisation") and a.task.is_empty():
+			if a.fxb("unlocks_tasks") and a.task.is_empty():
 				a.adopt_task(agents)
 
 	# Handle births
@@ -360,6 +360,12 @@ func _process(delta: float) -> void:
 	trading_system.tick(game_delta, agents, item_defs, time_system.day, history_log, spatial_grid)
 	for kill in hunting_system.tick(game_delta, agents, animal_sim, spatial_grid):
 		story.on_hunt(kill["hunter"], int(kill["prey_type"]), int(kill["shared"]))
+	# Firsts people did (the first boat, climb, cooked meal...): told once.
+	for d in concept_graph.drain_deeds():
+		story.add("people", str(d["text"]), d["pos"], [int(d["id"])], true)
+		var who: Agent = _find_agent(int(d["id"]))
+		if who:
+			story.life_of(who).events.append({"day": time_system.day, "text": str(d["text"]), "kind": "people"})
 	for evt in forest_system.tick(game_delta, world, agents, settlement_system, season, time_system.day):
 		story.on_forest(evt)
 	crafting_system.tick(game_delta, agents, item_defs, time_system.day, history_log)
@@ -509,7 +515,7 @@ func _handle_events() -> void:
 				agent.say(cname + "!", 4.0)
 				lineage_tracker.record(str(evt["concept_id"]), agent, time_system.day)
 				story.on_discovery(agent, str(evt["concept_id"]))
-				if evt["concept_id"] == "organisation":
+				if agent.fxb("unlocks_tasks") and agent.task.is_empty():
 					agent.adopt_task(agents)
 
 # ── Story ────────────────────────────────────────────────────────────────────

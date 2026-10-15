@@ -111,13 +111,13 @@ func _burn_firewood(settlement_system) -> void:
 # ── Jobs ─────────────────────────────────────────────────────────────────────
 
 func _find_job(a: Agent, st, world: World) -> void:
-	if a.knowledge.has("woodcutting") and st.wood_store < timber_wanted(st):
+	if a.fxb("wood_gathering") and st.wood_store < timber_wanted(st):
 		var t := _nearest_tile(a, st, world, FELL_RADIUS, 0.0, func(tile: Dictionary) -> bool:
 			return World.has_woods(tile) and not bool(tile["tree_cut"]) and float(tile.get("growth", 0.0)) >= FELL_GROWTH)
 		if t.x >= 0:
 			_take(a, "fell", t)
 			return
-	if a.knowledge.has("forestry") and _woods_round(st, world) < GROVE_WANT:
+	if a.fxb("replants") and _woods_round(st, world) < GROVE_WANT:
 		var t := _nearest_tile(a, st, world, GROVE_MAX, GROVE_MIN, func(tile: Dictionary) -> bool:
 			return int(tile["type"]) == World.TileType.GRASS and float(tile.get("burnt", 0.0)) <= 0.0 \
 				and not bool(tile.get("river", false)) and not bool(tile.get("is_shelter", false)))
@@ -152,7 +152,7 @@ func _work(a: Agent, st, world: World) -> Dictionary:
 			return {}
 		st.wood_store += TIMBER_PER_TREE
 		felled += 1
-		if a.knowledge.has("forestry"):
+		if a.fxb("replants"):
 			world.replant(t.x, t.y)
 			return {"kind": "replanted", "who": a, "tile": t}
 		return {"kind": "felled", "who": a, "tile": t}

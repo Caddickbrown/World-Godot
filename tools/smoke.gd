@@ -178,7 +178,9 @@ func _init() -> void:
 	# Memory caps.
 	for i in range(40):
 		picker._remember_food_source(px + i, pz, World.TileType.GRASS)
-	_check("food memory capped", (picker.memory["food_sources"] as Array).size() <= Agent.MEMORY_FOOD_CAP)
+	# Cartography (map_memory) lets someone hold twice as many places.
+	var food_cap: int = Agent.MEMORY_FOOD_CAP * (2 if picker.fxb("map_memory") else 1)
+	_check("food memory capped (%d)" % food_cap, (picker.memory["food_sources"] as Array).size() <= food_cap)
 	for i in range(40):
 		picker.remember_danger(px + i, pz, "wolf")
 	_check("danger memory capped", (picker.memory["dangers"] as Array).size() <= Agent.MEMORY_DANGER_CAP)

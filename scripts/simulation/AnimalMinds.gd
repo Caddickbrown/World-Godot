@@ -611,7 +611,7 @@ func _reintroduce(agents: Array, day: int, history_log) -> void:
 		return
 	var knows := false
 	for a in agents:
-		if _alive(a) and a.knowledge.has("conservation"):
+		if _alive(a) and a.fxb("enables_reintroduction"):
 			knows = true
 			break
 	if not knows:
