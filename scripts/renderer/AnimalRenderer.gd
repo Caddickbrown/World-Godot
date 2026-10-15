@@ -9,7 +9,6 @@ const MESH_PATHS: Dictionary = {
 	0: "res://assets/animals/Deer/SKM_Deer_Animations.fbx",
 	1: "res://assets/animals/Wolf/SKM_Wolf_Animations.fbx",
 	2: "res://assets/animals/Sheep/SKM_Sheep_Animations.fbx",
-	3: "res://assets/animals/Deer/SKM_Deer_Animations.fbx",  # the horse FBX has no mesh: a deer's body, horse-coloured
 	4: "res://assets/animals/Cow/SKM_Cow_Animations.fbx",
 	5: "res://assets/animals/Rabbit/SKM_Rabbit_Rig.fbx",
 	6: "res://assets/animals/Eagle/SKM_Eagle_Animations.fbx",
@@ -110,6 +109,12 @@ func _update_instance(animal: AnimalSim.Animal) -> void:
 	node.position = Vector3(tx, ty, tz)
 	node.rotation.y = animal.facing
 
+	if animal.animal_type == AnimalSim.AnimalType.HORSE:
+		var dt := maxf(get_process_delta_time(), 0.0001)
+		var moved: float = (animal.pos - (entry.get("last_pos", animal.pos) as Vector2)).length() * TILE_SIZE
+		entry["last_pos"] = animal.pos
+		HorseModel.animate(node, animal.state, moved / dt, dt)
+
 	# Gentle bank for flying eagles
 	if animal.animal_type == AnimalSim.AnimalType.EAGLE:
 		node.rotation.z = sin(Time.get_ticks_msec() * 0.0008) * 0.12
@@ -130,7 +135,9 @@ func _spawn(animal: AnimalSim.Animal) -> void:
 	var root: Node3D
 	var anim_player: AnimationPlayer = null
 
-	if packed:
+	if type_int == AnimalSim.AnimalType.HORSE:
+		root = HorseModel.build(animal.anim_id)   # the pack's horse has no mesh
+	elif packed:
 		var inst := packed.instantiate()
 		if inst is Node3D and _model_height(inst as Node3D) > 0.0:
 			root = inst as Node3D
@@ -154,6 +161,7 @@ func _spawn(animal: AnimalSim.Animal) -> void:
 		"anim":       anim_player,
 		"prev_state": -1,
 		"type":       type_int,
+		"last_pos":   animal.pos,
 	}
 	_instances[animal.anim_id] = entry
 
@@ -196,7 +204,7 @@ func _type_prefix(t: int) -> String:
 		AnimalSim.AnimalType.DEER:   return "Deer"
 		AnimalSim.AnimalType.WOLF:   return "Wolf"
 		AnimalSim.AnimalType.SHEEP:  return "Sheep"
-		AnimalSim.AnimalType.HORSE:  return "Deer"   # wears the deer model
+		AnimalSim.AnimalType.HORSE:  return "Horse"
 		AnimalSim.AnimalType.COW:    return "Cow"
 		AnimalSim.AnimalType.RABBIT: return "Rabbit"
 		AnimalSim.AnimalType.EAGLE:  return "Eagle"
@@ -217,7 +225,7 @@ func _find_anim_player(node: Node) -> AnimationPlayer:
 	return null
 
 ## Species drawn in a flat coat even if their model has a texture.
-const FLAT_COAT := [3]   # HORSE (borrowing the deer's body)
+const FLAT_COAT := []
 
 ## Some files hold several bodies on top of each other; show just one.
 const SHOW_ONLY: Dictionary = {
@@ -264,10 +272,21 @@ func _matte_of(src: Material, animal_type: int) -> StandardMaterial3D:
 ## The look changed (T): rebuild the shared material and re-dress everyone.
 func restyle() -> void:
 	_matte.clear()
+	HorseModel.restyle()
+	for id in _instances:
+		var he: Dictionary = _instances[id]
+		if int(he.get("type", -1)) == AnimalSim.AnimalType.HORSE:
+			var old_node: Node3D = he["node"]
+			var fresh := HorseModel.build(int(id))
+			fresh.scale = old_node.scale
+			fresh.transform = old_node.transform
+			add_child(fresh)
+			old_node.queue_free()
+			he["node"] = fresh
 	for id in _instances:
 		var e: Dictionary = _instances[id]
 		var n: Node = e.get("node")
-		if n: _ensure_texture(n, int(e.get("type", -1)))
+		if n and int(e.get("type", -1)) != AnimalSim.AnimalType.HORSE: _ensure_texture(n, int(e.get("type", -1)))
 
 ## Height of a model as it renders, in its own space (before we scale it).
 ## Skinned meshes are measured through their skin's bind pose: the FBX unit

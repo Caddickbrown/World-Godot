@@ -73,6 +73,17 @@ var birth_times: Array = []
 func _ready() -> void:
 	_setup_scene()
 	_load_data()
+	_begin.call_deferred()
+
+## A real game (Main is the scene the game launched, not a test or a capture)
+## opens on the look picker with the clock held until you begin.
+func _begin() -> void:
+	if get_tree().current_scene != self:
+		return
+	var hud := get_node_or_null("HUD")
+	if hud and hud.has_method("open_look"):
+		_set_speed(0.0)
+		hud.open_look(true)
 
 func _setup_scene() -> void:
 	# Audio (needs to be in scene tree)

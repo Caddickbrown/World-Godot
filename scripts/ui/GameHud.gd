@@ -10,6 +10,7 @@ extends CanvasLayer
 const CHRONICLE_ROWS := 5
 const TOAST_SECONDS := 4.5
 const SETTINGS_PATH := "user://world_settings.json"
+var _look_starting := false
 
 var main: Node = null
 var root: Control
@@ -155,9 +156,9 @@ func _build_bar() -> void:
 		speeds.add_child(b)
 		_speed_buttons[sp[0]] = b
 	row.add_child(speeds)
-	var look := UiTheme.button("A" if UiTheme.style == "storybook" else "B", false, 15)
-	look.tooltip_text = "Switch look (T)"
-	look.pressed.connect(toggle_style)
+	var look := UiTheme.button("Look", false, 15)
+	look.tooltip_text = "Choose the look (T flips it)"
+	look.pressed.connect(open_look.bind(false))
 	row.add_child(look)
 	_last_speed = -1.0
 
@@ -404,6 +405,10 @@ func open_screen(which: String) -> void:
 		"lives": screen = LifeStoryScreen.new()
 		"ideas": screen = IdeaGardenScreen.new()
 		"album": screen = AlbumScreen.new()
+		"look":
+			var ls := LookScreen.new()
+			ls.starting = _look_starting
+			screen = ls
 		_: screen_name = ""; return
 	screen.hud = self
 	root.add_child(screen)
@@ -414,13 +419,29 @@ func close_screen() -> void:
 		screen.queue_free()
 	screen = null
 	screen_name = ""
+	if _look_starting:
+		_look_starting = false
+		if main:
+			main._set_speed(1.0)
 
 func toggle_style() -> void:
 	UiTheme.next_style()
+	apply_style_change()
+
+## UiTheme.style changed: keep it, re-dress the world, rebuild the HUD.
+func apply_style_change() -> void:
 	_save_settings()
 	if main and main.has_method("apply_style"):
 		main.apply_style()
 	build()
+
+## The look picker. starting: the first screen of a new game, which holds the
+## clock until you begin.
+func open_look(starting: bool = false) -> void:
+	_look_starting = starting
+	if screen_name == "look":
+		screen_name = ""
+	open_screen("look")
 
 func _set_speed(s: float) -> void:
 	if main:

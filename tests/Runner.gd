@@ -705,6 +705,21 @@ func _test_main_views() -> void:
 		if h < 0.3 or h > 2.2:
 			bad.append("%s %.3fm" % [AnimalSim.AnimalType.keys()[an.animal_type], h])
 	check("every animal stands at a size you can see (%s)" % ", ".join(bad.slice(0, 4)), bad.is_empty() and not main.animal_sim.animals.is_empty())
+	# The look picker: opening it at the start holds the clock; picking a card
+	# switches the look; Begin starts time.
+	var look_hud = main.get_node("HUD")
+	var was_style := UiTheme.style
+	main._set_speed(0.0)
+	look_hud.open_look(true)
+	check("the look picker opens", look_hud.screen is LookScreen and (look_hud.screen as LookScreen).starting)
+	var other_look := "fieldnotes" if was_style == "storybook" else "storybook"
+	(look_hud.screen as LookScreen)._choose(other_look)
+	await get_tree().process_frame
+	check("choosing a card switches the look (and the picker stays open)", UiTheme.style == other_look and look_hud.screen is LookScreen)
+	look_hud.close_screen()
+	check("Begin starts the clock", main.time_system.speed > 0.0)
+	UiTheme.set_style(was_style)
+	look_hud.apply_style_change()
 	# Close and low over the highest ground, the eye stays above the hill.
 	var peak := Vector2(0, 0)
 	var peak_h := -INF
