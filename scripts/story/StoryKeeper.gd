@@ -327,6 +327,8 @@ const DEATH_PHRASES := {
 		"could not find enough to eat"],
 	"disease": ["was taken by fever", "fell sick and did not get up", "was carried off by the sickness"],
 	"conflict": ["fell in a quarrel between camps", "was killed in a fight over food"],
+	"wolf": ["was taken by a wolf, far from the fire", "went out alone and met a wolf"],
+	"bear": ["was killed by a bear", "met a bear in the dark and did not come home"],
 }
 
 static func _death_phrase(cause: String, who: int = 0) -> String:

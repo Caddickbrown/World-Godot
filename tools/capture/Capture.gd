@@ -22,6 +22,7 @@
 # --season=S      start in spring | summer | autumn | winter (a few days in)
 # --rainbow       stand a rainbow where the camera looks (after the sim)
 # --disaster=D    drought | flood | blight round where the camera looks
+# --rider         follow someone on horseback (after the sim; use --teach=horse_taming)
 # --no-hud        hide the HUD
 # --style=S       UI look: storybook | fieldnotes
 # --screen=S      open a full screen: lives | ideas | album
@@ -102,6 +103,14 @@ func _ready() -> void:
 		if not a.is_dead and a.health > 0.0:
 			who = a
 			break
+	if args.has("rider"):
+		for a in main.agents:
+			if not a.is_dead and a.riding_horse_id >= 0:
+				who = a
+				break
+		if who and who.riding_horse_id >= 0:
+			main.follow(who)
+			obs.look_at_point(Vector3(who.pos.x, 0, who.pos.y) * World.TILE_SIZE)
 	if who and (args.has("follow") or args.has("walk")):
 		main.follow(who)
 		obs.look_at_point(Vector3(who.pos.x, 0, who.pos.y) * World.TILE_SIZE)
