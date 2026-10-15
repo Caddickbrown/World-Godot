@@ -14,10 +14,10 @@ func fill() -> void:
 	var m := main()
 	var ledger: IdeaLedger = m.story.ledger
 	var row := UiTheme.hbox(28)
-	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	body.add_child(row)
 
-	var garden: Array = scroll_column(760, 14)
+	var garden: Array = scroll_column(660, 14)
 	(garden[0] as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	(garden[0] as Control).size_flags_vertical = Control.SIZE_EXPAND_FILL
 	row.add_child(garden[0])
@@ -36,7 +36,7 @@ func fill() -> void:
 		ids.sort_custom(func(x, y): return ledger.stage_of(x) != IdeaLedger.Stage.SEED and ledger.stage_of(y) == IdeaLedger.Stage.SEED)
 		col.add_child(UiTheme.caps(eras[era], "accent", 12))
 		var grid := GridContainer.new()
-		grid.columns = 7
+		grid.columns = 6
 		grid.add_theme_constant_override("h_separation", 8)
 		grid.add_theme_constant_override("v_separation", 8)
 		for id in ids:
@@ -57,7 +57,7 @@ func _plot(id: String, ledger: IdeaLedger) -> Button:
 	b.custom_minimum_size = Vector2(104, 96)
 	b.tooltip_text = (ledger.name_of(id) if stage != IdeaLedger.Stage.SEED else "Not yet thought of") + " · " + IdeaLedger.stage_name(stage)
 	var v := UiTheme.vbox(0)
-	v.set_anchors_preset(Control.PRESET_FULL_RECT)
+	v.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
 	var glyph := PlantGlyph.new().setup(stage, PETALS[abs(id.hash()) % PETALS.size()])

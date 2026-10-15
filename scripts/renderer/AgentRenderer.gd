@@ -162,7 +162,9 @@ func _make_label(font_size: int, color: Color) -> Label3D:
 	var l := Label3D.new()
 	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	l.font_size = font_size
-	l.pixel_size = 0.006
+	# Fixed on-screen size, like a map label: readable from the sky and up close.
+	l.fixed_size = true
+	l.pixel_size = 0.0011
 	l.outline_size = 10
 	l.outline_modulate = Color(0.08, 0.06, 0.04, 0.9)
 	l.modulate = color

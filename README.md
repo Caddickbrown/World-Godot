@@ -20,6 +20,8 @@ Open the folder in Godot 4.7 and press Play (`scenes/Main.tscn`).
 | WASD, Q/E, drag, wheel | Sky: pan, turn, tumble, zoom. Wisp: move (Shift to hurry), mouse to look |
 | E (as the wisp) | Listen in on the person beside you |
 | Space, 1/2/3 | Pause; 1×, 5×, 20× |
+| L, I, J | Lives, the Idea Garden, the Album (with hunches) |
+| T | Switch look: storybook (A) or field notes (B), for the UI and the world |
 | H, R | Back to the people; new world |
 
 ## Layout
@@ -30,7 +32,10 @@ Open the folder in Godot 4.7 and press Play (`scenes/Main.tscn`).
 | `scripts/simulation/` | `World` (map, resources), `Agent` (people), `AgentThoughts` (their words), `ConceptGraph`, `AnimalSim` |
 | `scripts/systems/` | Time, weather, settlements, conflict, disease, trade and the rest |
 | `scripts/view/` | `ObserverCamera` (sky and follow), `Wanderer` (the wisp) |
-| `scripts/renderer/` | Terrain, people (with pins, names and bubbles), animals, props, settlements |
+| `scripts/look/` | `Heightfield` (the smooth ground), `LookStyle` (world palettes), `SkyLook` |
+| `scripts/renderer/` | Terrain, people (with pins, names and bubbles), animals, flora, settlements |
+| `scripts/story/` | `StoryKeeper` (chronicle, lives), `IdeaLedger`, `Moments`, `Hunches`: read the sim, never write it |
+| `scripts/ui/` | `GameHud`, `UiTheme` (both looks as tokens), the Lives / Ideas / Album screens |
 | `scripts/mockup/ArtMockup.gd` | The art-direction mockup: the target look, same world generator |
 | `tests/` | `Runner.tscn` (unit and integration checks) and `run_ci.sh` |
 | `tools/` | `capture/` (review shots), `balance.gd` (population per day), `smoke.gd` (long soak) |

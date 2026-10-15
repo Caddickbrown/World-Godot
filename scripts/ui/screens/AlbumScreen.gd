@@ -12,7 +12,7 @@ func subtitle() -> String: return "Moments count only if you saw them. You can't
 func fill() -> void:
 	var m := main()
 	var row := UiTheme.hbox(32)
-	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	body.add_child(row)
 
 	var left := UiTheme.vbox(12)
@@ -30,11 +30,11 @@ func fill() -> void:
 		b.pressed.connect(func(): _tab = t[0]; _rebuild())
 		head.add_child(b)
 	left.add_child(head)
-	var sc: Array = scroll_column(600, 0)
+	var sc: Array = scroll_column(640, 0)
 	(sc[0] as Control).size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_child(sc[0])
 	var grid := GridContainer.new()
-	grid.columns = 4
+	grid.columns = 3
 	grid.add_theme_constant_override("h_separation", 14)
 	grid.add_theme_constant_override("v_separation", 14)
 	(sc[1] as VBoxContainer).add_child(grid)
@@ -75,11 +75,11 @@ func _sticker(e: Dictionary, i: int) -> PanelContainer:
 		sb.border_color = Color(UiTheme.c("muted"), 0.5)
 		sb.shadow_size = 0
 	p.add_theme_stylebox_override("panel", sb)
-	p.custom_minimum_size = Vector2(150, 120)
+	p.custom_minimum_size = Vector2(190, 120)
 	var v := UiTheme.vbox(4)
 	v.add_child(UiTheme.caps(e["kind"], "faint", 10))
-	v.add_child(UiTheme.wrap(UiTheme.label(e["name"] if e["found"] else "?", "display", 20, "text" if e["found"] else "muted"), 140))
-	v.add_child(UiTheme.wrap(UiTheme.label(e["note"] if e["found"] else e["hint"], "hand", 15, "muted"), 140))
+	v.add_child(UiTheme.wrap(UiTheme.label(e["name"] if e["found"] else "?", "display", 20, "text" if e["found"] else "muted"), 166))
+	v.add_child(UiTheme.wrap(UiTheme.label(e["note"] if e["found"] else e["hint"], "hand", 15, "muted"), 166))
 	p.add_child(v)
 	if UiTheme.n("tilt") > 0.0 and e["found"]:
 		p.rotation_degrees = [-2.0, 1.5, -1.0, 2.5][i % 4]

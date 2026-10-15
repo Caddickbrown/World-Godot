@@ -71,7 +71,8 @@ func on_death(a: Agent) -> void:
 	life.died_day = day
 	life.cause = a.death_cause
 	life.last_line = last_line(a)
-	life.events.append({"day": day, "text": _death_phrase(a.death_cause).capitalize() + ".", "kind": "people"})
+	var phrase := _death_phrase(a.death_cause, a.agent_id)
+	life.events.append({"day": day, "text": phrase.left(1).to_upper() + phrase.substr(1) + ".", "kind": "people"})
 	_recently_dead.append(a)
 	add("people", life.last_line, a.pos, [a.agent_id], not life.firsts.is_empty() or life.total_taught() >= 5 or _founders_left <= 1)
 	if a.death_cause == "old_age":
@@ -83,7 +84,7 @@ func on_death(a: Agent) -> void:
 
 func on_discovery(a: Agent, concept_id: String) -> void:
 	var how := ledger.note_discovery(concept_id, a.agent_name, day)
-	var cname := ledger.name_of(concept_id)
+	var cname := ledger.name_of(concept_id).to_lower()
 	var life := _life(a)
 	if how["first"]:
 		life.firsts.append(concept_id)
@@ -96,7 +97,7 @@ func on_discovery(a: Agent, concept_id: String) -> void:
 			_try_moment(special[concept_id], a.pos, [a.agent_id], "%s, day %d" % [a.agent_name, day])
 	elif how["refound"]:
 		_event(a, "Found %s again, long after it was lost." % cname, "ideas")
-		add("ideas", "%s is known again: %s worked it out anew." % [cname, a.agent_name], a.pos, [a.agent_id])
+		add("ideas", "%s is known again: %s worked it out anew." % [cname.left(1).to_upper() + cname.substr(1), a.agent_name], a.pos, [a.agent_id])
 		ledger.ideas[concept_id]["stage"] = IdeaLedger.Stage.SPROUT
 		_try_moment("idea_refound", a.pos, [a.agent_id], "%s, by %s" % [cname, a.agent_name])
 	else:
@@ -112,12 +113,12 @@ func on_spread(learner: Agent, teacher: Agent, concept_id: String) -> void:
 	tl.taught[concept_id] = int(tl.taught.get(concept_id, 0)) + 1
 	var n: int = tl.taught[concept_id]
 	if n == TEACHER_THRESHOLD:
-		var cname := ledger.name_of(concept_id)
+		var cname := ledger.name_of(concept_id).to_lower()
 		_event(teacher, "Has taught %s to %d people." % [cname, n], "ideas")
 		add("ideas", "%s has taught %s to %d people." % [teacher.agent_name, cname, n], teacher.pos, [teacher.agent_id])
 		_try_moment("teacher", teacher.pos, [teacher.agent_id], "%s: %s" % [teacher.agent_name, cname])
 	if learner and tl.taught.size() == 1 and n == 1:
-		_event(teacher, "Taught %s to %s, the first idea they passed on." % [ledger.name_of(concept_id), learner.agent_name], "ideas")
+		_event(teacher, "Taught %s to %s, the first idea they passed on." % [ledger.name_of(concept_id).to_lower(), learner.agent_name], "ideas")
 
 ## World events (weather, fire, settlements). moment: optional moment id.
 func on_world(text: String, pos: Vector2 = Vector2(-1, -1), moment: String = "") -> void:
@@ -230,15 +231,21 @@ func last_line(a: Agent) -> String:
 		elif life.founder:
 			epithet = "one of the first forty"
 	var head := a.agent_name + (", " + epithet + "," if epithet != "" else "")
-	return "%s %s." % [head, _death_phrase(a.death_cause)]
+	return "%s %s." % [head, _death_phrase(a.death_cause, a.agent_id)]
 
-static func _death_phrase(cause: String) -> String:
-	match cause:
-		"old_age": return "died old, in the warmth of the camp"
-		"starvation": return "starved in a hungry season"
-		"disease": return "was taken by fever"
-		"conflict": return "fell in a quarrel between camps"
-	return "is gone"
+## A few ways to say each, picked by who it is, so the chronicle doesn't drone.
+const DEATH_PHRASES := {
+	"old_age": ["died old, in the warmth of the camp", "lived a long life and slept away",
+		"died with grandchildren close by", "grew old and was gone by morning"],
+	"starvation": ["starved in a hungry season", "went hungry one winter too many",
+		"could not find enough to eat"],
+	"disease": ["was taken by fever", "fell sick and did not get up", "was carried off by the sickness"],
+	"conflict": ["fell in a quarrel between camps", "was killed in a fight over food"],
+}
+
+static func _death_phrase(cause: String, who: int = 0) -> String:
+	var options: Array = DEATH_PHRASES.get(cause, ["is gone"])
+	return options[posmod(who, options.size())]
 
 func _life(a: Agent) -> LifeRecord:
 	if not lives.has(a.agent_id):

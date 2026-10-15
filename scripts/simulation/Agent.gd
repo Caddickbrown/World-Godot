@@ -1067,10 +1067,20 @@ func adopt_task(all_agents: Array) -> void:
 
 # ── Name generator ───────────────────────────────────────────────────────────
 
+## Names already given. Two people called Unir made the story (and the
+## hunches) ambiguous; 2-3 syllables give ~2,900 names and a world sees
+## hundreds of people, so collisions were routine.
+static var _names_given: Dictionary = {}
+
 static func _random_name() -> String:
 	var syllables := ["ar","el","or","an","en","am","ul","in","er","om","al","ir","un","ae"]
-	var len_ := 2 + randi() % 2
-	var name_ := ""
-	for _i in range(len_):
-		name_ += syllables[randi() % syllables.size()]
-	return name_.capitalize()
+	for attempt in 60:
+		var len_ := 2 + randi() % 2 + (1 if attempt >= 40 else 0)
+		var name_ := ""
+		for _i in range(len_):
+			name_ += syllables[randi() % syllables.size()]
+		name_ = name_.capitalize()
+		if not _names_given.has(name_):
+			_names_given[name_] = true
+			return name_
+	return "Ael%d" % _names_given.size()

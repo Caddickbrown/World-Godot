@@ -7,11 +7,11 @@ var hud: GameHud
 var body: Control
 
 func build_screen() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var dim := ColorRect.new()
 	dim.color = Color(UiTheme.c("ink"), 0.55)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
 	var page := UiTheme.panel()
 	var sb := UiTheme.panel_box()
@@ -19,7 +19,7 @@ func build_screen() -> void:
 	if UiTheme.style == "fieldnotes":
 		sb.bg_color = UiTheme.c("screen_bg")
 	page.add_theme_stylebox_override("panel", sb)
-	page.set_anchors_preset(Control.PRESET_FULL_RECT)
+	page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	page.offset_left = 48
 	page.offset_right = -48
 	page.offset_top = 40

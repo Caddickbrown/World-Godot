@@ -47,3 +47,24 @@ One line of cause, one line of rule.
   terrain's vertex colour, never as a slab on top.
 - **Headless shots can be the real renderer.** Mesa's lavapipe (`mesa-vulkan-drivers`) runs
   Forward+ under `xvfb-run`, so review shots match the game.
+
+## Story and look
+
+- **The simulation already knew more than it said.** "Spread" events (who taught whom) were
+  dropped by Main, and pairing up raised no event at all. Rule: before inventing a mechanic,
+  read what the sim emits; the story layer watches agents for changes it doesn't announce.
+- **Reading the chronicle found bugs no test did:** settlements meeting themselves every day,
+  thirty camps of three, towns the moment one member could write. Rule: after changing the
+  sim, read a real chronicle (`tools/balance.gd --chronicle=60`), not just the numbers.
+- **An idea could never be lost.** `ConceptGraph.known_by` keeps the dead. Rule: anything
+  about "what the world knows" counts the living.
+- **A capture "took forever".** Its script had a parse error, so the scene ran with no script
+  and never quit. Rule: CI parse-checks every tool script; a hang means check the log first.
+- **World and Heightfield held each other**, so both leaked at exit. Rule: a helper that
+  needs its owner only while building drops the reference when done.
+- **Sand drawn by tile type made a sawtooth coast.** Rule: colour from continuous fields
+  (height, biome noise); use tiles only for state (felled, overgrazed, river).
+- **The woods swallowed the people.** Rule: canopy has clearings, names draw over scenery at a
+  fixed screen size, and near-camera flora dithers away in the walk view.
+- **The headless renderer keeps no MultiMesh data.** Rule: renderers keep their own state
+  for tests to read (`trees_shown_on`), not the GPU's.

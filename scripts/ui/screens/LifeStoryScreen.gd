@@ -14,7 +14,7 @@ func fill() -> void:
 	if _chosen < 0 and m.selected_agent:
 		_chosen = m.selected_agent.agent_id
 	var row := UiTheme.hbox(28)
-	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	body.add_child(row)
 
 	var list: Array = scroll_column(300, 6)
@@ -56,7 +56,7 @@ static func _weight(l: LifeRecord) -> int:
 func _person_button(life: LifeRecord) -> Button:
 	var tag := ""
 	if not life.firsts.is_empty():
-		tag = " · first to " + main().story.ledger.name_of(life.firsts[0]).to_lower()
+		tag = " · found " + main().story.ledger.name_of(life.firsts[0]).to_lower()
 	elif not life.alive():
 		tag = " · day %d" % life.died_day
 	var b := UiTheme.button(life.name + tag, life.agent_id == _chosen, 15)

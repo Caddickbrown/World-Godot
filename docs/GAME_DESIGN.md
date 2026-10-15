@@ -72,17 +72,23 @@ over their head (in brackets, to say it's unspoken) and opens their card. That's
 | # | Name | Done when |
 |---|---|---|
 | M0 | Foundation ✅ | AGENTS.md, this file, tests + CI, capture tool, balance probe; season, conflict, height and lifespan fixes |
-| M1 | **Three views** (started) | Sky, follow and wisp views working ✅; then the follow card and HUD in the new UI style (`docs/ART_DIRECTION.md`), map scrap, chronicle postcards |
-| M2 | New look | Terrain, water, sky, flora and people rebuilt per `docs/ART_DIRECTION.md` (the mockup becomes the game) |
-| M3 | Stories | Life stories, family twig, the chronicle's voice, last lines |
-| M4 | Collecting | Moments album, the Idea Garden with wilting and rediscovery, hunches and glimmers |
-| M5 | Postcards and polish | Seed postcards, save/continue, sound, settings, controller |
+| M1 | Three views ✅ | Sky, follow and wisp views; follow card, almanac bar, chronicle in the new UI (both looks, T to switch) |
+| M2 | New look ✅ (first pass) | Island, smooth terrain, sea, sky, flora, people and settlements per `docs/ART_DIRECTION.md`. Next: animals in the same style, grass and flowers, weather (rain, rainbow) |
+| M3 | Stories ✅ (first pass) | Chronicle voice, life records and last lines, the Lives screen. Next: family twig drawing, "press a life" into the album |
+| M4 | Collecting ✅ (first pass) | Album of 25 moments (witness rule: on screen within 200 m, or following), the Idea Garden, hunches and glimmers. Next: more moments, ideas actually being lost (see open decisions) |
+| M5 | Postcards and polish | Seed postcards, save/continue, sound, settings, controller, a minimap |
 
 Each milestone ends with the standard shots (`tools/capture/shots.sh`), an independent review
 against this file and `ART_DIRECTION.md`, and a green `tests/run_ci.sh`.
 
 ## Open decisions
 
+0. **Ideas are never lost in practice.** With the current spread rate an idea
+   reaches most people within a day or two, so nobody is ever its last holder
+   (0 losses in 3 seeds x 15 days, `tools/balance.gd`). Options: slower spread
+   for crafts that need teaching (pottery, metalwork) than for ideas anyone can
+   copy, or ideas held only by a camp that is wiped out. Proposal: per-idea
+   "needs a teacher" flag; measure before and after.
 1. **Witnessing rule for the album.** "On screen" (simple) or "on screen and close enough to read
    names" (rewards zooming in)? Proposal: the latter.
 2. **Do lost ideas come back easier?** Rediscovery could be faster near where the idea was last

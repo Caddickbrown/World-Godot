@@ -19,6 +19,7 @@ func _ready() -> void:
 	_test_world_surface_and_capacity()
 	_test_conflict_needs_rival_settlements_and_hunger()
 	_test_thoughts()
+	_test_names_unique()
 	_test_wanderer_movement()
 	_test_idea_ledger()
 	_test_story_keeper()
@@ -104,6 +105,15 @@ func _test_conflict_needs_rival_settlements_and_hunger() -> void:
 		if conflict.is_in_conflict(c):
 			clashed_frames += 1
 	check("one second of frames gives about 0.2 clashes, not 12 (got %d)" % clashed_frames, clashed_frames <= 3)
+
+func _test_names_unique() -> void:
+	var seen: Dictionary = {}
+	var dupes := 0
+	for i in 600:
+		var n := Agent._random_name()
+		if seen.has(n): dupes += 1
+		seen[n] = true
+	check("no two people share a name (%d repeats in 600)" % dupes, dupes == 0)
 
 func _test_thoughts() -> void:
 	var a := Agent.new(5.0, 5.0)
@@ -246,7 +256,7 @@ func _test_story_keeper() -> void:
 	keeper.on_death(a)
 	var line: String = keeper.life_of(a).last_line
 	check("a life ends on a line naming what they're remembered for (%s)" % line,
-		line.begins_with(a.agent_name + ", who first thought of") and line.contains("died old"))
+		line.begins_with(a.agent_name + ", who first thought of") and StoryKeeper.DEATH_PHRASES["old_age"].any(func(ph): return line.contains(ph)))
 	check("the dead keep their story", not keeper.life_of(a).alive() and keeper.lives.has(a.agent_id))
 
 	# The album persists across worlds.

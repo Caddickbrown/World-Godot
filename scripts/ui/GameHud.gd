@@ -62,7 +62,7 @@ func build() -> void:
 	_speed_buttons.clear()
 	_toasts.clear()
 	root = Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	_build_bar()
@@ -268,7 +268,8 @@ func _fill_follow_card(a: Agent) -> void:
 		if st:
 			bits.append(st.name)
 	v.add_child(UiTheme.label(" · ".join(bits), "body", 15, "muted"))
-	v.add_child(UiTheme.wrap(UiTheme.label(AgentThoughts.doing(a).capitalize(), "strong", 16, "warn" if float(a.needs["hunger"]) < 0.3 else "text"), 260))
+	var doing := AgentThoughts.doing(a)
+	v.add_child(UiTheme.wrap(UiTheme.label(doing.left(1).to_upper() + doing.substr(1), "strong", 16, "warn" if float(a.needs["hunger"]) < 0.3 else "text"), 260))
 	v.add_child(UiTheme.wrap(UiTheme.label("“%s”" % AgentThoughts.thought(a), "hand", 19), 260))
 	for m in [["Fed", float(a.needs["hunger"]), "warn"], ["Rested", float(a.needs["energy"]), "good"]]:
 		var row := UiTheme.vbox(2)
