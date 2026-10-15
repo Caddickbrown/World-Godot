@@ -29,7 +29,7 @@ const BUILDINGS := {
 	"coop":       {"ideas": ["coop", "animal_domestication", "domestication"], "tier": 0, "name": "Hen coop"},
 	"pen":        {"ideas": ["herding", "animal_breeding"], "tier": 0, "name": "Sheep pen"},
 	"tree_house": {"ideas": ["tree_house"], "tier": 0, "name": "Tree house"},
-	"walls":      {"ideas": ["masonry", "architecture"], "tier": 1, "name": "Walls"},
+	"walls":      {"ideas": ["masonry", "architecture"], "tier": 2, "name": "Walls"},   # towns only
 	"docks":      {"ideas": ["boat_building", "sailing", "seafaring"], "tier": 0, "name": "Jetty"},
 }
 ## Order the civic ring is filled in (the rest have places of their own).
@@ -548,11 +548,14 @@ func _walls(k: PropKit, c: Vector3, gate_a: float) -> void:
 		if not _land_ok(c + p, 0.4):
 			continue
 		var gp := _ground(c, p, 0.9)
-		var h := 1.25 + rng.randf_range(-0.12, 0.12)
-		k.box(Vector3(2.15, h + 0.4, 0.7), PropKit.at(gp + Vector3(0, (h + 0.4) * 0.5 - 0.4, 0), -a), _c(stone, rng.randf() * 0.12))
-		k.box(Vector3(2.2, 0.16, 0.82), PropKit.at(gp + Vector3(0, h + 0.05, 0), -a), _c(stone.lightened(0.12)))
+		var h := 0.8 + rng.randf_range(-0.08, 0.08)
+		# Along the ring (yaw -a turned the blocks to point outwards, so the
+		# wall read as a ring of stepping stones).
+		var along := -a + PI / 2.0
+		k.box(Vector3(2.15, h + 0.4, 0.6), PropKit.at(gp + Vector3(0, (h + 0.4) * 0.5 - 0.4, 0), along), _c(stone, rng.randf() * 0.12))
+		k.box(Vector3(2.2, 0.14, 0.72), PropKit.at(gp + Vector3(0, h + 0.04, 0), along), _c(stone.lightened(0.12)))
 	for side in [-1.0, 1.0]:
-		var a := gate_a + side * 0.17
+		var a: float = gate_a + side * 0.17
 		var p := Vector3(cos(a), 0, sin(a)) * WALL_RING
 		if not _land_ok(c + p, 0.8):
 			continue
@@ -632,7 +635,7 @@ func _channel(k: PropKit, c: Vector3, from: Vector3, to: Vector3) -> void:
 		var gy := (world.surface_y((c.x + p.x) / TILE_SIZE, (c.z + p.z) / TILE_SIZE) if world else 0.0)
 		k.box(Vector3(0.36, 0.06, 0.84), PropKit.at(Vector3(p.x, gy + 0.03, p.z), yaw), water)
 		for sgn in [-1.0, 1.0]:
-			var e := p + side * 0.28 * sgn
+			var e: Vector3 = p + side * 0.28 * sgn
 			k.box(Vector3(0.16, 0.14, 0.84), PropKit.at(Vector3(e.x, gy + 0.05, e.z), yaw), edge)
 
 # ── Dwellings (as before) ────────────────────────────────────────────────────

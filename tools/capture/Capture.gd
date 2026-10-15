@@ -23,6 +23,7 @@
 # --rainbow       stand a rainbow where the camera looks (after the sim)
 # --disaster=D    drought | flood | blight round where the camera looks
 # --rider         follow someone on horseback (after the sim; use --teach=horse_taming)
+# --inspect       show the inspect card for whatever is where the camera looks
 # --no-hud        hide the HUD
 # --style=S       UI look: storybook | fieldnotes
 # --screen=S      open a full screen: lives | ideas | album
@@ -207,7 +208,12 @@ func _ready() -> void:
 		hud.build()
 		main._update_hud()
 		if args.has("screen"):
-			hud.open_screen(str(args["screen"]))
+			if str(args["screen"]) == "look":
+				hud.open_look(true)
+			else:
+				hud.open_screen(str(args["screen"]))
+		if args.has("inspect"):
+			hud.show_inspect(Inspect.describe(main, main.observer.target))
 	if args.has("no-hud") and hud:
 		hud.visible = false
 	main._update_hud()

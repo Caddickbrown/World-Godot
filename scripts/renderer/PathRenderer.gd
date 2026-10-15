@@ -72,8 +72,8 @@ func rebuild() -> void:
 	var weight: Dictionary = {}   # Vector2i vertex -> alpha
 	var reach := int(ceil((TILE_SIZE * 0.5 + SPREAD) / step))
 	for t in shown:
-		var cx := (t.x + 0.5) * TILE_SIZE
-		var cz := (t.y + 0.5) * TILE_SIZE
+		var cx: float = (t.x + 0.5) * TILE_SIZE
+		var cz: float = (t.y + 0.5) * TILE_SIZE
 		var w: float = shown[t]
 		var ix0 := int(round(cx / step))
 		var iz0 := int(round(cz / step))
