@@ -647,8 +647,9 @@ func _update_hud() -> void:
 			"day": time_system.day,
 			"season": time_system.season,
 			"hour": time_system.hour,
-			"weather": weather_system.label,
-			"temp": weather_system.temp_label,
+			# Where you're looking, as the sky shows it (not the worst zone anywhere).
+			"weather": weather_system.label_at(_focus_tile().x, _focus_tile().y),
+			"temp": "%.0f°C" % weather_system.temperature_at(_focus_tile().x, _focus_tile().y),
 			"era": _get_era(discovered.size()),
 			"concepts": discovered,
 			"selected_agent": selected_agent,
@@ -709,6 +710,11 @@ func _show_game_over() -> void:
 		print("[World] GAME OVER — Day ", time_system.day)
 
 # ── Sun ──────────────────────────────────────────────────────────────────────
+
+## The tile the eye is on: the wisp when walking, else the observer's target.
+func _focus_tile() -> Vector2:
+	var f: Vector3 = wanderer.world_position() if view_mode == ViewMode.WALK else observer.target
+	return Vector2(f.x, f.z) / TILE_SIZE
 
 func _update_sun() -> void:
 	var focus: Vector3 = wanderer.world_position() if view_mode == ViewMode.WALK else observer.target
