@@ -19,6 +19,9 @@
 # --animal=T      look at the nearest living animal of type T (deer, wolf, rabbit, ...)
 # --wild=K        look at the first of the small wild things: whales | shoals | flocks |
 #                 robins | butterflies | swarms | hives | frogs (AmbientLife)
+# --season=S      start in spring | summer | autumn | winter (a few days in)
+# --rainbow       stand a rainbow where the camera looks (after the sim)
+# --disaster=D    drought | flood | blight round where the camera looks
 # --no-hud        hide the HUD
 # --style=S       UI look: storybook | fieldnotes
 # --screen=S      open a full screen: lives | ideas | album
@@ -62,6 +65,10 @@ func _ready() -> void:
 			for dz in range(-1, 2):
 				for dx in range(-1, 2):
 					main.fire_system.start_fire(int(t["x"]) + dx, int(t["z"]) + dz, 40.0, main.time_system.game_time, main.world)
+	if args.has("season"):
+		var si := TimeSystem.SEASONS.find(str(args["season"]).capitalize())
+		if si >= 0:
+			main.time_system.game_time = (si * TimeSystem.SEASON_DAYS + 2.5) * TimeSystem.DAY_LENGTH
 	if args.has("sim"):
 		main.time_system.set_speed(20.0)
 		var steps := int(float(args["sim"]) / 20.0 * 30.0)
@@ -108,6 +115,28 @@ func _ready() -> void:
 		if big:
 			obs.look_at_point(Vector3(big.centre.x, 0, big.centre.y) * World.TILE_SIZE)
 			print("[Capture] camp %s: %d people, tier %d, timber %.0f" % [big.name, big.member_ids.size(), big.tier, big.wood_store])
+	var look_tile := Vector2(obs.target.x, obs.target.z) / World.TILE_SIZE
+	if args.has("disaster"):
+		var kinds := {"drought": DisasterSystem.DisasterType.DROUGHT, "flood": DisasterSystem.DisasterType.FLOOD,
+			"blight": DisasterSystem.DisasterType.BLIGHT}
+		if kinds.has(str(args["disaster"])):
+			# A flood picks its own place (a river or low shore); the others go
+			# where the camera looks.
+			var flood := str(args["disaster"]) == "flood"
+			main.disaster_system.start(kinds[str(args["disaster"])], main.time_system.day, main.history_log, main.world,
+				Vector2(-1, -1) if flood else look_tile)
+			if flood:
+				var fc: Vector2 = main.disaster_system.centre
+				obs.look_at_point(Vector3(fc.x, 0, fc.y) * World.TILE_SIZE)
+			main.disaster_system.remaining_time = main.disaster_system.duration * 0.5   # at its height
+			main.disaster_system.apply(main.world, main.agents)
+			main._flush_tile_changes()
+			main.terrain_renderer.flush_all()
+	if args.has("rainbow"):
+		main.weather_system.force_rainbow(look_tile.x, look_tile.y)
+		main.weather_system._rainbow_timer = WeatherSystem.RAINBOW_SECONDS * 0.6   # fully up
+	if args.has("rainbow") or args.has("disaster") or args.has("season"):
+		main._update_sun()
 	if args.has("no-wild") and main.ambient_renderer:
 		main.ambient_renderer.visible = false
 	if args.has("wild") and main.ambient_life:

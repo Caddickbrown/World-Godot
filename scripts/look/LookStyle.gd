@@ -22,6 +22,10 @@ const BARREN := Color(0.62, 0.52, 0.36)
 const TRAMPLED := Color(0.60, 0.50, 0.35)
 const RIVER := Color(0.30, 0.62, 0.70)
 const LAVA := Color(0.55, 0.16, 0.08)
+## Disasters on the land (DisasterSystem writes tile["drought"|"blight"|"flooded"]).
+const PARCHED := Color(0.74, 0.62, 0.38)
+const BLIGHT := Color(0.50, 0.48, 0.42)
+const FLOOD_MUD := Color(0.36, 0.40, 0.36)
 
 const TRIBES := [Color(0.80, 0.42, 0.22), Color(0.88, 0.70, 0.30), Color(0.62, 0.30, 0.24),
 	Color(0.92, 0.86, 0.70), Color(0.30, 0.55, 0.62), Color(0.55, 0.62, 0.30)]
@@ -61,6 +65,8 @@ static func ground(nv: float, h: float, nrm: Vector3, tile: Dictionary, wobble: 
 			c = c.lerp(ASH, 0.75)
 		if bool(tile.get("river", false)):
 			c = c.lerp(RIVER, 0.75)
+		if bool(tile.get("flooded", false)):
+			c = c.lerp(FLOOD_MUD, 0.6)   # the water sheet (DisasterView) sits over it
 	# Sand is a height band (smooth), never the tile type (which steps).
 	if h > -2.5:
 		c = c.lerp(SAND, (1.0 - smoothstep(0.45, 1.1, h)) * (0.85 if h > 0.0 else 0.4))
@@ -70,3 +76,13 @@ static func ground(nv: float, h: float, nrm: Vector3, tile: Dictionary, wobble: 
 	c = c.lerp(ROCK_DARK, smoothstep(0.25, 0.55, slope))
 	c = c.lerp(SNOW, smoothstep(13.0, 17.0, h) * (1.0 - smoothstep(0.35, 0.6, slope)))
 	return g(c)
+
+## Drought browns and blight greys what grows (sand, rock and water keep their
+## colour). The amounts are smooth fields the terrain samples between tiles.
+static func disaster_tint(c: Color, drought: float, blight: float) -> Color:
+	if drought <= 0.0 and blight <= 0.0:
+		return c
+	var green := clampf((c.g - maxf(c.r, c.b)) * 6.0, 0.0, 1.0)
+	c = c.lerp(g(PARCHED), drought * 0.8 * green)
+	c = c.lerp(g(BLIGHT), blight * 0.65 * green)
+	return c
