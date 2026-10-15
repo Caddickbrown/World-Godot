@@ -30,15 +30,18 @@ func _init(concepts_data: Array) -> void:
 # ── Discovery ────────────────────────────────────────────────────────────────
 
 func check_discovery(agent: Agent, tile: Dictionary, delta: float, world: World, all_agents: Array, current_day: int = 0) -> String:
+	# Roll first, check after: a discovery's chance is about 1e-4 a second, and
+	# the conditions are the costly part (some scan every person, or 49 tiles),
+	# so checking them for all 83 ideas, every person, every frame was half of
+	# a frame at 20x. The odds are the same either way: the roll and the
+	# conditions are independent.
+	var base: float = agent.curiosity * delta * discovery_pace * agent.fxf("discovery_bonus")
+	if agent.knowledge.has("curiosity_culture"): base *= 1.2
+	if agent.task == "scout": base *= 1.15
 	for id in concepts:
-		var concept: Dictionary = concepts[id]
 		if agent.knowledge.has(id): continue
-		if not _prerequisites_met(agent, concept): continue
-		if not _conditions_met(agent, tile, concept, world, all_agents): continue
-
-		var prob: float = float(concept.get("discovery_probability", 0.0001)) * agent.curiosity * delta * discovery_pace
-		if agent.knowledge.has("curiosity_culture"): prob *= 1.2
-		if agent.task == "scout": prob *= 1.15
+		var concept: Dictionary = concepts[id]
+		var prob: float = float(concept.get("discovery_probability", 0.0001)) * base
 
 		if id == "fire" and not world.natural_fires.is_empty():
 			var adj := [[0,0],[1,0],[-1,0],[0,1],[0,-1]]
@@ -48,12 +51,14 @@ func check_discovery(agent: Agent, tile: Dictionary, delta: float, world: World,
 					prob *= 30.0
 					break
 
-		if randf() < prob:
-			if known_by[id].is_empty():
-				concept["first_discoverer"] = {"name": agent.agent_name, "id": agent.agent_id, "day": current_day}
-			_grant(agent, id, current_day)
-			events.append({"type": "discovery", "agent_id": agent.agent_id, "agent_name": agent.agent_name, "concept_id": id})
-			return id
+		if randf() >= prob: continue
+		if not _prerequisites_met(agent, concept): continue
+		if not _conditions_met(agent, tile, concept, world, all_agents): continue
+		if known_by[id].is_empty():
+			concept["first_discoverer"] = {"name": agent.agent_name, "id": agent.agent_id, "day": current_day}
+		_grant(agent, id, current_day)
+		events.append({"type": "discovery", "agent_id": agent.agent_id, "agent_name": agent.agent_name, "concept_id": id})
+		return id
 	return ""
 
 func _prerequisites_met(agent: Agent, concept: Dictionary) -> bool:

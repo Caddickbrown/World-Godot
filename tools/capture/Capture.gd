@@ -117,11 +117,18 @@ func _ready() -> void:
 		obs.look_at_point(Vector3(who.pos.x, 0, who.pos.y) * World.TILE_SIZE)
 	if burn_at.x >= 0.0:
 		obs.look_at_point(Vector3(burn_at.x, 0, burn_at.y) * World.TILE_SIZE)
-	if args.has("camp"):
+	if args.has("camp") or args.has("town"):
 		var big = null
 		for st in main.settlement_system.get_settlements():
 			if big == null or st.member_ids.size() > big.member_ids.size():
 				big = st
+		if big and args.has("town"):
+			# Everything a town can put up, to see the layout whole.
+			big.tier = 2
+			for id in ["masonry", "agriculture", "temple", "church", "barn", "woodworking", "irrigation",
+					"coop", "herding", "ritual"]:
+				big.knowledge_pool[id] = true
+			main._update_settlements()
 		if big:
 			obs.look_at_point(Vector3(big.centre.x, 0, big.centre.y) * World.TILE_SIZE)
 			print("[Capture] camp %s: %d people, tier %d, timber %.0f" % [big.name, big.member_ids.size(), big.tier, big.wood_store])

@@ -51,6 +51,43 @@ func clear() -> void:
 	_shown.clear()
 	_mats.clear()
 
+## Ground people have built on (SettlementRenderer.clearings): no wild tree
+## is drawn there, so a house never stands in a trunk. Drawing only: the
+## tile still has its woods in the sim. Vector2i chunk -> PackedVector3Array
+## of (x, z, radius) in world metres.
+var _clearings: Dictionary = {}
+var _clearing_list := PackedVector3Array()
+
+func set_clearings(spots: PackedVector3Array) -> void:
+	if spots == _clearing_list:
+		return
+	_clearing_list = spots
+	var by: Dictionary = {}
+	var span := CHUNK * TILE_SIZE
+	for q in spots:
+		for cz in range(floori((q.y - q.z) / span), floori((q.y + q.z) / span) + 1):
+			for cx in range(floori((q.x - q.z) / span), floori((q.x + q.z) / span) + 1):
+				var c := Vector2i(cx, cz)
+				if not by.has(c):
+					by[c] = PackedVector3Array()
+				var arr: PackedVector3Array = by[c]
+				arr.append(q)
+				by[c] = arr
+	for c in by:
+		if not _clearings.has(c) or _clearings[c] != by[c]:
+			_dirty[c] = true
+	for c in _clearings:
+		if not by.has(c):
+			_dirty[c] = true
+	_clearings = by
+
+func _cleared(c: Vector2i, p: Vector3) -> bool:
+	var spots: PackedVector3Array = _clearings.get(c, PackedVector3Array())
+	for q in spots:
+		if Vector2(p.x - q.x, p.z - q.y).length() < q.z:
+			return true
+	return false
+
 ## A tile's trees changed: redraw its chunk soon (a few chunks a frame).
 func mark_dirty(x: int, z: int) -> void:
 	_dirty[Vector2i(x / CHUNK, z / CHUNK)] = true
@@ -184,11 +221,15 @@ func _draw_tile(x: int, z: int, data: Dictionary) -> void:
 	if World.has_woods(tile) and float(tile.get("growth", 1.0)) >= 0.0:
 		g = floorf(clampf(float(tile.get("growth", 1.0)), 0.0, 1.0) * ForestSystem.VISUAL_STEPS) / ForestSystem.VISUAL_STEPS
 	var counts := [0, 0, 0]
+	var chunk := Vector2i(x / CHUNK, z / CHUNK)
+	var built := _clearings.has(chunk)
 	for slot in _slots(x, z, tile):
 		var kind: String = slot["kind"]
 		if kind == "":
 			continue
 		var p: Vector3 = slot["p"]
+		if built and _cleared(chunk, p):
+			continue
 		var b := Basis(Vector3.UP, float(slot["yaw"]))
 		var s: float = slot["s"]
 		if kind == "snag":

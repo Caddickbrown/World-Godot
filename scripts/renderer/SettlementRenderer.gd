@@ -38,12 +38,24 @@ const _BUILDS_AS := {
 	"fields": ["fields"], "workshop": ["workshop", "forge", "kiln"], "well": ["ditches"],
 	"coop": ["coop"], "pen": ["pens"], "tree_house": ["tree_houses"], "walls": ["walls"],
 }
-## Order the civic ring is filled in (the rest have places of their own).
+## The order a place is laid out in (the rest have places of their own): a
+## "d" is the next dwelling. Every place plans all of it, whatever stands yet,
+## so a new house or a new barn never moves the ones already up; what is not
+## built yet is an empty plot. The well and barn come early, near the hearth;
+## the church, coop and pen late, at the edge.
+const PLAN := ["well", "d", "d", "d", "d", "granary", "workshop", "temple", "d", "d", "d", "d",
+	"church", "coop", "pen", "d", "d", "d", "d"]
 const CIVIC := ["temple", "church", "granary", "workshop", "well", "coop", "pen"]
-const CIVIC_RING := 14.0      # metres from the hearth
-const CIVIC_SLOTS := 12
-const WALL_RING := 18.5
-const FIELD_RING := 25.0
+## Footprint radius (metres) of each thing the plan places.
+const FOOT := {"d": 1.8, "temple": 3.6, "church": 3.4, "granary": 2.8, "workshop": 2.6,
+	"well": 1.3, "coop": 1.5, "pen": 3.6}
+const PLAZA := 3.4            # metres round the hearth kept open
+const LANE_CLEAR := 0.7       # metres a building keeps off a lane's line
+const MAX_SLOPE := 0.45       # rise over run across a footprint
+const TRIES := 40             # candidate spots weighed for each building
+const WALL_MARGIN := 3.0      # metres the wall stands outside the outermost building
+const WALL_SECTORS := 28
+const WALL_PIECE := 2.1       # metres of wall per block
 const SHRINE_AT := Vector2(1.5, 1.5)   # tiles from the hearth: SettlementSystem's temple_pos, where rituals gather
 const TIER_WORDS := ["camp", "hamlet", "town"]
 
@@ -56,6 +68,12 @@ var _kit_mat: StandardMaterial3D
 ## settlement id -> Array of sites {kind, name, pos: Vector2 (world metres), radius, day, settlement}
 var sites: Dictionary = {}
 var _raised: Dictionary = {}      # "id:kind" -> day it first stood
+## settlement id -> {"at": centre, "plan": _plan()}. A plan doesn't depend on
+## what stands yet, only on where the hearth is (and the ground there), so it
+## is made once: a full plan weighs ~760 spots, and a place is redrawn every
+## time its larder fills a fifth.
+var _plans: Dictionary = {}
+var _houses: Dictionary = {}      # settlement id -> dwellings drawn
 
 func clear() -> void:
 	for ch in get_children():
@@ -66,6 +84,7 @@ func clear() -> void:
 
 func restyle() -> void:
 	clear()
+	_plans.clear()
 	_mats.clear()
 	_kit_mat = null
 
@@ -104,6 +123,13 @@ func sync(settlements: Array, fires: Dictionary) -> void:
 	for s in settlements:
 		live[s.id] = true
 		var count := clampi(int(ceil(float(s.member_ids.size()) / PEOPLE_PER_DWELLING)), 2, MAX_DWELLINGS)
+		# A house goes up when it's needed but stands empty a while before it
+		# comes down: people come and go every hour, and redrawing the place
+		# (and clearing its trees) each time was a frame's work for nothing.
+		var had := int(_houses.get(s.id, 0))
+		if count < had and count > had - 2:
+			count = had
+		_houses[s.id] = count
 		var kinds := buildings_for(s)
 		var sig := "%d|%d|%.1f,%.1f|%s|%d|%s" % [int(s.tier), count, s.centre.x, s.centre.y, ",".join(kinds),
 			int(larder_fill(s) * 4.99), season]
@@ -121,6 +147,8 @@ func sync(settlements: Array, fires: Dictionary) -> void:
 			(_built[id]["node"] as Node).queue_free()
 			_built.erase(id)
 			sites.erase(id)
+			_plans.erase(id)
+			_houses.erase(id)
 	_sync_fires(fires)
 
 func _build_settlement(s, count: int, kinds: Array, season: String) -> Node3D:
@@ -130,33 +158,35 @@ func _build_settlement(s, count: int, kinds: Array, season: String) -> Node3D:
 	add_child(root)
 	var list: Array = []
 	sites[s.id] = list
-	var rng := RandomNumberGenerator.new()
+	var rng := RandomNumberGenerator.new()   # colours only; the layout has its own
 	rng.seed = int(s.id) * 7919 + 13
 	var shrine_local := Vector3(SHRINE_AT.x * TILE_SIZE, 0, SHRINE_AT.y * TILE_SIZE)
 	if s.has_temple:
 		shrine_local = Vector3((s.temple_pos.x - s.centre.x) * TILE_SIZE, 0, (s.temple_pos.y - s.centre.y) * TILE_SIZE)
 	var has_shrine := kinds.has("shrine")
 	var dwell_name: String = ["Hide tent", "Round hut", "Timber house"][clampi(int(s.tier), 0, 2)]
-	for i in count:
-		# Rings: six round the hearth, then a wider ring.
-		var ring := 0 if i < 6 else 1
-		var in_ring := 6 if ring == 0 else 10
-		var a := TAU * float(i % in_ring) / float(in_ring) + rng.randf_range(-0.2, 0.2) + ring * 0.3
-		var r := (5.0 if ring == 0 else 9.5) + rng.randf_range(-0.6, 0.6)
-		var p := Vector3(cos(a) * r, 0, sin(a) * r)
-		if has_shrine and Vector2(p.x - shrine_local.x, p.z - shrine_local.z).length() < 2.8:
-			continue   # the shrine stands here
-		var wp := c + p
-		var tx := wp.x / TILE_SIZE
-		var tz := wp.z / TILE_SIZE
-		if world and not world.is_walkable(tx, tz):
-			continue
-		p.y = (world.surface_y(tx, tz) if world else 0.0)
-		var d := _dwelling(int(s.tier), rng, bool(ConceptEffects.settlement_fx(s)["unlocks_stone_buildings"]))
-		d.position = p
-		d.rotation.y = atan2(-p.x, -p.z)  # doors face the hearth
-		root.add_child(d)
-		list.append(_site("dwelling", "%s · %s" % [dwell_name, s.name], c + p, 1.8, s))
+	var cached: Dictionary = _plans.get(s.id, {})
+	if cached.is_empty() or (cached["at"] as Vector2).distance_to(s.centre) > 0.01:
+		cached = {"at": s.centre, "plan": _plan(s, c, shrine_local)}
+		_plans[s.id] = cached
+	var plan: Dictionary = cached["plan"]
+	var stone := bool(ConceptEffects.settlement_fx(s)["unlocks_stone_buildings"])
+	var drawn: Array = []          # {p, foot} of what stands, for the wall and fields
+	var house := 0
+	for spot in plan["spots"]:
+		var what: String = spot["what"]
+		var p: Vector3 = spot["p"]
+		if what == "d":
+			house += 1
+			if house > count:
+				continue
+			p.y = world.surface_y((c.x + p.x) / TILE_SIZE, (c.z + p.z) / TILE_SIZE) if world else 0.0
+			var d := _dwelling(int(s.tier), rng, stone)
+			d.position = p
+			d.rotation.y = float(spot["yaw"])
+			root.add_child(d)
+			list.append(_site("dwelling", "%s · %s" % [dwell_name, s.name], c + p, 1.8, s))
+			drawn.append(spot)
 	# The hearth ring of stones
 	var hy := world.surface_y(s.centre.x, s.centre.y) if world else 0.0
 	for i in 8:
@@ -167,36 +197,19 @@ func _build_settlement(s, count: int, kinds: Array, season: String) -> Node3D:
 		st.material_override = _mat(Color(0.5, 0.48, 0.46))
 		root.add_child(st)
 	list.append(_site("hearth", str(s.name), c, 2.4, s))
-	# What they know, standing round them, all in one mesh.
+	# What they know, standing among them, all in one mesh.
 	var kit := PropKit.new()
-	var used: Array = []   # local Vector2 positions taken, with radius in z
 	if has_shrine:
 		var sp := _ground(c, shrine_local)
 		_shrine(kit, PropKit.at(sp, atan2(-sp.x, -sp.z)))
 		list.append(_site("shrine", "Shrine of %s" % s.name, c + sp, 1.6, s))
-	var slot0 := float(posmod(int(s.id) * 5 + 3, CIVIC_SLOTS))
-	var free_slots: Array = []
-	for k in CIVIC_SLOTS:
-		var a := TAU * (slot0 + k) / CIVIC_SLOTS
-		var p := Vector3(cos(a), 0, sin(a)) * CIVIC_RING
-		if _land_ok(c + p, 2.2):
-			free_slots.append(p)
-	# The temple faces the shrine's side of the hearth: take the slot nearest it.
-	for kind in CIVIC:
-		if not kinds.has(kind) or free_slots.is_empty():
+	for spot in plan["spots"]:
+		var kind: String = spot["what"]
+		if kind == "d" or not kinds.has(kind):
 			continue
-		var pick := 0
-		if kind == "temple":
-			var best := INF
-			for j in free_slots.size():
-				var d: float = (free_slots[j] as Vector3).normalized().distance_to(shrine_local.normalized())
-				if d < best:
-					best = d
-					pick = j
-		var p: Vector3 = free_slots[pick]
-		free_slots.remove_at(pick)
+		var p: Vector3 = spot["p"]
 		var gp := _ground(c, p, 2.0)
-		var xf := PropKit.at(gp, atan2(-p.x, -p.z))   # fronts face the hearth
+		var xf := PropKit.at(gp, float(spot["yaw"]))
 		var label := ""
 		match kind:
 			"temple":
@@ -221,14 +234,17 @@ func _build_settlement(s, count: int, kinds: Array, season: String) -> Node3D:
 				_pen(kit, xf)
 				label = "Sheep pen · %s" % s.name
 		list.append(_site(kind, label, c + gp, 3.4 if kind in ["temple", "church", "pen"] else 2.6, s))
-		used.append(p)
-	var gate_a := TAU * (slot0 + 0.5) / CIVIC_SLOTS
+		drawn.append(spot)
+	var lanes: Array = plan["lanes"]
+	var edge := _edge(drawn)
 	if kinds.has("walls"):
-		_walls(kit, c, gate_a)
-		list.append(_site("walls", "Walls of %s" % s.name, c, WALL_RING, s))
+		var line := _walls(kit, c, edge, lanes[0])
+		var site := _site("walls", "Walls of %s" % s.name, c, 0.0, s)
+		site["line"] = line
+		list.append(site)
 	var field_spots: Array = []
 	if kinds.has("fields"):
-		field_spots = _fields(kit, c, s, season, gate_a, list)
+		field_spots = _fields(kit, c, s, season, lanes[1], edge, kinds.has("walls"), drawn, list)
 	if kinds.has("well") and not field_spots.is_empty():
 		for site in list:
 			if site["kind"] == "well":
@@ -276,7 +292,7 @@ func pick(world_xz: Vector2) -> Dictionary:
 			var r: float = site["radius"]
 			var d := world_xz.distance_to(p)
 			if site["kind"] == "walls":
-				d = absf(d - r)
+				d = _line_dist(site.get("line", PackedVector2Array()), world_xz)
 				if d > 1.6:
 					continue
 				d += 1.0   # anything else this close wins
@@ -288,6 +304,28 @@ func pick(world_xz: Vector2) -> Dictionary:
 				best_d = d
 				best = site
 	return best
+
+## Distance from a point to a closed line.
+static func _line_dist(line: PackedVector2Array, p: Vector2) -> float:
+	var best := INF
+	for i in line.size():
+		var a := line[i]
+		var b := line[(i + 1) % line.size()]
+		best = minf(best, p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b)))
+	return best
+
+## Where wild trees must not be drawn: every building's and field's
+## footprint, as (x, z, radius) in world metres. Not the tree house (it is
+## in one), the jetty (over water) or the wall (a line).
+func clearings() -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for id in sites:
+		for site in sites[id]:
+			if str(site["kind"]) in ["walls", "tree_house", "docks"]:
+				continue
+			var p: Vector2 = site["pos"]
+			out.append(Vector3(p.x, p.y, float(site["radius"]) + 1.4))   # and a crown's width
+	return out
 
 ## Every site of one kind (tests, the island screen).
 func sites_of(settlement_id: int) -> Array:
@@ -545,39 +583,244 @@ func _docks(k: PropKit, xf: Transform3D) -> void:
 	k.box(Vector3(0.04, 1.6, 1.2), xf * PropKit.at(bp + Vector3(0, 1.75, -0.35)), _c(Color(0.96, 0.92, 0.82) if _story() else Color(0.80, 0.76, 0.66)))
 
 ## A ring of dry-stone wall round the town, with a gate and two towers.
-func _walls(k: PropKit, c: Vector3, gate_a: float) -> void:
-	var n := int(TAU * WALL_RING / 2.0)
+# ── Layout ───────────────────────────────────────────────────────────────────
+## A place grows out from its hearth the way real ones do: each building goes
+## up beside ones already standing, fronting one of the lanes people walk out
+## on (to the gate, the fields, the woods), on ground that is dry and not too
+## steep. The edge is wherever the building stopped, so a place on a headland
+## is long and thin, one in a valley follows it, and no two share a shape.
+## Seeded by the settlement's id and the ground, never the global RNG.
+
+## Lanes: {a0, bend, phase}. Lane 0 is the way in (the gate, for a town),
+## lane 1 heads for the fields, lane 2 somewhere between.
+static func _lanes_for(rng: RandomNumberGenerator) -> Array:
+	var a0 := rng.randf() * TAU
+	var out: Array = []
+	for a in [a0, a0 + PI + rng.randf_range(-0.5, 0.5), a0 + (1.0 if rng.randf() < 0.5 else -1.0) * rng.randf_range(1.4, 2.1)]:
+		out.append({"a0": a, "bend": rng.randf_range(0.12, 0.3) * (1.0 if rng.randf() < 0.5 else -1.0),
+			"phase": rng.randf() * TAU})
+	return out
+
+## The lane's heading at r metres out: it wanders, gently.
+static func _lane_angle(lane: Dictionary, r: float) -> float:
+	return float(lane["a0"]) + float(lane["bend"]) * sin(r * 0.11 + float(lane["phase"]))
+
+## Roughly how far (metres) a local point lies off a lane.
+static func _lane_off(lane: Dictionary, p: Vector3) -> float:
+	var r := Vector2(p.x, p.z).length()
+	return absf(wrapf(atan2(p.z, p.x) - _lane_angle(lane, r), -PI, PI)) * r
+
+## Every building's spot, in PLAN order: [{what, p (local), yaw, foot}].
+func _plan(s, c: Vector3, shrine_local: Vector3) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(s.id) * 104729 + 7
+	var lanes := _lanes_for(rng)
+	var placed: Array = [{"what": "hearth", "p": Vector3.ZERO, "foot": PLAZA - 1.0}]
+	# Where the sim gathers for rituals stays clear whether or not it stands yet.
+	placed.append({"what": "shrine", "p": shrine_local, "foot": 2.0})
+	var spots: Array = []
+	for what in PLAN:
+		var foot: float = FOOT[what]
+		var best: Dictionary = {}
+		var best_score := INF
+		# How far out the houses so far reach, on average: the edge-lovers
+		# (coop, pen) stand just past it, and new spots are sought within it.
+		var reach := 0.0
+		var homes := 0
+		for q in placed:
+			if q["what"] == "d":
+				reach += Vector2(q["p"].x, q["p"].z).length()
+				homes += 1
+		reach = reach / homes + 2.0 if homes > 0 else PLAZA + 3.0
+		for _i in TRIES:
+			# Draw the same numbers whatever happens, so each building's spot
+			# depends only on the ones planned before it.
+			var lane: Dictionary = lanes[rng.randi() % lanes.size()]
+			var along := rng.randf_range(PLAZA + foot, PLAZA + foot + 3.0 + reach)
+			var side := 1.0 if rng.randf() < 0.5 else -1.0
+			var off := foot + LANE_CLEAR + rng.randf_range(0.2, 1.6)
+			var anchor: Dictionary = placed[rng.randi() % placed.size()]
+			var dir := rng.randf() * TAU
+			var gap := rng.randf_range(0.6, 1.9)
+			var by_lane := rng.randf() < 0.5
+			var noise := rng.randf()
+			var p: Vector3
+			if by_lane:
+				var a := _lane_angle(lane, along)
+				p = Vector3(cos(a), 0, sin(a)) * along + Vector3(-sin(a), 0, cos(a)) * side * off
+			else:
+				p = anchor["p"] + Vector3(cos(dir), 0, sin(dir)) * (float(anchor["foot"]) + foot + gap)
+			var score := _spot_score(what, p, foot, placed, lanes, shrine_local, reach, c)
+			if score == INF:
+				continue
+			score += noise * 2.0
+			if score < best_score:
+				best_score = score
+				best = {"what": what, "p": p, "foot": foot}
+		if best.is_empty():
+			continue    # nowhere fit: that plot is never built
+		best["yaw"] = _facing(best["p"], lanes, rng.randf_range(-0.22, 0.22))
+		placed.append(best)
+		spots.append(best)
+	return {"spots": spots, "lanes": lanes}
+
+## Lower is better; INF: can't stand here.
+func _spot_score(what: String, p: Vector3, foot: float, placed: Array, lanes: Array,
+		shrine_local: Vector3, reach: float, c: Vector3) -> float:
+	var r := Vector2(p.x, p.z).length()
+	if r < PLAZA + foot * 0.6:
+		return INF
+	var front := INF
+	for lane in lanes:
+		var off := _lane_off(lane, p)
+		if off < foot + LANE_CLEAR and r > PLAZA:
+			return INF    # lanes stay open
+		front = minf(front, off)
+	var near := 0
+	for q in placed:
+		var d := Vector2(p.x - q["p"].x, p.z - q["p"].z).length()
+		var need: float = float(q["foot"]) + foot + 0.6
+		if d < need:
+			return INF
+		if d < need + 3.5:
+			near += 1
+	if not _land_ok(c + p, foot) or _slope(c + p, foot) > MAX_SLOPE:
+		return INF
+	# Compact, along a lane, among neighbours.
+	var score := r + minf(absf(front - (foot + LANE_CLEAR + 0.9)), 4.0) * 0.6 - near * 0.7
+	match what:
+		"church", "granary", "workshop":
+			score = r * 1.5 + minf(absf(front - (foot + LANE_CLEAR + 0.9)), 4.0) * 0.6
+		"temple":
+			score = Vector2(p.x - shrine_local.x, p.z - shrine_local.z).length() * 1.4 - near * 0.3
+		"well":
+			score = r * 1.6
+		"coop", "pen":
+			score = absf(r - (reach + foot)) * 1.2 - near * 0.3   # at the edge, by the last houses
+	return score
+
+## Doors face the nearest lane, else the hearth, give or take.
+static func _facing(p: Vector3, lanes: Array, jitter: float) -> float:
+	var r := Vector2(p.x, p.z).length()
+	var target := Vector3.ZERO
+	var best := 7.0
+	for lane in lanes:
+		var off := _lane_off(lane, p)
+		if off < best:
+			best = off
+			var a := _lane_angle(lane, r)
+			target = Vector3(cos(a), 0, sin(a)) * r
+	var dir := target - p
+	return atan2(dir.x, dir.z) + jitter
+
+## How much the ground rises across a footprint (rise over run).
+func _slope(wp: Vector3, foot: float) -> float:
+	if world == null:
+		return 0.0
+	var lo := INF
+	var hi := -INF
+	for o in [Vector2(foot, 0), Vector2(-foot, 0), Vector2(0, foot), Vector2(0, -foot)]:
+		var y := world.surface_y((wp.x + o.x) / TILE_SIZE, (wp.z + o.y) / TILE_SIZE)
+		lo = minf(lo, y)
+		hi = maxf(hi, y)
+	return (hi - lo) / (2.0 * foot)
+
+## The built edge: for each of WALL_SECTORS headings, how far out (metres)
+## the outermost building reaches, smoothed so it never cuts inside one.
+static func _edge(drawn: Array) -> PackedFloat32Array:
+	var raw := PackedFloat32Array()
+	raw.resize(WALL_SECTORS)
+	raw.fill(PLAZA + 2.0)
+	var width := TAU / WALL_SECTORS
+	for q in drawn:
+		var p: Vector3 = q["p"]
+		var r := Vector2(p.x, p.z).length()
+		var a := atan2(p.z, p.x)
+		var foot: float = q["foot"]
+		# A building covers the headings its footprint spans.
+		var span := asin(clampf(foot / maxf(r, foot), 0.0, 1.0)) + width * 0.5
+		for k in WALL_SECTORS:
+			var d := absf(wrapf(k * width - a, -PI, PI))
+			if d <= span:
+				raw[k] = maxf(raw[k], r * cos(minf(d, PI / 2.0)) + foot)
+	var e := raw.duplicate()
+	for _pass in 3:
+		var nxt := e.duplicate()
+		for k in WALL_SECTORS:
+			var avg := (e[(k - 1 + WALL_SECTORS) % WALL_SECTORS] + 2.0 * e[k] + e[(k + 1) % WALL_SECTORS]) * 0.25
+			nxt[k] = maxf(raw[k], avg)
+		e = nxt
+	return e
+
+## The edge's reach (metres) at a heading, between sectors.
+static func _edge_at(edge: PackedFloat32Array, a: float) -> float:
+	var f := wrapf(a, 0.0, TAU) / (TAU / WALL_SECTORS)
+	var k := int(f) % WALL_SECTORS
+	return lerpf(edge[k], edge[(k + 1) % WALL_SECTORS], f - floorf(f))
+
+## A town wall round its built edge, with a gate where the way in (lane 0)
+## crosses it. Returns the wall's line in world metres (for picking).
+func _walls(k: PropKit, c: Vector3, edge: PackedFloat32Array, way_in: Dictionary) -> PackedVector2Array:
 	var stone := Color(0.66, 0.63, 0.58)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(c.x * 31.0 + c.z * 17.0)
-	for i in n:
-		var a := TAU * (float(i) + 0.5) / n
-		var gap := absf(wrapf(a - gate_a, -PI, PI))
-		if gap < 0.13:
+	# A fine closed line round the edge, a little out from it, with a slight
+	# wobble so it reads as built by hand, not drawn with compasses.
+	var fine: Array = []
+	var steps := WALL_SECTORS * 4
+	for i in steps:
+		var a := TAU * float(i) / steps
+		var r := _edge_at(edge, a) + WALL_MARGIN + 0.35 * sin(a * 5.0 + c.x) + 0.25 * sin(a * 9.0 + c.z)
+		fine.append(Vector3(cos(a), 0, sin(a)) * r)
+	# Walk it, a block every WALL_PIECE metres.
+	var pts: Array = [fine[0]]
+	var carry := 0.0
+	for i in steps:
+		var a: Vector3 = fine[i]
+		var b: Vector3 = fine[(i + 1) % steps]
+		var seg := a.distance_to(b)
+		var t := WALL_PIECE - carry
+		while t <= seg:
+			pts.append(a.lerp(b, t / seg))
+			t += WALL_PIECE
+		carry = seg - (t - WALL_PIECE)
+	var line := PackedVector2Array()
+	for p in pts:
+		line.append(Vector2(c.x + p.x, c.z + p.z))
+	# The gate: where the way in meets the wall.
+	var gr := _edge_at(edge, _lane_angle(way_in, 12.0)) + WALL_MARGIN
+	var ga := _lane_angle(way_in, gr)
+	var gate := Vector3(cos(ga), 0, sin(ga)) * gr
+	for i in pts.size():
+		var a: Vector3 = pts[i]
+		var b: Vector3 = pts[(i + 1) % pts.size()]
+		var mid := (a + b) * 0.5
+		if mid.distance_to(gate) < 2.4 or not _land_ok(c + mid, 0.4):
 			continue
-		var p := Vector3(cos(a), 0, sin(a)) * WALL_RING
-		if not _land_ok(c + p, 0.4):
-			continue
-		var gp := _ground(c, p, 0.9)
-		var h := 0.8 + rng.randf_range(-0.08, 0.08)
-		# Along the ring (yaw -a turned the blocks to point outwards, so the
-		# wall read as a ring of stepping stones).
-		var along := -a + PI / 2.0
-		k.box(Vector3(2.15, h + 0.4, 0.6), PropKit.at(gp + Vector3(0, (h + 0.4) * 0.5 - 0.4, 0), along), _c(stone, rng.randf() * 0.12))
-		k.box(Vector3(2.2, 0.14, 0.72), PropKit.at(gp + Vector3(0, h + 0.04, 0), along), _c(stone.lightened(0.12)))
+		var gp := _ground(c, mid, 0.9)
+		var h := 0.8 + rng.randf_range(-0.1, 0.1)
+		var dir := b - a
+		var along := atan2(-dir.z, dir.x)
+		var len := dir.length() + 0.12
+		k.box(Vector3(len, h + 0.4, 0.6), PropKit.at(gp + Vector3(0, (h + 0.4) * 0.5 - 0.4, 0), along), _c(stone, rng.randf() * 0.12))
+		k.box(Vector3(len + 0.05, 0.14, 0.72), PropKit.at(gp + Vector3(0, h + 0.04, 0), along), _c(stone.lightened(0.12)))
+	# Towers either side of the gate, on the wall's line.
+	var tangent := Vector3(-sin(ga), 0, cos(ga))
 	for side in [-1.0, 1.0]:
-		var a: float = gate_a + side * 0.17
-		var p := Vector3(cos(a), 0, sin(a)) * WALL_RING
+		var p: Vector3 = gate + tangent * side * 3.0
 		if not _land_ok(c + p, 0.8):
 			continue
 		var gp := _ground(c, p, 1.0)
 		k.cyl(0.95, 1.05, 2.6, PropKit.at(gp + Vector3(0, -0.3, 0)), _c(stone), 8)
 		k.cyl(0.0, 1.25, 1.2, PropKit.at(gp + Vector3(0, 2.3, 0)), _c(Color(0.80, 0.42, 0.28) if _story() else Color(0.40, 0.38, 0.36)), 8)
+	return line
 
-## Two to four plots of crops outside the town, rows facing the hearth. The
-## crop follows the season: green shoots, tall green-gold, gold with sheaves,
-## then bare ridges. Returns the plots' local centres.
-func _fields(k: PropKit, c: Vector3, s, season: String, gate_a: float, list: Array) -> Array:
+## Two to four plots of crops just outside the built edge (or the wall), off
+## towards the field lane, each turned its own way. The crop follows the
+## season: green shoots, tall green-gold, gold with sheaves, then bare
+## ridges. Returns the plots' local centres.
+func _fields(k: PropKit, c: Vector3, s, season: String, lane: Dictionary, edge: PackedFloat32Array,
+		walled: bool, drawn: Array, list: Array) -> Array:
 	var spots: Array = []
 	var want := clampi(2 + int(s.member_ids.size() / 8), 2, 4)
 	var soil := _c(Color(0.45, 0.32, 0.20))
@@ -590,11 +833,15 @@ func _fields(k: PropKit, c: Vector3, s, season: String, gate_a: float, list: Arr
 		"winter": tall = 0.0
 	crop = _c(crop)
 	var crop_name := "Wheat field" if season != "winter" else "Fallow field"
-	for k_i in 10:
+	var frng := RandomNumberGenerator.new()
+	frng.seed = int(s.id) * 6271 + 3
+	for k_i in 14:
+		var a := _lane_angle(lane, 20.0) + (float(k_i % 2) * 2.0 - 1.0) * float(k_i + 1) * 0.21 + frng.randf_range(-0.12, 0.12)
+		var r := _edge_at(edge, a) + (WALL_MARGIN + 1.5 if walled else 1.0) + 4.6 + frng.randf_range(0.0, 2.5)
+		var tilt := frng.randf_range(-0.35, 0.35)
 		if spots.size() >= want:
-			break
-		var a := gate_a + PI + (float(k_i) - 4.5) * 0.42
-		var p := Vector3(cos(a), 0, sin(a)) * FIELD_RING
+			continue   # same numbers drawn either way
+		var p := Vector3(cos(a), 0, sin(a)) * r
 		var wp := c + p
 		if not _land_ok(wp, 3.4):
 			continue
@@ -605,10 +852,13 @@ func _fields(k: PropKit, c: Vector3, s, season: String, gate_a: float, list: Arr
 		for q in spots:
 			if (q as Vector3).distance_to(p) < 8.0:
 				clash = true
+		for q in drawn:
+			if (q["p"] as Vector3).distance_to(p) < float(q["foot"]) + 4.6:
+				clash = true
 		if clash:
 			continue
 		spots.append(p)
-		var yaw := -a + PI / 2.0
+		var yaw := -a + PI / 2.0 + tilt
 		var basis := Basis(Vector3.UP, yaw)
 		for row in 7:
 			var rx := -3.0 + row

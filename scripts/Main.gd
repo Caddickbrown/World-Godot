@@ -272,6 +272,22 @@ func _init_world() -> void:
 
 # ── Process (game loop) ───────────────────────────────────────────────────────
 
+## Opt-in timing of each stage of a simulated frame (tools/profile.gd).
+var profiling := false
+var profile: Dictionary = {}       # stage -> microseconds, summed
+var _prof_t := 0
+
+func _prof_start() -> void:
+	if profiling:
+		_prof_t = Time.get_ticks_usec()
+
+func _prof(stage: String) -> void:
+	if not profiling:
+		return
+	var now := Time.get_ticks_usec()
+	profile[stage] = int(profile.get(stage, 0)) + now - _prof_t
+	_prof_t = now
+
 func _process(delta: float) -> void:
 	_update_view_overlays()
 	if game_over: return
@@ -284,6 +300,7 @@ func _process(delta: float) -> void:
 		_update_hud()
 		return
 
+	_prof_start()
 	var season := time_system.season.to_lower()
 	weather_system.update(game_delta, time_system.season, world, time_system.hour)
 	world.day = time_system.day
@@ -326,6 +343,7 @@ func _process(delta: float) -> void:
 	if weather_system.is_storm:
 		_maybe_lightning(game_delta)
 
+	_prof("world, weather, fire, disasters")
 	# Spatial grid update (before agent ticks so proximity queries are fresh)
 	spatial_grid.update(agents)
 
@@ -338,6 +356,7 @@ func _process(delta: float) -> void:
 			if a.fxb("unlocks_tasks") and a.task.is_empty():
 				a.adopt_task(agents)
 
+	_prof("people (Agent ticks)")
 	# Handle births
 	_handle_births()
 
@@ -347,6 +366,7 @@ func _process(delta: float) -> void:
 	# Handle campfires
 	_handle_campfires(game_delta)
 
+	_prof("births, idea events, campfires")
 	# Ecology, conflict, trading, crafting, settlements
 	ecology_system.tick(game_delta, world, agents, time_system.day, history_log)
 	conflict_system.tick(game_delta, agents, time_system.day, history_log, spatial_grid)
@@ -357,9 +377,11 @@ func _process(delta: float) -> void:
 			_push_notification("A sickness is spreading!")
 		else:
 			_push_notification("The sickness has passed.")
+	_prof("ecology, conflict, disease")
 	trading_system.tick(game_delta, agents, item_defs, time_system.day, history_log, spatial_grid)
 	for kill in hunting_system.tick(game_delta, agents, animal_sim, spatial_grid):
 		story.on_hunt(kill["hunter"], int(kill["prey_type"]), int(kill["shared"]))
+	_prof("trading, hunting")
 	# Firsts people did (the first boat, climb, cooked meal...): told once.
 	for d in concept_graph.drain_deeds():
 		story.add("people", str(d["text"]), d["pos"], [int(d["id"])], true)
@@ -368,8 +390,10 @@ func _process(delta: float) -> void:
 			story.life_of(who).events.append({"day": time_system.day, "text": str(d["text"]), "kind": "people"})
 	for evt in forest_system.tick(game_delta, world, agents, settlement_system, season, time_system.day):
 		story.on_forest(evt)
+	_prof("forest")
 	crafting_system.tick(game_delta, agents, item_defs, time_system.day, history_log)
 	settlement_system.tick(game_delta, agents, concept_graph, time_system.day, history_log, spatial_grid)
+	_prof("crafting, settlements")
 	tile_items.tick_spoilage(game_delta, item_defs, disaster_system.get_spoilage_mult())
 	animal_skill_system.tick_passive(game_delta)
 
@@ -423,6 +447,7 @@ func _process(delta: float) -> void:
 	# Sun position (day/night)
 	_update_sun()
 
+	_prof("vocations, achievements, deaths, sun")
 	# Tick wildlife
 	animal_sim.tick(game_delta, world)
 	ambient_life.tick(game_delta, time_system.hour, time_system.season, agents, weather_system.is_raining)
@@ -431,19 +456,26 @@ func _process(delta: float) -> void:
 	_tick_population(game_delta)
 	_tick_animal_minds(game_delta)
 
+	_prof("animals, animal minds, ambient life")
 	# Push any tile changes this frame into the chunked terrain mesh.
 	_flush_tile_changes()
+	_prof("tile redraws (terrain, flora)")
 	path_system.tick(game_delta, agents, world, settlement_system.get_settlements(), time_system.day)
-	path_renderer.sync(path_system)
+	_prof("path footfall")
+	path_renderer.sync(path_system, delta)
+	_prof("path drawing")
 	island_history.observe(self)
+	_prof("island history")
 
 	_feed_story(game_delta, alive_count)
 
+	_prof("story")
 	# Rendering
 	agent_renderer.update()
 	animal_renderer.update()
 	_update_settlements()
 	_update_hud()
+	_prof("renderers, settlements, HUD")
 
 ## The dead lie where they fell for a while (mourners gather), then are
 ## buried: their figure goes and they stop being ticked. Their story stays in
@@ -952,6 +984,7 @@ func _update_settlements() -> void:
 	var all: Array = settlement_system.get_settlements()
 	settlement_renderer.darkness = sky.darkness(time_system.time_of_day)
 	settlement_renderer.sync(all, world.natural_fires)
+	environment_renderer.set_clearings(settlement_renderer.clearings())
 	terrain_renderer.set_camps(all.map(func(st): return st.centre * TILE_SIZE))
 
 # ── New system helpers ────────────────────────────────────────────────────────

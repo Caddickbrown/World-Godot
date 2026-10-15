@@ -129,3 +129,18 @@ One line of cause, one line of rule.
   read. `tests/suites/40_ideas.gd` now fails on any unread key.
 - **Tests that leave a current camera behind steal the next scene's.** Remove test nodes from the
   tree before freeing them.
+
+## Performance (tools/profile.gd)
+
+- **Measure before you port.** At 20x with 150 people a frame took 68 ms. Half of it was one function:
+  `check_discovery` checked every idea's conditions, some scanning every person, before rolling a
+  1-in-10,000 chance. Rolling first gave the same odds at a third of the cost. No language change
+  beats skipping the work.
+- **Spikes hide in averages.** The paths mesh cost "5 ms a frame" but was really a 35–80 ms rebuild
+  every 1.5 s. Time single calls, not just shares. The fix was to rebuild only what changed, in
+  chunks, with a budget per pass.
+- **A profiler's clock can lie.** `get_process_delta_time()` inside a hand-driven loop returns a
+  stale value, so cooldowns ran 10x too often in the profile. Pass the delta in.
+- **Hysteresis on anything drawn from a count.** A settlement's houses flickered 3↔4 as people
+  came and went, and every flicker rebuilt the place and its trees.
+
