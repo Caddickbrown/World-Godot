@@ -287,8 +287,8 @@ var is_elderly: bool:
 var speed_mult: float:
 	get:
 		if mourning > 0.0:
-			return _base_speed_mult() * 0.75
-		return _base_speed_mult()
+			return _base_speed_mult() * 0.75 * ride_mult
+		return _base_speed_mult() * ride_mult
 
 func _base_speed_mult() -> float:
 	match life_stage:
@@ -1177,3 +1177,11 @@ static func _random_name() -> String:
 			_names_given[name_] = true
 			return name_
 	return "Ael%d" % _names_given.size()
+
+# ── Animals (AnimalMinds sets these; see docs/features/animals.md) ───────────
+
+## The tame horse this person is riding (-1: on foot). AgentRenderer seats
+## them on it.
+var riding_horse_id: int = -1
+## Speed from the horse under them: 1.8 on open grass, about 1.0 in forest.
+var ride_mult: float = 1.0

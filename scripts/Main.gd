@@ -394,6 +394,7 @@ func _process(delta: float) -> void:
 	# Tick wildlife
 	animal_sim.tick(game_delta, world)
 	_tick_population(game_delta)
+	_tick_animal_minds(game_delta)
 
 	# Push any tile changes this frame into the chunked terrain mesh.
 	_flush_tile_changes()
@@ -961,3 +962,19 @@ func _find_agent(id: int) -> Agent:
 		if a.agent_id == id:
 			return a
 	return null
+
+# ── Animal minds (appended; see docs/features/animals.md) ────────────────────
+
+## Packs, taming, riding, flocks at camp and the rare predator attack.
+## Built lazily for each new world so _reset() needs no edit.
+var animal_minds: AnimalMinds
+
+func _tick_animal_minds(game_delta: float) -> void:
+	if animal_minds == null or animal_minds.sim != animal_sim:
+		animal_minds = AnimalMinds.new()
+		animal_minds.setup(world, animal_sim, population_manager, animal_skill_system)
+	for evt in animal_minds.tick(game_delta, agents, settlement_system, time_system, history_log):
+		story.add(str(evt["kind"]), str(evt["text"]), evt["pos"], evt["ids"], bool(evt["major"]))
+		var who = evt.get("who")
+		if who != null and str(evt.get("life", "")) != "":
+			story.life_of(who).events.append({"day": time_system.day, "text": str(evt["life"]), "kind": "people"})

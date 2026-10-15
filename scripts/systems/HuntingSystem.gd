@@ -7,6 +7,7 @@ extends RefCounted
 
 const PREY := [AnimalSim.AnimalType.DEER, AnimalSim.AnimalType.RABBIT]
 const HUNT_RANGE := 10.0      # tiles a hunter will go after prey
+const DOG_RANGE := 4.0        # a hunter's dog finds game this much further off
 const KILL_RANGE := 0.9
 const HUNGRY_BELOW := 0.55
 const MEAT := {AnimalSim.AnimalType.DEER: 0.7, AnimalSim.AnimalType.RABBIT: 0.35}
@@ -36,8 +37,7 @@ func tick(delta: float, agents: Array, animal_sim: AnimalSim, spatial_grid = nul
 			continue
 		var d: float = a.pos.distance_to(prey.pos)
 		if d <= KILL_RANGE:
-			prey.health = 0.0
-			prey.state = AnimalSim.AnimalState.DEAD
+			animal_sim.kill(prey, "hunted")
 			a.needs["hunger"] = minf(1.0, a.needs["hunger"] + float(MEAT.get(prey.animal_type, 0.3)))
 			var shared := 0
 			var near: Array = spatial_grid.get_nearby_agents(a.pos, SHARE_RADIUS) if spatial_grid != null else agents
@@ -57,11 +57,18 @@ func tick(delta: float, agents: Array, animal_sim: AnimalSim, spatial_grid = nul
 			a.needs_check_timer = maxf(a.needs_check_timer, RETHINK + 0.5)
 	return kills
 
+## Deer and rabbits keep their distance from people now (AnimalSim fear), so a
+## hunt is a chase: the prey bolts, tires, and a hunter on foot closes in.
 func _nearest_prey(a: Agent, animal_sim: AnimalSim) -> AnimalSim.Animal:
 	var best: AnimalSim.Animal = null
-	var best_d := HUNT_RANGE
+	var reach := HUNT_RANGE
 	for an in animal_sim.animals:
-		if an.state == AnimalSim.AnimalState.DEAD or not (an.animal_type in PREY):
+		if an.owner_id == a.agent_id and an.animal_type == AnimalSim.AnimalType.WOLF and an.alive:
+			reach += DOG_RANGE
+			break
+	var best_d := reach
+	for an in animal_sim.animals:
+		if an.state == AnimalSim.AnimalState.DEAD or not (an.animal_type in PREY) or an.is_kept:
 			continue
 		var d: float = a.pos.distance_to(an.pos)
 		if d < best_d:
