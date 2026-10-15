@@ -9,8 +9,12 @@ var birth_events: Array = []    # { x, z, parent_name, parent_a_id, parent_b_id,
 ## and writing on day 3, so a world's story was spent in half an hour, and no
 ## idea was ever lost because everything spread too fast for anyone to die the
 ## last holder. Measured with tools/balance.gd; see the commit that set them.
-static var discovery_pace := 0.35
-static var spread_pace := 0.45
+## Re-measured after the double-ticked-newborn fix (which had been doubling
+## every child's chances): discovery barely moves the result, because a
+## discovery needs its prerequisites held by that one person; spreading is
+## the real gate.
+static var discovery_pace := 0.6
+static var spread_pace := 0.9
 ## Crafts (era 2 and later) have to be taught: only an adult can pass one on,
 ## infants can't take one up, and they spread more slowly than ideas anyone
 ## can copy by watching. That makes them fragile: a craft held by a few can

@@ -93,3 +93,11 @@ One line of cause, one line of rule.
   now buried half a day after death (the story keeps them).
 - **A parse error in the test runner is a 10-minute hang**, not a failure: a scene whose
   script fails to load never quits. CI now parse-checks `tests/*.gd` first.
+- **The wildlife was mostly invisible, and nobody could tell.** The animal FBX files import at
+  different unit scales and hand-tuned per-species scales left rabbits 7 cm tall, foxes
+  14 cm, pigs 1.7 cm; the horse had no mesh at all. Paused captures also left every animal at
+  the map origin. Rule: measure models (skinned ones through the skin's bind pose, where the
+  unit scale lives), scale to a real height, and test that every species is a visible size.
+- **A Python "rewrite in place" that opens for write before reading empties the file.**
+  `open(p,'w').write(open(p).read())` truncated Capture.gd; the empty script then hung
+  the capture scene. Read first, then write.

@@ -18,21 +18,24 @@ const MESH_PATHS: Dictionary = {
 	9: "res://assets/animals/Bear/SKM_Bear_Animations.fbx",
 }
 
-# Uniform scale applied to each instantiated FBX scene
-const MESH_SCALES: Dictionary = {
-	0: 0.25,  # DEER
-	1: 0.28,  # WOLF
-	2: 0.22,  # SHEEP
-	3: 0.30,  # HORSE
-	4: 0.28,  # COW
-	5: 0.18,  # RABBIT
-	6: 0.22,  # EAGLE
-	7: 0.20,  # FOX
-	8: 0.22,  # PIG
-	9: 0.32,  # BEAR
+# Standing height (metres) each species is scaled to. The FBX files come in at
+# wildly different units (a cow imported 4 mm tall, a fox 3 mm), so the scale
+# is measured from each model once, not guessed. People are 1.7 m.
+const TARGET_HEIGHT: Dictionary = {
+	0: 1.5,   # DEER
+	1: 0.85,  # WOLF
+	2: 0.9,   # SHEEP
+	3: 1.7,   # HORSE
+	4: 1.5,   # COW
+	5: 0.45,  # RABBIT (a touch big, so you can see it)
+	6: 0.6,   # EAGLE
+	7: 0.6,   # FOX
+	8: 0.8,   # PIG
+	9: 1.4,   # BEAR
 }
+var _type_scale: Dictionary = {}   # AnimalType int -> uniform scale for its model
 
-# Fallback box colours when FBX not yet imported
+# Species colours: for models without a texture, and the stand-in figure
 const FALLBACK_COLORS: Dictionary = {
 	0: Color(0.85, 0.70, 0.45),  # DEER  - tan
 	1: Color(0.55, 0.45, 0.35),  # WOLF  - grey-brown
@@ -58,7 +61,6 @@ const ANIM_DEAD:  Array = ["Death_A","Death",  "death","Idle_A"]
 
 var _sim: AnimalSim
 var _scenes: Dictionary = {}     # AnimalType int → PackedScene (null if not imported yet)
-var _atlas_tex: Texture2D        # shared atlas; applied when FBX material is missing texture
 
 # Per-animal visual state: anim_id → { node, anim, prev_state }
 var _instances: Dictionary = {}
@@ -67,9 +69,6 @@ var world: World  # for ground height; set by Main
 
 func setup(sim: AnimalSim) -> void:
 	_sim = sim
-	var tex := load("res://assets/textures/Atlas_COL_1k_LPAA.png")
-	if tex is Texture2D:
-		_atlas_tex = tex as Texture2D
 	_cache_scenes()
 	for a in sim.animals:
 		var animal: AnimalSim.Animal = a as AnimalSim.Animal
@@ -133,17 +132,20 @@ func _spawn(animal: AnimalSim.Animal) -> void:
 
 	if packed:
 		var inst := packed.instantiate()
-		if inst is Node3D:
+		if inst is Node3D and _model_height(inst as Node3D) > 0.0:
 			root = inst as Node3D
 			anim_player = _find_anim_player(inst)
-			_ensure_texture(inst)
+			_ensure_texture(inst, type_int)
 		else:
-			inst.queue_free()
+			inst.queue_free()   # e.g. the horse imports with no mesh at all
 			root = _make_fallback(type_int)
 	else:
 		root = _make_fallback(type_int)
 
-	var s: float = float(MESH_SCALES.get(type_int, 0.25))
+	if not _type_scale.has(type_int):
+		var h := _model_height(root)
+		_type_scale[type_int] = float(TARGET_HEIGHT.get(type_int, 1.0)) / h if h > 0.0 else 1.0
+	var s: float = _type_scale[type_int]
 	root.scale = Vector3(s, s, s)
 	add_child(root)
 
@@ -151,11 +153,11 @@ func _spawn(animal: AnimalSim.Animal) -> void:
 		"node":       root,
 		"anim":       anim_player,
 		"prev_state": -1,
+		"type":       type_int,
 	}
 	_instances[animal.anim_id] = entry
 
-	if anim_player:
-		_play_for_state(anim_player, animal.state, animal.animal_type)
+	_update_instance(animal)   # stand where they are now, not at the map origin
 
 # ── Animation ────────────────────────────────────────────────────────────────
 
@@ -214,36 +216,112 @@ func _find_anim_player(node: Node) -> AnimationPlayer:
 			return result
 	return null
 
-func _ensure_texture(node: Node) -> void:
-	# If a MeshInstance3D has no albedo texture, apply the shared atlas.
-	# This handles cases where Godot's FBX importer can't locate the texture file.
-	if not _atlas_tex: return
+## Some files hold several bodies on top of each other; show just one.
+const SHOW_ONLY: Dictionary = {
+	4: ["cow-cattle-horns"],   # COW: also cow-cattle, Cow_NoHorns, Horns_Seperated
+	9: ["BearGrizzly"],        # BEAR: also BearWild
+}
+
+## The FBX materials come in glossy and some lack their texture. Each is
+## swapped for a matte copy (the shared atlas where the texture is missing),
+## graded by LookStyle, so animals sit in the same light as people and land.
+var _matte: Dictionary = {}   # [original material, type] -> matte copy
+
+func _ensure_texture(node: Node, animal_type: int = -1) -> void:
 	if node is MeshInstance3D:
 		var mi := node as MeshInstance3D
+		if SHOW_ONLY.has(animal_type) and not (str(mi.name) in SHOW_ONLY[animal_type]):
+			mi.visible = false
 		if mi.mesh:
-			for surf_idx in range(mi.mesh.get_surface_count()):
-				var mat := mi.get_active_material(surf_idx)
-				if mat is StandardMaterial3D:
-					var sm := mat as StandardMaterial3D
-					if sm.albedo_texture == null:
-						var new_mat := sm.duplicate() as StandardMaterial3D
-						new_mat.albedo_texture = _atlas_tex
-						mi.set_surface_override_material(surf_idx, new_mat)
+			for i in mi.mesh.get_surface_count():
+				var src := mi.mesh.surface_get_material(i)
+				mi.set_surface_override_material(i, _matte_of(src, animal_type))
 	for child in node.get_children():
-		_ensure_texture(child)
+		_ensure_texture(child, animal_type)
 
+## A model that shipped without its texture (sheep, wolf, rabbit) gets a flat
+## species colour: the shared atlas doesn't match their UVs (it came out
+## rainbow-striped).
+func _matte_of(src: Material, animal_type: int) -> StandardMaterial3D:
+	var key := [src, animal_type]
+	if _matte.has(key):
+		return _matte[key]
+	var m := StandardMaterial3D.new()
+	var tex: Texture2D = (src as BaseMaterial3D).albedo_texture if src is BaseMaterial3D else null
+	if tex:
+		m.albedo_texture = tex
+		m.albedo_color = LookStyle.g(Color(1, 1, 1))
+	else:
+		m.albedo_color = LookStyle.g(Color(FALLBACK_COLORS.get(animal_type, Color(0.7, 0.7, 0.7))))
+	m.roughness = 0.95
+	m.metallic_specular = 0.2
+	_matte[key] = m
+	return m
+
+## The look changed (T): rebuild the shared material and re-dress everyone.
+func restyle() -> void:
+	_matte.clear()
+	for id in _instances:
+		var e: Dictionary = _instances[id]
+		var n: Node = e.get("node")
+		if n: _ensure_texture(n, int(e.get("type", -1)))
+
+## Height of a model as it renders, in its own space (before we scale it).
+## Skinned meshes are measured through their skin's bind pose: the FBX unit
+## scale lives there, so the raw mesh box can be 100x too small.
+static func _model_height(root: Node3D) -> float:
+	var box := AABB()
+	var any := false
+	for mi in root.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		if m.mesh == null or not m.visible:
+			continue
+		var b := _local_xf(root, m) * m.get_aabb()
+		var sk := m.get_node_or_null(m.skeleton) as Skeleton3D
+		if sk and m.skin and m.skin.get_bind_count() > 0:
+			var bi := m.skin.get_bind_bone(0)
+			if bi < 0:
+				bi = sk.find_bone(m.skin.get_bind_name(0))
+			if bi >= 0:
+				b = _local_xf(root, sk) * (sk.get_bone_global_rest(bi) * m.skin.get_bind_pose(0)) * m.get_aabb()
+		box = b if not any else box.merge(b)
+		any = true
+	if not any and root is MeshInstance3D and (root as MeshInstance3D).mesh:
+		return (root as MeshInstance3D).get_aabb().size.y
+	return box.size.y if any else 0.0
+
+## n's transform relative to root (works before either is in the tree).
+static func _local_xf(root: Node, n: Node) -> Transform3D:
+	var t := Transform3D.IDENTITY
+	while n != null and n != root:
+		if n is Node3D:
+			t = (n as Node3D).transform * t
+		n = n.get_parent()
+	return t
+
+## A plain four-legged figure (1 m tall before scaling) for a model that
+## didn't import. Faces +Z like the FBX ones.
 func _make_fallback(animal_type: int) -> Node3D:
 	var root := Node3D.new()
-	var mi := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(0.35, 0.35, 0.35)
-	mi.mesh = box
 	var mat := StandardMaterial3D.new()
-	var col: Color = Color(FALLBACK_COLORS.get(animal_type, Color(0.7, 0.7, 0.7)))
-	mat.albedo_color = col
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mi.material_override = mat
-	root.add_child(mi)
+	mat.albedo_color = LookStyle.g(Color(FALLBACK_COLORS.get(animal_type, Color(0.7, 0.7, 0.7))))
+	mat.roughness = 0.95
+	var parts := [
+		[Vector3(0.36, 0.34, 0.95), Vector3(0, 0.66, 0)],          # body
+		[Vector3(0.16, 0.36, 0.18), Vector3(0, 0.86, 0.48)],       # neck
+		[Vector3(0.18, 0.18, 0.34), Vector3(0, 0.98, 0.62)],       # head
+	]
+	for lx in [-0.12, 0.12]:
+		for lz in [-0.36, 0.36]:
+			parts.append([Vector3(0.09, 0.52, 0.09), Vector3(lx, 0.26, lz)])
+	for p in parts:
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = p[0]
+		mi.mesh = bm
+		mi.position = p[1]
+		mi.material_override = mat
+		root.add_child(mi)
 	return root
 
 func clear() -> void:

@@ -81,6 +81,8 @@ func _setup_scene() -> void:
 	observer = ObserverCamera.new()
 	observer.bounds = Vector2(WORLD_WIDTH * TILE_SIZE, WORLD_HEIGHT * TILE_SIZE)
 	observer.target = Vector3(observer.bounds.x / 2.0, 0, observer.bounds.y / 2.0)
+	observer.ground_fn = func(x: float, z: float) -> float:
+		return world.surface_y(x / TILE_SIZE, z / TILE_SIZE) if world else 0.0
 	add_child(observer)
 	camera = observer.camera
 	observer.clicked.connect(_handle_click)
@@ -758,6 +760,7 @@ func apply_style() -> void:
 	terrain_renderer.rebuild()
 	environment_renderer.setup(world)
 	agent_renderer.restyle()
+	animal_renderer.restyle()
 	settlement_renderer.restyle()
 
 func follow(agent: Agent) -> void:

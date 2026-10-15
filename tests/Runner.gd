@@ -538,6 +538,35 @@ func _test_main_views() -> void:
 	var adults: int = main.agents.filter(func(a): return a.life_stage == "adult").size()
 	check("founders arrive as adults (%d/%d)" % [adults, main.agents.size()], adults == main.agents.size())
 	check("the observer starts in charge", main.observer.active and main.observer.camera.current)
+	# Wildlife is visible: the FBX models import at mixed units (a cow came in
+	# 4 mm tall), so each species is scaled from its measured height.
+	var bad: Array = []
+	for an in main.animal_sim.animals:
+		var node: Node3D = main.animal_renderer._instances.get(an.anim_id, {}).get("node")
+		var h: float = AnimalRenderer._model_height(node) * node.scale.y if node else 0.0
+		if h < 0.3 or h > 2.2:
+			bad.append("%s %.3fm" % [AnimalSim.AnimalType.keys()[an.animal_type], h])
+	check("every animal stands at a size you can see (%s)" % ", ".join(bad.slice(0, 4)), bad.is_empty() and not main.animal_sim.animals.is_empty())
+	# Close and low over the highest ground, the eye stays above the hill.
+	var peak := Vector2(0, 0)
+	var peak_h := -INF
+	for z in range(0, main.world.height, 2):
+		for x in range(0, main.world.width, 2):
+			var hh: float = main.world.surface_y(x + 0.5, z + 0.5)
+			if hh > peak_h:
+				peak_h = hh
+				peak = Vector2(x + 0.5, z + 0.5)
+	var obs: ObserverCamera = main.observer
+	var keep := [obs.distance, obs.angle_v]
+	obs.distance = ObserverCamera.ZOOM_MIN
+	obs.angle_v = ObserverCamera.TILT_MIN
+	obs.look_at_point(Vector3(peak.x, 0, peak.y) * World.TILE_SIZE)
+	var cam: Vector3 = obs.camera.position
+	check("the eye looks at the hilltop, not sea level (%.1f m)" % obs.target.y, absf(obs.target.y - peak_h) < 0.5)
+	check("...and never sinks into the ground",
+		cam.y >= main.world.surface_y(cam.x / World.TILE_SIZE, cam.z / World.TILE_SIZE) + 1.0)
+	obs.distance = keep[0]
+	obs.angle_v = keep[1]
 
 	# A birth adds exactly one person (the renderer once appended them a second
 	# time to the shared list, so every child was ticked and counted twice).

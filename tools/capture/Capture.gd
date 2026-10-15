@@ -13,6 +13,7 @@
 # --listen        (with --walk) listen in on the nearest person
 # --yaw=RAD       (with --walk) turn the walker's camera; --cam-distance=D its distance
 # --weather=W     clear | rain | storm (set after the sim, cloud fully drawn in)
+# --animal=T      look at the nearest living animal of type T (deer, wolf, rabbit, ...)
 # --no-hud        hide the HUD
 # --style=S       UI look: storybook | fieldnotes
 # --screen=S      open a full screen: lives | ideas | album
@@ -76,6 +77,20 @@ func _ready() -> void:
 	if who and (args.has("follow") or args.has("walk")):
 		main.follow(who)
 		obs.look_at_point(Vector3(who.pos.x, 0, who.pos.y) * World.TILE_SIZE)
+	if args.has("animal"):
+		var want := str(args["animal"]).to_upper()
+		var pick = null
+		for an in main.animal_sim.animals:
+			if an.state == AnimalSim.AnimalState.DEAD or AnimalSim.AnimalType.keys()[an.animal_type] != want:
+				continue
+			if pick == null:
+				pick = an
+			var t: Dictionary = main.world.get_tile_f(an.pos.x, an.pos.y)
+			if not t.is_empty() and int(t["type"]) == World.TileType.GRASS:
+				pick = an   # out in the open, not lost in the trees
+				break
+		if pick:
+			obs.look_at_point(Vector3(pick.pos.x, 0, pick.pos.y) * World.TILE_SIZE)
 	obs.apply()
 
 	if args.has("walk"):

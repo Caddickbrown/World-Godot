@@ -31,6 +31,10 @@ var bounds: Vector2 = Vector2(256, 256)  # world extent in units (x, z)
 
 ## Returns the followed point (world units) or Vector3.INF when nobody is followed.
 var follow_target_fn: Callable = Callable()
+## Ground height (metres) at world x, z. The eye looks at the ground, not sea
+## level, and never sinks into a hill. Set by Main.
+var ground_fn: Callable = Callable()
+const CLEARANCE := 1.5
 
 var _keys: Dictionary = {}
 var _left_pressed := false
@@ -66,7 +70,12 @@ func apply() -> void:
 		sin(angle_h) * cos(angle_v),
 		sin(angle_v),
 		cos(angle_h) * cos(angle_v)) * distance
-	camera.position = target + offset
+	if ground_fn.is_valid():
+		target.y = maxf(0.0, float(ground_fn.call(target.x, target.z)))
+	var pos := target + offset
+	if ground_fn.is_valid():
+		pos.y = maxf(pos.y, float(ground_fn.call(pos.x, pos.z)) + CLEARANCE)
+	camera.position = pos
 	camera.look_at(target, Vector3.UP)
 
 func zoom_by(factor: float) -> void:
