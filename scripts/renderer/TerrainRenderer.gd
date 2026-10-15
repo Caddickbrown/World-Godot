@@ -1,255 +1,178 @@
 class_name TerrainRenderer
 extends Node3D
+## The ground: the World's Heightfield drawn as smooth, vertex-coloured chunks,
+## with a depth-shaded sea around the island. Colours come from LookStyle, so
+## the look switches with the UI style. Tile changes (felled trees, overgrazing)
+## rebuild only their chunk, a few per frame.
 
 const TILE_SIZE := World.TILE_SIZE
-
-## Tiles per chunk edge. The world is split into CHUNK_TILES x CHUNK_TILES
-## chunks so each chunk becomes its own MeshInstance3D (frustum-cullable,
-## independently rebuildable).
-const CHUNK_TILES := 16
-
-## World-space height per elevation unit (kept identical to the old renderer).
+const CHUNK_M := 32               # metres per chunk edge
+const DIRTY_PER_FLUSH := 2
+const SEA_MARGIN := 320.0
+## Kept for anything still reading the old constant.
 const HEIGHT_SCALE := World.HEIGHT_SCALE
 
-## How far below a border tile's own height the world-edge skirt extends,
-## so you don't see under the world at a low camera angle.
-const BORDER_SKIRT_DEPTH := 0.5
-
-## Max number of dirty chunks rebuilt per flush_dirty() call, so a burst of
-## tile changes (e.g. a spreading wildfire) can't spike a frame.
-const DIRTY_PER_FLUSH := 2
-
 var world: World
-
-var chunk_cols: int = 0
-var chunk_rows: int = 0
-
-var _chunk_instances: Dictionary = {}   # "cx,cz" -> MeshInstance3D
-var _dirty_chunks: Dictionary = {}      # "cx,cz" -> true
+var field: Heightfield
+var chunk_count := 0
+var _chunks: Dictionary = {}      # Vector2i -> MeshInstance3D
+var _dirty: Dictionary = {}       # Vector2i -> true
 var _material: StandardMaterial3D
+var _water: MeshInstance3D
+## Settlement centres (world metres) for trampled ground; set by Main.
+var camps: Array = []
 
-# Tile colours (base)
 static func tile_color(tile_type: int) -> Color:
+	# Minimap and anything else that wants one colour per tile type.
 	match tile_type:
-		World.TileType.DEEP_WATER: return Color(0.10, 0.22, 0.55)
-		World.TileType.WATER:      return Color(0.18, 0.38, 0.72)
-		World.TileType.BEACH:      return Color(0.85, 0.80, 0.60)
-		World.TileType.GRASS:      return Color(0.34, 0.62, 0.25)
-		World.TileType.WOODLAND:   return Color(0.22, 0.50, 0.18)
-		World.TileType.FOREST:     return Color(0.10, 0.38, 0.12)
-		World.TileType.DESERT:     return Color(0.82, 0.72, 0.42)
-		World.TileType.STONE:      return Color(0.55, 0.52, 0.50)
-		World.TileType.MOUNTAIN:   return Color(0.70, 0.68, 0.65)
-		World.TileType.GLACIER:    return Color(0.85, 0.92, 0.98)
-		World.TileType.LAVA:       return Color(0.85, 0.25, 0.08)
+		World.TileType.DEEP_WATER: return Color(0.10, 0.22, 0.45)
+		World.TileType.WATER:      return Color(0.20, 0.50, 0.62)
+		World.TileType.BEACH:      return LookStyle.SAND
+		World.TileType.GRASS:      return LookStyle.MEADOW
+		World.TileType.WOODLAND:   return LookStyle.WOOD
+		World.TileType.FOREST:     return LookStyle.FOREST
+		World.TileType.DESERT:     return LookStyle.DESERT
+		World.TileType.STONE:      return LookStyle.ROCK
+		World.TileType.MOUNTAIN:   return LookStyle.ROCK_DARK
+		World.TileType.GLACIER:    return LookStyle.SNOW
+		World.TileType.LAVA:       return LookStyle.LAVA
 	return Color(0.5, 0.5, 0.5)
 
 func setup(p_world: World) -> void:
 	world = p_world
+	field = world.heightfield
+	if field == null:
+		field = Heightfield.new().build(world)
+		world.heightfield = field
 	rebuild()
 
-## Full rebuild: regenerates every chunk from scratch. Still used by
-## Main.gd right after world generation.
 func rebuild() -> void:
-	if world == null:
-		return
-	_ensure_material()
-
-	for child in get_children():
-		child.queue_free()
-	_chunk_instances.clear()
-	_dirty_chunks.clear()
-
-	chunk_cols = (world.width + CHUNK_TILES - 1) / CHUNK_TILES
-	chunk_rows = (world.height + CHUNK_TILES - 1) / CHUNK_TILES
-
-	for cz in range(chunk_rows):
-		for cx in range(chunk_cols):
-			_rebuild_chunk_mesh(cx, cz)
-
-## Marks the chunk containing tile (x, z) dirty. It will be rebuilt on the
-## next flush_dirty() (or immediately if rebuild_chunk() is called directly).
-func rebuild_tile(x: int, z: int) -> void:
-	if world == null or chunk_cols <= 0 or chunk_rows <= 0:
-		return
-	var cx := x / CHUNK_TILES
-	var cz := z / CHUNK_TILES
-	_mark_dirty(cx, cz)
-
-	# A tile's height skirts can be built by a neighbouring chunk (the skirt
-	# is only emitted by the taller side of a boundary), so a tile sitting on
-	# a chunk edge can also affect the adjacent chunk's mesh.
-	if x % CHUNK_TILES == 0 and x > 0:
-		_mark_dirty(cx - 1, cz)
-	if x % CHUNK_TILES == CHUNK_TILES - 1:
-		_mark_dirty(cx + 1, cz)
-	if z % CHUNK_TILES == 0 and z > 0:
-		_mark_dirty(cx, cz - 1)
-	if z % CHUNK_TILES == CHUNK_TILES - 1:
-		_mark_dirty(cx, cz + 1)
-
-## Immediately rebuilds a single chunk's mesh.
-func rebuild_chunk(cx: int, cz: int) -> void:
-	if world == null:
-		return
-	_rebuild_chunk_mesh(cx, cz)
-	_dirty_chunks.erase("%d,%d" % [cx, cz])
-
-## Rebuilds a handful of dirty chunks (at most DIRTY_PER_FLUSH). Call this
-## once per frame (or tick) to lazily catch up on pending tile changes
-## without spiking a frame when many tiles change at once.
-func flush_dirty() -> void:
-	if _dirty_chunks.is_empty():
-		return
-	var keys: Array = _dirty_chunks.keys()
-	var n: int = min(DIRTY_PER_FLUSH, keys.size())
-	for i in range(n):
-		var key: String = keys[i]
-		var parts := key.split(",")
-		rebuild_chunk(int(parts[0]), int(parts[1]))
-
-func _mark_dirty(cx: int, cz: int) -> void:
-	if cx < 0 or cz < 0 or cx >= chunk_cols or cz >= chunk_rows:
-		return
-	_dirty_chunks["%d,%d" % [cx, cz]] = true
-
-func _ensure_material() -> void:
-	if _material:
-		return
+	for ch in get_children():
+		ch.queue_free()
+	_chunks.clear()
+	_dirty.clear()
 	_material = StandardMaterial3D.new()
 	_material.vertex_color_use_as_albedo = true
-	_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	_material.roughness = 1.0
-	_material.metallic_specular = 0.1
-	# Skirts are only built on the taller side of a height boundary, and the
-	# top faces use an explicit UP normal regardless of triangle winding, so
-	# disable culling to avoid depending on exact vertex winding order.
-	_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_material.vertex_color_is_srgb = true
+	_material.roughness = 0.95
+	chunk_count = int(ceil(field.size_m / CHUNK_M))
+	for cz in chunk_count:
+		for cx in chunk_count:
+			_build_chunk(Vector2i(cx, cz))
+	_build_water()
 
-func _rebuild_chunk_mesh(cx: int, cz: int) -> void:
-	var key := "%d,%d" % [cx, cz]
-	var x0 := cx * CHUNK_TILES
-	var z0 := cz * CHUNK_TILES
+func rebuild_tile(x: int, z: int) -> void:
+	var c := Vector2i(int(x * TILE_SIZE / CHUNK_M), int(z * TILE_SIZE / CHUNK_M))
+	_dirty[c] = true
 
-	if cx < 0 or cz < 0 or x0 >= world.width or z0 >= world.height:
-		var stale: MeshInstance3D = _chunk_instances.get(key)
-		if stale:
-			stale.queue_free()
-			_chunk_instances.erase(key)
-		return
+## Older callers rebuilt by tile chunk index; now any chunk key works.
+func rebuild_chunk(cx: int, cz: int) -> void:
+	_dirty[Vector2i(cx, cz)] = true
 
-	var x1: int = min(x0 + CHUNK_TILES, world.width)
-	var z1: int = min(z0 + CHUNK_TILES, world.height)
+func flush_dirty() -> void:
+	var done := 0
+	for c in _dirty.keys():
+		if done >= DIRTY_PER_FLUSH:
+			break
+		_dirty.erase(c)
+		_build_chunk(c)
+		done += 1
 
+func _build_chunk(c: Vector2i) -> void:
+	if _chunks.has(c):
+		(_chunks[c] as Node).queue_free()
+	var x0 := c.x * CHUNK_M
+	var z0 := c.y * CHUNK_M
+	var steps := int(CHUNK_M / Heightfield.STEP)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var count := steps + 1
+	for iz in count:
+		for ix in count:
+			var x := minf(x0 + ix * Heightfield.STEP, field.size_m)
+			var z := minf(z0 + iz * Heightfield.STEP, field.size_m)
+			var h := field.height_at(x, z)
+			var nrm := field.normal_at(x, z)
+			var tile := world.get_tile_f(x / TILE_SIZE, z / TILE_SIZE)
+			var wob := sin(x * 0.07 + z * 0.05) * cos(z * 0.09 - x * 0.03) * 0.5 + 0.5
+			var col := LookStyle.ground(field.biome_at(x, z), h, nrm, tile, wob)
+			col = _trample(col, x, z)
+			st.set_color(col)
+			st.set_normal(nrm)
+			st.add_vertex(Vector3(x, h, z))
+	for iz in steps:
+		for ix in steps:
+			var i := iz * count + ix
+			st.add_index(i); st.add_index(i + 1); st.add_index(i + count)
+			st.add_index(i + 1); st.add_index(i + count + 1); st.add_index(i + count)
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = _material
+	add_child(mi)
+	_chunks[c] = mi
 
-	for z in range(z0, z1):
-		for x in range(x0, x1):
-			_add_tile(st, x, z)
+func _trample(col: Color, x: float, z: float) -> Color:
+	for p in camps:
+		var d := Vector2(x - p.x, z - p.y).length()
+		if d < 9.0:
+			col = col.lerp(LookStyle.g(LookStyle.TRAMPLED), (1.0 - smoothstep(3.5, 9.0, d)) * 0.85)
+	return col
 
-	st.index()
-	var mesh := st.commit()
+## Repaint chunks under these camps (world metres) when settlements change.
+func set_camps(centres: Array) -> void:
+	var changed := centres.size() != camps.size()
+	if not changed:
+		for i in centres.size():
+			if (centres[i] as Vector2).distance_to(camps[i]) > 1.0:
+				changed = true
+				break
+	if not changed:
+		return
+	var touched: Array = camps.duplicate() + centres
+	camps = centres
+	for p in touched:
+		for dz in [-1, 0, 1]:
+			for dx in [-1, 0, 1]:
+				var q: Vector2 = p + Vector2(dx, dz) * 9.0
+				_dirty[Vector2i(clampi(int(q.x / CHUNK_M), 0, chunk_count - 1), clampi(int(q.y / CHUNK_M), 0, chunk_count - 1))] = true
 
-	var inst: MeshInstance3D = _chunk_instances.get(key)
-	if inst == null:
-		inst = MeshInstance3D.new()
-		inst.material_override = _material
-		add_child(inst)
-		_chunk_instances[key] = inst
-	inst.mesh = mesh
-
-func _tile_render_color(tile: Dictionary) -> Color:
-	var color := tile_color(int(tile["type"]))
-
-	# River tint
-	if tile.get("river", false):
-		color = color.lerp(Color(0.2, 0.5, 0.85), 0.4)
-
-	# Cut trees appear darker
-	if tile.get("tree_cut", false):
-		color = color.darkened(0.3)
-
-	return color
-
-func _add_tile(st: SurfaceTool, x: int, z: int) -> void:
-	var tile: Dictionary = world.tiles[z][x]
-	var color := _tile_render_color(tile)
-
-	var elev: float = float(tile["elevation"])
-	var wx := x * TILE_SIZE
-	var wz := z * TILE_SIZE
-	var wy := elev * HEIGHT_SCALE  # slight height variation, stepped per tile
-
-	# Quad vertices (two triangles), flat per-tile — intentionally not
-	# smoothed with neighbours so the blocky tile look is preserved.
-	var v0 := Vector3(wx,              wy, wz)
-	var v1 := Vector3(wx + TILE_SIZE,  wy, wz)
-	var v2 := Vector3(wx + TILE_SIZE,  wy, wz + TILE_SIZE)
-	var v3 := Vector3(wx,              wy, wz + TILE_SIZE)
-
-	_add_tri(st, v0, v1, v2, Vector3.UP, color)
-	_add_tri(st, v0, v2, v3, Vector3.UP, color)
-
-	# Vertical skirts on any edge where this tile is higher than its
-	# neighbour, so mountains next to water (or any height step) don't show
-	# a gap through the world at a low camera angle.
-	_add_skirt_edge(st, x, z, wx, wz, wy, color, 1, 0)
-	_add_skirt_edge(st, x, z, wx, wz, wy, color, -1, 0)
-	_add_skirt_edge(st, x, z, wx, wz, wy, color, 0, 1)
-	_add_skirt_edge(st, x, z, wx, wz, wy, color, 0, -1)
-
-func _add_skirt_edge(st: SurfaceTool, x: int, z: int, wx: float, wz: float, wy_top: float, color: Color, dx: int, dz: int) -> void:
-	var nx := x + dx
-	var nz := z + dz
-	var in_bounds := nx >= 0 and nx < world.width and nz >= 0 and nz < world.height
-
-	var wy_bottom: float
-	if in_bounds:
-		var ntile: Dictionary = world.tiles[nz][nx]
-		var n_wy: float = float(ntile["elevation"]) * HEIGHT_SCALE
-		if n_wy >= wy_top:
-			return  # neighbour is level or higher: no gap on this side
-		wy_bottom = n_wy
-	else:
-		wy_bottom = wy_top - BORDER_SKIRT_DEPTH
-
-	var p_a: Vector3
-	var p_b: Vector3
-	var normal: Vector3
-	if dx == 1:
-		p_a = Vector3(wx + TILE_SIZE, 0.0, wz)
-		p_b = Vector3(wx + TILE_SIZE, 0.0, wz + TILE_SIZE)
-		normal = Vector3(1, 0, 0)
-	elif dx == -1:
-		p_a = Vector3(wx, 0.0, wz)
-		p_b = Vector3(wx, 0.0, wz + TILE_SIZE)
-		normal = Vector3(-1, 0, 0)
-	elif dz == 1:
-		p_a = Vector3(wx, 0.0, wz + TILE_SIZE)
-		p_b = Vector3(wx + TILE_SIZE, 0.0, wz + TILE_SIZE)
-		normal = Vector3(0, 0, 1)
-	else:
-		p_a = Vector3(wx, 0.0, wz)
-		p_b = Vector3(wx + TILE_SIZE, 0.0, wz)
-		normal = Vector3(0, 0, -1)
-
-	var top_a := Vector3(p_a.x, wy_top, p_a.z)
-	var top_b := Vector3(p_b.x, wy_top, p_b.z)
-	var bot_a := Vector3(p_a.x, wy_bottom, p_a.z)
-	var bot_b := Vector3(p_b.x, wy_bottom, p_b.z)
-
-	var wall_color := color.darkened(0.12)
-	_add_tri(st, top_a, bot_a, bot_b, normal, wall_color)
-	_add_tri(st, top_a, bot_b, top_b, normal, wall_color)
-
-func _add_tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, normal: Vector3, color: Color) -> void:
-	st.set_normal(normal)
-	st.set_color(color)
-	st.add_vertex(a)
-	st.set_normal(normal)
-	st.set_color(color)
-	st.add_vertex(b)
-	st.set_normal(normal)
-	st.set_color(color)
-	st.add_vertex(c)
+func _build_water() -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var step := 2.0
+	var n := int((field.size_m + SEA_MARGIN * 2.0) / step) + 1
+	for iz in n:
+		for ix in n:
+			var x := -SEA_MARGIN + ix * step
+			var z := -SEA_MARGIN + iz * step
+			var inside := x >= 0.0 and z >= 0.0 and x <= field.size_m and z <= field.size_m
+			var d := (Heightfield.SEA_LEVEL - field.height_at(x, z)) if inside else 40.0
+			st.set_color(Color(clampf(d / 10.0, -0.1, 1.0), 0, 0))
+			st.add_vertex(Vector3(x, Heightfield.SEA_LEVEL, z))
+	for iz in n - 1:
+		for ix in n - 1:
+			var i := iz * n + ix
+			st.add_index(i); st.add_index(i + 1); st.add_index(i + n)
+			st.add_index(i + 1); st.add_index(i + n + 1); st.add_index(i + n)
+	st.generate_normals()
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/mockup_water.gdshader")
+	if LookStyle.naturalist():
+		mat.set_shader_parameter("shallow_color", Color(0.42, 0.62, 0.58))
+		mat.set_shader_parameter("mid_color", Color(0.18, 0.38, 0.45))
+		mat.set_shader_parameter("deep_color", Color(0.08, 0.17, 0.26))
+		mat.set_shader_parameter("foam_color", Color(0.86, 0.88, 0.85))
+	_water = MeshInstance3D.new()
+	_water.mesh = st.commit()
+	_water.material_override = mat
+	_water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_water)
+	var floor_mi := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(field.size_m + SEA_MARGIN * 2.0, field.size_m + SEA_MARGIN * 2.0)
+	floor_mi.mesh = plane
+	floor_mi.position = Vector3(field.size_m / 2.0, -12.0, field.size_m / 2.0)
+	var fm := StandardMaterial3D.new()
+	fm.albedo_color = Color(0.05, 0.16, 0.30)
+	floor_mi.material_override = fm
+	add_child(floor_mi)

@@ -22,6 +22,11 @@ run() {  # run <label> <timeout-seconds> <godot args...>
 # which no class_name resolves on a fresh clone.
 run "Importing project" 600 --editor --quit
 run "Booting Main.tscn for 600 frames" 300 --quit-after 600
+# Tools are loaded by nothing the game runs, so a parse error there only shows
+# when someone renders shots (and a scene whose script failed never quits).
+for f in tools/*.gd tools/capture/*.gd; do
+  run "Parsing $f" 60 --check-only --script "$f"
+done
 run "Running tests" "${TEST_TIMEOUT:-600}" res://tests/Runner.tscn
 if [ -z "${SKIP_SOAK:-}" ]; then
   run "Simulation soak (tools/smoke.gd)" "${SOAK_TIMEOUT:-900}" --script res://tools/smoke.gd

@@ -26,3 +26,10 @@ shot 4_walk           --seed=7 --sim=120 --hour=10 --walk
 shot 5_listen         --seed=7 --sim=120 --hour=16 --walk --listen --cam-distance=4.5
 shot 6_walk_dusk      --seed=7 --sim=120 --hour=19.6 --walk --no-hud
 shot 7_settled        --seed=7 --sim=1500 --hour=12 --follow --distance=40 --tilt=50
+# The HUD and screens, in both looks (a world ~7 days on).
+for st in storybook fieldnotes; do
+  shot "8_hud_$st"    --seed=7 --sim=900 --hour=10 --follow --distance=30 --tilt=45 --style=$st
+  shot "9_lives_$st"  --seed=7 --sim=900 --hour=10 --follow --style=$st --screen=lives
+  shot "10_ideas_$st" --seed=7 --sim=900 --hour=10 --style=$st --screen=ideas
+  shot "11_album_$st" --seed=7 --sim=900 --hour=10 --style=$st --screen=album
+done

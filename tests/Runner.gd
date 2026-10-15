@@ -23,6 +23,7 @@ func _ready() -> void:
 	_test_idea_ledger()
 	_test_story_keeper()
 	_test_hunches()
+	_test_island_and_heightfield()
 	print("== integration")
 	await _test_main_views()
 	print("== %d checks, %d failures" % [_checks, _failures])
@@ -277,6 +278,53 @@ func _test_hunches() -> void:
 	check("a right call adds a glimmer", done.size() == 1 and done[0]["correct"] and h.glimmers == 1)
 	check("open hunches are capped", h.offer(people, ledger, g.concepts, 2).size() + h.open.size() <= Hunches.MAX_OPEN)
 
+func _test_island_and_heightfield() -> void:
+	var w := World.new(7)
+	var edge_land := 0
+	for i in w.width:
+		for t in [w.get_tile(i, 0), w.get_tile(i, w.height - 1), w.get_tile(0, i), w.get_tile(w.width - 1, i)]:
+			if not (int(t["type"]) in [World.TileType.WATER, World.TileType.DEEP_WATER]):
+				edge_land += 1
+	check("the world is an island: sea all round the edge (%d land edge tiles)" % edge_land, edge_land == 0)
+	var hf := Heightfield.new().build(w)
+	w.heightfield = hf
+	var wet_land := 0
+	var dry_sea := 0
+	for z in w.height:
+		for x in w.width:
+			var t := int(w.get_tile(x, z)["type"])
+			var h := hf.height_at_tile(x + 0.5, z + 0.5)
+			if t in [World.TileType.WATER, World.TileType.DEEP_WATER] and h >= 0.0:
+				dry_sea += 1
+			elif w.is_walkable(x + 0.5, z + 0.5) and h <= 0.0:
+				wet_land += 1
+	check("no sea tile stands above the water (%d)" % dry_sea, dry_sea == 0)
+	check("no walkable tile is under the sea (%d)" % wet_land, wet_land == 0)
+	check("surface_y follows the smooth ground", is_equal_approx(w.surface_y(40.5, 40.5), maxf(hf.height_at_tile(40.5, 40.5), 0.0)))
+
+	var env := EnvironmentRenderer.new()
+	add_child(env)
+	env.setup(w)
+	var tree_tile := Vector2i(-1, -1)
+	for z in w.height:
+		for x in w.width:
+			if env.tree_count_on(x, z) > 0:
+				tree_tile = Vector2i(x, z)
+				break
+		if tree_tile.x >= 0:
+			break
+	check("the woods have trees", tree_tile.x >= 0)
+	if tree_tile.x >= 0:
+		var tile := w.get_tile(tree_tile.x, tree_tile.y)
+		tile["tree_cut"] = true
+		env.refresh_tile(tree_tile.x, tree_tile.y)
+		# (The headless renderer keeps no MultiMesh data, so ask the flora.)
+		check("a felled tree disappears", not env.trees_shown_on(tree_tile.x, tree_tile.y))
+		tile["tree_cut"] = false
+		env.refresh_tile(tree_tile.x, tree_tile.y)
+		check("...and grows back", env.trees_shown_on(tree_tile.x, tree_tile.y))
+	env.queue_free()
+
 # ── Integration ──────────────────────────────────────────────────────────────
 
 func _test_main_views() -> void:
@@ -350,6 +398,22 @@ func _test_main_views() -> void:
 	main.time_system.set_speed(1.0)
 	check("the chronicle fills as the world runs (%d entries)" % main.story.chronicle.size(), main.story.chronicle.size() > 5)
 	check("every founder has a life story", main.agents.slice(0, main.AGENT_COUNT).all(func(a): return main.story.lives.has(a.agent_id)))
+
+	# Every screen opens and closes in both looks, and the world restyles.
+	var hud: GameHud = main.get_node("HUD")
+	for style in UiTheme.STYLES:
+		UiTheme.set_style(style)
+		main.apply_style()
+		hud.build()
+		for scr in ["lives", "ideas", "album"]:
+			hud.open_screen(scr)
+			await get_tree().process_frame
+			check("the %s screen opens in the %s look" % [scr, style], hud.screen != null and hud.screen_name == scr)
+			hud.close_screen()
+	check("closing leaves no screen", hud.screen == null)
+	UiTheme.set_style("storybook")
+	main.apply_style()
+	hud.build()
 
 	# A reset mid-walk must not leave the wanderer in charge of a dead camera.
 	main.set_view_mode(main.ViewMode.WALK)

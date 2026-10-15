@@ -101,10 +101,26 @@ func _rng(x: int, z: int, offset: float = 0.0) -> float:
 	return fmod(abs(sin(x * 127.1 + z * 311.7 + offset * 74.5) * 43758.5453), 1.0)
 
 func _noise(x: int, z: int) -> float:
+	return noise_at(float(x), float(z))
+
+## The world's shape field at any tile-space point (fractional coordinates are
+## valid: it is a sum of sines). Below -0.22 is sea. The world is an island:
+## the field falls away near the map edge so land never meets the border.
+## The terrain renderer samples this same function, so look and sim agree.
+func noise_at(x: float, z: float) -> float:
+	var u := absf(x / float(width) * 2.0 - 1.0)
+	var v := absf(z / float(height) * 2.0 - 1.0)
+	return _raw_noise(x, z) - smoothstep(ISLAND_EDGE_START, 1.0, maxf(u, v)) * ISLAND_EDGE_DROP
+
+## Fraction of the half-width where the island starts falling to the sea.
+const ISLAND_EDGE_START := 0.72
+const ISLAND_EDGE_DROP := 0.9
+
+func _raw_noise(x: float, z: float) -> float:
 	var s := seed_val * 0.137
 	# Scale into the reference space so landmasses keep their shape at any size.
-	var fx := float(x) * _noise_scale
-	var fz := float(z) * _noise_scale
+	var fx := x * _noise_scale
+	var fz := z * _noise_scale
 	var base := (
 		sin(fx * 0.18 + s)        * cos(fz * 0.14 + s * 1.71) * 0.45 +
 		sin(fx * 0.35 + s * 2.13) * cos(fz * 0.29 + s * 0.63) * 0.30 +
@@ -459,8 +475,14 @@ func traversal_cost(x: float, z: float, knowledge: Dictionary) -> float:
 	if tile["type"] == TileType.DESERT: return 1.5
 	return 1.0
 
+## The smooth ground (a Heightfield), built by Main for the look. Without one
+## (tests, tools) the ground is the old per-tile step height.
+var heightfield = null
+
 ## Height of the ground (world units) under a tile-space point.
 func surface_y(x: float, z: float) -> float:
+	if heightfield != null:
+		return maxf(heightfield.height_at_tile(x, z), 0.0)
 	var tile := get_tile_f(x, z)
 	if tile.is_empty(): return 0.0
 	return float(tile["elevation"]) * HEIGHT_SCALE

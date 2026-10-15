@@ -59,8 +59,7 @@ var camera: Camera3D  # the observer's camera (used for picking)
 const LISTEN_RADIUS := 2.5
 
 # Lighting
-var sun: DirectionalLight3D
-var sky_env: WorldEnvironment
+var sky: SkyLook
 
 # Game state
 var game_over: bool = false
@@ -88,22 +87,9 @@ func _setup_scene() -> void:
 	wanderer = Wanderer.new()
 	add_child(wanderer)
 
-	# Directional light (sun)
-	sun = DirectionalLight3D.new()
-	sun.light_energy = 1.2
-	sun.shadow_enabled = false
-	add_child(sun)
-
-	# Ambient via WorldEnvironment
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.53, 0.70, 0.95)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.7, 0.7, 0.75)
-	env.ambient_light_energy = 0.8
-	sky_env = WorldEnvironment.new()
-	sky_env.environment = env
-	add_child(sky_env)
+	# Sky, sun, moon and haze (follows the look style).
+	sky = SkyLook.new()
+	add_child(sky)
 
 func _load_data() -> void:
 	# Load concepts
@@ -139,6 +125,7 @@ var world_seed: int = -1
 func _init_world() -> void:
 	# Simulation
 	world = World.new(world_seed)
+	world.heightfield = Heightfield.new().build(world)
 	time_system = TimeSystem.new()
 	weather_system = WeatherSystem.new()
 	concept_graph = ConceptGraph.new(concepts_data)
@@ -205,6 +192,7 @@ func _init_world() -> void:
 	crafting_system = CraftingSystem.new()
 	settlement_system = SettlementSystem.new()
 	conflict_system.settlement_system = settlement_system
+	agent_renderer.settlement_system = settlement_system
 	tile_items = TileItems.new()
 	spatial_grid = SpatialGrid.new()
 	animal_skill_system = AnimalSkillSystem.new()
@@ -498,7 +486,8 @@ static func _reword(msg: String) -> String:
 	var met := RegEx.create_from_string("Settlements '(.*)' and '(.*)' made contact").search(m)
 	if met:
 		return "The people of %s and %s have met." % [met.get_string(1), met.get_string(2)]
-	m = m.replace("Lightning struck a forest at", "Lightning set the forest alight near")
+	if m.begins_with("Lightning struck a forest"):
+		return "Lightning set the forest alight."
 	return m + "."
 
 func _news_pos(t: String) -> Vector2:
@@ -645,19 +634,7 @@ func _show_game_over() -> void:
 # ── Sun ──────────────────────────────────────────────────────────────────────
 
 func _update_sun() -> void:
-	var tod := time_system.time_of_day
-	var sun_angle := (tod - 0.25) * TAU  # noon at tod=0.5
-	sun.rotation = Vector3(sun_angle, deg_to_rad(30), 0)
-	# Dim at night
-	var t := clampf(sin(tod * PI) * 2.0, 0.0, 1.0)
-	sun.light_energy = lerpf(0.05, 1.2, t)
-	# Sky colour
-	var env := sky_env.environment
-	if env:
-		var day_color := Color(0.53, 0.70, 0.95)
-		var night_color := Color(0.04, 0.04, 0.12)
-		env.background_color = night_color.lerp(day_color, t)
-		env.ambient_light_energy = lerpf(0.15, 0.8, t)
+	sky.set_time(time_system.time_of_day)
 
 # ── Views and input ──────────────────────────────────────────────────────────
 
@@ -717,6 +694,23 @@ func listen_to_nearest() -> Agent:
 	agent_renderer.listening_id = a.agent_id if a else -1
 	if a: story.on_player("listen", a.agent_name)
 	return a
+
+## Point the sky camera at a tile (chronicle entries are clickable).
+func look_at_tile(tile_pos: Vector2) -> void:
+	if view_mode == ViewMode.WALK:
+		set_view_mode(ViewMode.OBSERVE)
+	observer.stop_following()
+	observer.look_at_point(Vector3(tile_pos.x * TILE_SIZE, 0.0, tile_pos.y * TILE_SIZE))
+	observer.distance = minf(observer.distance, 45.0)
+	observer.apply()
+
+## The UI look changed (T); the world's look follows it once it has two.
+func apply_style() -> void:
+	sky.apply_style()
+	terrain_renderer.rebuild()
+	environment_renderer.setup(world)
+	agent_renderer.restyle()
+	settlement_renderer.restyle()
 
 func follow(agent: Agent) -> void:
 	_select(agent)
@@ -799,27 +793,10 @@ func _handle_click(screen_pos: Vector2) -> void:
 # ── Settlements ───────────────────────────────────────────────────────────────
 
 func _update_settlements() -> void:
-	# Only show buildings after organisation is discovered
-	var org_known := false
-	for a in agents:
-		if a.knowledge.has("organisation"):
-			org_known = true
-			break
-	if not org_known:
-		return
-
-	# Determine era index for building tier selection
-	var discovered_count: int = concept_graph.get_discovered_concepts().size()
-	var era_idx: int = _get_era_index(discovered_count)
-
-	# Place buildings wherever there's an active campfire
-	var settlement_tiles: Array = []
-	for key in world.natural_fires:
-		var parts: PackedStringArray = key.split(",")
-		if parts.size() == 2:
-			settlement_tiles.append([int(parts[0]), int(parts[1])])
-
-	settlement_renderer.sync(settlement_tiles, era_idx)
+	var all: Array = settlement_system.get_settlements()
+	settlement_renderer.darkness = sky.darkness(time_system.time_of_day)
+	settlement_renderer.sync(all, world.natural_fires)
+	terrain_renderer.set_camps(all.map(func(st): return st.centre * TILE_SIZE))
 
 # ── New system helpers ────────────────────────────────────────────────────────
 
@@ -894,14 +871,12 @@ func _tick_population(game_delta: float) -> void:
 				want -= 1
 
 # Terrain is chunk-meshed, so changed tiles rebuild only their own chunk.
-# Felled trees also have to be removed from the prop MultiMesh.
+# Felled trees vanish from the flora, and come back when they regrow.
 func _flush_tile_changes() -> void:
 	for c in world.drain_dirty_tiles():
 		var cell: Vector2i = c
 		terrain_renderer.rebuild_tile(cell.x, cell.y)
-		var tile := world.get_tile(cell.x, cell.y)
-		if not tile.is_empty() and bool(tile.get("tree_cut", false)):
-			environment_renderer.remove_tree_at(cell.x, cell.y)
+		environment_renderer.refresh_tile(cell.x, cell.y)  # felled or regrown
 	terrain_renderer.flush_dirty()
 
 # ── Utility ───────────────────────────────────────────────────────────────────

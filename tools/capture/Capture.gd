@@ -13,17 +13,31 @@
 # --listen        (with --walk) listen in on the nearest person
 # --yaw=RAD       (with --walk) turn the walker's camera; --cam-distance=D its distance
 # --no-hud        hide the HUD
+# --style=S       UI look: storybook | fieldnotes
+# --screen=S      open a full screen: lives | ideas | album
 # Needs a display: tools/capture/shots.sh wraps itself in xvfb-run.
 extends Node
 
+var _t0 := 0
+
+func _mark(what: String) -> void:
+	if OS.get_environment("CAPTURE_PROFILE") != "":
+		print("[Capture] %6d ms  %s" % [Time.get_ticks_msec() - _t0, what])
+
 func _ready() -> void:
+	_t0 = Time.get_ticks_msec()
 	var args := parse_args(OS.get_cmdline_user_args())
 	var s := int(args.get("seed", "7"))
 	seed(s)
+	UiTheme.set_style(str(args.get("style", "storybook")))
 	var main: Node = load("res://scenes/Main.tscn").instantiate()
 	main.world_seed = s
+	main.album_path = "user://capture_album.json"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(main.album_path))
 	add_child(main)
+	_mark("main ready")
 	await get_tree().process_frame
+	_mark("first frame")
 
 	if args.has("sim"):
 		main.time_system.set_speed(20.0)
@@ -75,12 +89,20 @@ func _ready() -> void:
 		main._update_view_overlays()
 		main.agent_renderer.update()
 
-	if args.has("no-hud"):
-		var hud := main.get_node_or_null("HUD")
-		if hud: hud.visible = false
+	var hud := main.get_node_or_null("HUD")
+	if hud and hud.has_method("build"):
+		UiTheme.set_style(str(args.get("style", "storybook")))  # over any saved look
+		hud.build()
+		main._update_hud()
+		if args.has("screen"):
+			hud.open_screen(str(args["screen"]))
+	if args.has("no-hud") and hud:
+		hud.visible = false
 	main._update_hud()
+	_mark("set up")
 	for i in int(args.get("frames", "8")):
 		await get_tree().process_frame
+		_mark("frame %d" % i)
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
 	var out: String = args.get("out", "user://capture.png")

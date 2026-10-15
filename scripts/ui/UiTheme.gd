@@ -30,6 +30,10 @@ const TOKENS := {
 
 static var _fonts: Dictionary = {}
 
+## Static caches outlive scenes; drop the fonts so nothing leaks at exit.
+static func clear_cache() -> void:
+	_fonts.clear()
+
 static func set_style(s: String) -> void:
 	if s in STYLES:
 		style = s
@@ -113,8 +117,8 @@ static func button(text: String, selected: bool = false, size: int = 16) -> Butt
 	normal.set_border_width_all(int(n("border_w")) if story else 1)
 	normal.border_color = c("ink") if story else (c("accent") if selected else c("border"))
 	normal.set_corner_radius_all(14 if story else 4)
-	normal.content_margin_left = 14
-	normal.content_margin_right = 14
+	normal.content_margin_left = 12
+	normal.content_margin_right = 12
 	normal.content_margin_top = 6
 	normal.content_margin_bottom = 6
 	if story:
