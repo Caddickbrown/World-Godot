@@ -101,3 +101,11 @@ One line of cause, one line of rule.
 - **A Python "rewrite in place" that opens for write before reading empties the file.**
   `open(p,'w').write(open(p).read())` truncated Capture.gd; the empty script then hung
   the capture scene. Read first, then write.
+- **Data the code never reads.** Four of the seven discovery-condition types in
+  concepts.json fell through ConceptGraph's `match` unhandled, so those conditions were
+  always true; and the one that was read (stone tools on STONE tiles) was so strict it
+  stalled two worlds in three. Rule: a data-driven system rejects (or tests) every key the
+  data uses; probe the tech tree for the first idea that never comes.
+- **Drawn once is frozen.** Flora scattered at load can't show a simulation that changes
+  tiles: spread, fire and regrowth all happened invisibly. Anything the sim changes must be
+  drawn from live state, with dirty marking so only what changed redraws.

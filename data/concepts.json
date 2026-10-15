@@ -28,8 +28,11 @@
     "prerequisites": [],
     "discovery_conditions": [
       {
-        "type": "tile_type",
-        "value": "STONE"
+        "type": "near_tile",
+        "value": [
+          "STONE",
+          "MOUNTAIN"
+        ]
       }
     ],
     "discovery_probability": 0.0005,

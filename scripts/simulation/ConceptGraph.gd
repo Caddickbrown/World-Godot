@@ -78,11 +78,44 @@ func _conditions_met(agent: Agent, tile: Dictionary, concept: Dictionary, world:
 					if abs(other.pos.x - agent.pos.x) + abs(other.pos.y - agent.pos.y) < 5.0:
 						count += 1
 				if count < int(value): return false
-			"has_knowledge":
+			"has_knowledge", "has_concept":
 				if not agent.knowledge.has(value): return false
 			"inventory_item":
 				if not agent.inventory.has(value): return false
+			# These used to fall through unmatched, so the idea could be found
+			# anywhere (sailing far inland, stone tools never, see near_tile).
+			"adjacent_to":
+				if not _type_within(world, tile, value, 1): return false
+			"near_tile":
+				if not _type_within(world, tile, value, NEAR_TILES): return false
+			"tile_has_resource":
+				if float(tile.get(str(value), -1.0)) <= 0.0: return false
+			"near_bee_hive":
+				# No hives are modelled: bees live in the woods.
+				if not _type_within(world, tile, ["WOODLAND", "FOREST"], int(value)): return false
 	return true
+
+const NEAR_TILES := 3
+
+## Is a tile of this type (a name, or a list of names) within r tiles? WATER
+## counts deep water too.
+static func _type_within(world: World, tile: Dictionary, value: Variant, r: int) -> bool:
+	if world == null or tile.is_empty():
+		return true
+	var want: Array = value if value is Array else [value]
+	var types: Dictionary = {}
+	for name in want:
+		types[World.TileType.get(str(name), -1)] = true
+		if str(name) == "WATER":
+			types[World.TileType.DEEP_WATER] = true
+	var cx := int(tile["x"])
+	var cz := int(tile["z"])
+	for dz in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			var t := world.get_tile(cx + dx, cz + dz)
+			if not t.is_empty() and types.has(int(t["type"])):
+				return true
+	return false
 
 func _tile_type_from_string(s: String) -> int:
 	return World.TileType.get(s, -1)

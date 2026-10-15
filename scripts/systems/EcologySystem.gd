@@ -12,7 +12,7 @@ const GRAZE_CHECK_INTERVAL     := 5.0
 const DAY_LENGTH               := 120.0   # seconds per in-game day (matches TimeSystem)
 
 # Forest spread / revert daily probabilities.
-const SPREAD_CHANCE_PER_DAY    := 0.02
+const SPREAD_CHANCE_PER_DAY    := 0.04   # per edge; grown woodland seeds at half this
 const REVERT_CHANCE_PER_DAY    := 0.002
 const SUCCESSION_CHANCE_PER_DAY := 0.01   # grown woodland next to forest becomes forest
 
@@ -82,8 +82,12 @@ func _do_forest_spread(world: World, day: int = 0, history_log: HistoryLog = nul
 				continue
 			var tile_type: int = int(tile.get("type", -1))
 
-			# --- FOREST spreads into adjacent GRASS → WOODLAND ---
-			if tile_type == World.TileType.FOREST:
+			# --- FOREST, and grown WOODLAND (at half the rate), seed the GRASS
+			# next to them: it becomes WOODLAND, starting as seedlings ---
+			var seeds_out: bool = tile_type == World.TileType.FOREST or (tile_type == World.TileType.WOODLAND \
+				and float(tile.get("growth", 1.0)) >= 0.8 and not bool(tile.get("tree_cut", false)))
+			if seeds_out:
+				var p_seed: float = spread_prob if tile_type == World.TileType.FOREST else spread_prob * 0.5
 				for d in dirs:
 					var nx: int = x + d.x
 					var nz: int = z + d.y
@@ -93,7 +97,7 @@ func _do_forest_spread(world: World, day: int = 0, history_log: HistoryLog = nul
 					if ntile.is_empty():
 						continue
 					if int(ntile.get("type", -1)) == World.TileType.GRASS and float(ntile.get("burnt", 0.0)) <= 0.0:
-						if randf() < spread_prob:
+						if randf() < p_seed:
 							# Seeded from the wood next door: it starts as seedlings.
 							ntile["type"] = World.TileType.WOODLAND
 							ntile["growth"] = 0.0
@@ -107,26 +111,32 @@ func _do_forest_spread(world: World, day: int = 0, history_log: HistoryLog = nul
 							if randf() < HERB_SPAWN_CHANCE:
 								ntile["herbs"] = 1.0
 
-			# --- Isolated WOODLAND reverts to GRASS ---
-			elif tile_type == World.TileType.WOODLAND:
+			# --- A lone WOODLAND tile (no woods at all beside it) fades back to
+			# GRASS; WOODLAND beside FOREST slowly turns to forest ---
+			if tile_type == World.TileType.WOODLAND:
 				var has_forest_neighbour: bool = false
+				var has_woods_neighbour: bool = false
 				for d in dirs:
 					var nx: int = x + d.x
 					var nz: int = z + d.y
 					if nx < 0 or nx >= World.WORLD_WIDTH or nz < 0 or nz >= World.WORLD_HEIGHT:
 						continue
 					var ntile: Dictionary = world.get_tile(nx, nz)
-					if not ntile.is_empty() and int(ntile.get("type", -1)) == World.TileType.FOREST:
+					if ntile.is_empty():
+						continue
+					var nt := int(ntile.get("type", -1))
+					if nt == World.TileType.FOREST:
 						has_forest_neighbour = true
-						break
-				if not has_forest_neighbour:
+					if nt == World.TileType.FOREST or nt == World.TileType.WOODLAND:
+						has_woods_neighbour = true
+				if not has_woods_neighbour:
 					# Planted groves are tended; only wild ones fade back to grass.
 					if randf() < revert_prob and not bool(tile.get("planted", false)):
 						tile["type"] = World.TileType.GRASS
 						tile["growth"] = -1.0
 						world.mark_tile_dirty(x, z)
 						world.mark_flora_dirty(x, z)
-				elif float(tile.get("growth", 1.0)) >= 0.95 and not bool(tile.get("tree_cut", false)) \
+				elif has_forest_neighbour and float(tile.get("growth", 1.0)) >= 0.95 and not bool(tile.get("tree_cut", false)) \
 						and randf() < succession_prob:
 					# Grown woodland beside forest: pines come up through it.
 					tile["type"] = World.TileType.FOREST

@@ -30,6 +30,7 @@ func _ready() -> void:
 	_test_teaching_hunting_moving_grief()
 	_test_larder()
 	_test_living_woods()
+	_test_discovery_conditions()
 	print("== integration")
 	await _test_main_views()
 	print("== %d checks, %d failures" % [_checks, _failures])
@@ -617,6 +618,35 @@ func _test_living_woods() -> void:
 	env.refresh_tile(stump.x, stump.y)
 	check("a felled tile shows stumps, not trees", env.stumps_shown_on(stump.x, stump.y) > 0 and not env.trees_shown_on(stump.x, stump.y))
 	env.queue_free()
+
+func _test_discovery_conditions() -> void:
+	var w := World.new(7)
+	var g := _graph()
+	var a := _adult(10, 10)
+	var inland := Vector2i(-1, -1)
+	var shore := Vector2i(-1, -1)
+	var by_rock := Vector2i(-1, -1)
+	var far_rock := Vector2i(-1, -1)
+	for z in range(4, w.height - 4):
+		for x in range(4, w.width - 4):
+			var t := w.get_tile(x, z)
+			if not w.is_walkable(x + 0.5, z + 0.5):
+				continue
+			var water := ConceptGraph._type_within(w, t, "WATER", 1)
+			var rock := ConceptGraph._type_within(w, t, ["STONE", "MOUNTAIN"], ConceptGraph.NEAR_TILES)
+			if water and shore.x < 0: shore = Vector2i(x, z)
+			if not water and not ConceptGraph._type_within(w, t, "WATER", 3) and inland.x < 0: inland = Vector2i(x, z)
+			if rock and int(t["type"]) != World.TileType.STONE and by_rock.x < 0: by_rock = Vector2i(x, z)
+			if not rock and far_rock.x < 0: far_rock = Vector2i(x, z)
+	var sail: Dictionary = g.concepts["sailing"]
+	var stone: Dictionary = g.concepts["stone_tools"]
+	check("sailing is thought of by the water", g._conditions_met(a, w.get_tile(shore.x, shore.y), sail, w, []))
+	check("...not far inland (the condition used to be ignored)", not g._conditions_met(a, w.get_tile(inland.x, inland.y), sail, w, []))
+	check("stone tools come to someone near rock, not only on it", g._conditions_met(a, w.get_tile(by_rock.x, by_rock.y), stone, w, []))
+	check("...but not in the middle of a meadow", not g._conditions_met(a, w.get_tile(far_rock.x, far_rock.y), stone, w, []))
+	var t0 := w.get_tile(shore.x, shore.y)
+	check("'has_concept' conditions are honoured", not g._conditions_met(a, t0,
+		{"discovery_conditions": [{"type": "has_concept", "value": "writing"}]}, w, []))
 
 func _test_larder() -> void:
 	var a := _adult(40, 40)

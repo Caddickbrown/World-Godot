@@ -99,18 +99,20 @@ Longer rhythms:
   in about two days, eight once the camp knows fermentation, so a preserving idea is what
   turns a good summer into a survivable winter.
 
-### Balance, as measured (tools/balance.gd, 14 days, after the double-tick fix)
+### Balance, as measured (tools/balance.gd, 14 days)
 
-| Seed | Ideas found | Ideas ever lost | Population |
-|---|---|---|---|
-| 1 | 32 | 0 | 52 → cap 150 by day 8 |
-| 3 | 16 | 0 | 49 → 150 by day 8 |
-| 5 | 15 | 0 | 48 → 150 by day 9 |
+| Seed | Ideas found | Ideas ever lost | Woods (start → end) | Felled / plantings | Camps / hamlets / towns |
+|---|---|---|---|---|---|
+| 1 | 47 | 0 | 1769 → 1884 | 126 / 14 | 0 / 3 / 5 |
+| 3 | 35 | 0 | 2190 → 2202 (149 young) | 129 / 0 | 3 / 4 / 5 |
+| 5 | 13 | 0 | 2942 → 3072 | 0 / 0 | 9 / 1 / 0 |
 
-Open: two of three worlds stall in the mid-teens, and ideas are still never lost (open
-decision 0). Discovery pace barely matters; each discovery needs its prerequisites held by
-one person, so spreading and craft teaching are the gate. Next probe: craft_pace and the
-population cap together, over 3+ seeds.
+The stall in the mid-teens was stone tools: it could only be thought of standing on bare
+rock, where nobody goes, and shelter, housing, hunting and woodcutting all hang off it. It
+now comes to someone near rock. Several discovery conditions in `data/concepts.json`
+(adjacent_to, has_concept, tile_has_resource, near_bee_hive) were silently ignored by
+ConceptGraph, so e.g. sailing could be thought of inland; they're honoured now.
+Open: seed 5 still never reaches rock in 14 days; ideas are still never lost.
 
 ## Milestones
 

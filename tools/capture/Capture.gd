@@ -14,6 +14,7 @@
 # --yaw=RAD       (with --walk) turn the walker's camera; --cam-distance=D its distance
 # --weather=W     clear | rain | storm (set after the sim, cloud fully drawn in)
 # --teach=A,B     give every founder these ideas before the sim (to show what they do)
+# --burn          set the wood nearest the founders alight before the sim, and look there
 # --camp          look at the biggest settlement (after --sim)
 # --animal=T      look at the nearest living animal of type T (deer, wolf, rabbit, ...)
 # --no-hud        hide the HUD
@@ -47,6 +48,18 @@ func _ready() -> void:
 		for a in main.agents:
 			for id in str(args["teach"]).split(","):
 				a.knowledge[id] = true
+	var burn_at := Vector2(-1, -1)
+	if args.has("burn"):
+		var c := Vector2.ZERO
+		for a in main.agents:
+			c += a.pos
+		c /= maxf(1.0, main.agents.size())
+		var t: Dictionary = main.world.find_nearest(c.x, c.y, [World.TileType.FOREST], 40.0)
+		if not t.is_empty():
+			burn_at = Vector2(int(t["x"]) + 0.5, int(t["z"]) + 0.5)
+			for dz in range(-1, 2):
+				for dx in range(-1, 2):
+					main.fire_system.start_fire(int(t["x"]) + dx, int(t["z"]) + dz, 40.0, main.time_system.game_time, main.world)
 	if args.has("sim"):
 		main.time_system.set_speed(20.0)
 		var steps := int(float(args["sim"]) / 20.0 * 30.0)
@@ -83,6 +96,8 @@ func _ready() -> void:
 	if who and (args.has("follow") or args.has("walk")):
 		main.follow(who)
 		obs.look_at_point(Vector3(who.pos.x, 0, who.pos.y) * World.TILE_SIZE)
+	if burn_at.x >= 0.0:
+		obs.look_at_point(Vector3(burn_at.x, 0, burn_at.y) * World.TILE_SIZE)
 	if args.has("camp"):
 		var big = null
 		for st in main.settlement_system.get_settlements():

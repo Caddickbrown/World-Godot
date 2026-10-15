@@ -16,7 +16,7 @@ const CHUNK := 16                  # tiles per side of a flora chunk
 const REBUILDS_PER_FRAME := 3
 const TREE_PARTS := ["pine_lo", "pine_hi", "trunk", "crown", "crown_small", "stump", "snag"]
 const TRUNK_COL := Color(0.42, 0.29, 0.20)
-const CHAR_COL := Color(0.13, 0.11, 0.10)
+const CHAR_COL := Color(0.06, 0.055, 0.05)
 
 var _world: World
 var _field: Heightfield
