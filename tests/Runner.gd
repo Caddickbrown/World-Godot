@@ -25,6 +25,9 @@ func _ready() -> void:
 	_test_story_keeper()
 	_test_hunches()
 	_test_island_and_heightfield()
+	_test_wildlife_stays_on_land()
+	_test_families_and_fire()
+	_test_teaching_hunting_moving_grief()
 	print("== integration")
 	await _test_main_views()
 	print("== %d checks, %d failures" % [_checks, _failures])
@@ -334,6 +337,157 @@ func _test_island_and_heightfield() -> void:
 		env.refresh_tile(tree_tile.x, tree_tile.y)
 		check("...and grows back", env.trees_shown_on(tree_tile.x, tree_tile.y))
 	env.queue_free()
+
+func _test_wildlife_stays_on_land() -> void:
+	var w := World.new(7)
+	var sim := AnimalSim.new()
+	sim.spawn_wildlife(w)
+	for i in 1800:  # a minute of animal life at 30 fps
+		sim.tick(1.0 / 30.0, w)
+	var wet := 0
+	var cornered := 0
+	var alive := 0
+	for a in sim.animals:
+		if a.state == AnimalSim.AnimalState.DEAD or a.animal_type == AnimalSim.AnimalType.EAGLE:
+			continue
+		alive += 1
+		if not w.is_walkable(a.pos.x, a.pos.y): wet += 1
+		if a.pos.x < 32.0 and a.pos.y < 32.0: cornered += 1
+	check("land animals stay on land (%d of %d in the sea)" % [wet, alive], wet == 0)
+	check("...and don't all drift to the old 32-tile corner (%d of %d)" % [cornered, alive], cornered < alive / 2)
+
+func _test_families_and_fire() -> void:
+	var w := World.new(99)
+	var pts: Array = w.get_spawn_points(3)
+	var graph := ConceptGraph.new([])
+	var parent := _adult(float(pts[0]["x"]), float(pts[0]["z"]))
+	var child := Agent.new(parent.pos.x, parent.pos.y)
+	child.age = child.max_age * 0.15
+	child._update_life_stage()
+	child.parents = [parent.agent_id]
+	parent.children = [child.agent_id]
+	# A child far from its parent heads back.
+	child.pos = parent.pos + Vector2(6, 0)
+	if not w.is_walkable(child.pos.x, child.pos.y):
+		child.pos = parent.pos + Vector2(0, 1)
+	var ts := TimeSystem.new()
+	ts.game_time = TimeSystem.DAY_LENGTH * (11.0 / 24.0)  # midday
+	child._decide_action(w, [parent, child], graph, ts)
+	check("a straying child heads back to a parent", child.target.distance_to(parent.pos) < 2.0)
+	# A hungry child is fed by a parent with food to spare.
+	child.pos = parent.pos + Vector2(0.5, 0)
+	child.needs["hunger"] = 0.2
+	parent.needs["hunger"] = 0.9
+	parent.social_timer = 0.0
+	parent._try_socialise(0.1, [parent, child], graph)
+	check("a parent feeds a hungry child", child.needs["hunger"] > 0.3 and parent.fed_children == 1)
+
+	# Dusk: a settled adult goes to sit by the hearth, and sits.
+	var st := SettlementSystem.new()
+	var s1 := SettlementSystem.Settlement.new()
+	s1.id = 1
+	s1.centre = parent.pos
+	s1.member_ids = [parent.agent_id]
+	st.settlements = [s1]
+	st._reindex_members()
+	parent._settlement_system = st
+	ts.game_time = TimeSystem.DAY_LENGTH * (18.5 / 24.0)
+	parent.pos = s1.centre + Vector2(5, 0)
+	parent._decide_action(w, [parent], graph, ts)
+	check("at dusk a settled person walks to the fire", parent.state == Agent.State.WANDERING and parent.target.distance_to(s1.centre) <= Agent.FIRE_RING_MAX + 0.1)
+	parent.pos = parent.target
+	parent._decide_action(w, [parent], graph, ts)
+	check("...and sits down round it", parent.state == Agent.State.SOCIALIZING)
+	parent.tick(0.1, w, [parent], graph, 1.0, {}, "spring", ts, 1, null, st)
+	check("...at the fire", parent.at_fire)
+	ts.game_time = TimeSystem.DAY_LENGTH * (21.0 / 24.0)
+	parent.tick(0.1, w, [parent], graph, 1.0, {}, "spring", ts, 1, null, st)
+	check("night ends the evening at the fire", not parent.at_fire)
+
+func _test_teaching_hunting_moving_grief() -> void:
+	var g := _graph()
+	# Teaching: with every allowed transfer made certain, only the rules decide.
+	var old_pace := ConceptGraph.spread_pace
+	ConceptGraph.spread_pace = 1000.0
+	var adult := _adult()
+	var infant := Agent.new(10, 10)
+	infant._update_life_stage()
+	adult.knowledge["pottery"] = true      # era 2: a craft
+	adult.knowledge["fire"] = true         # era 1: anyone can copy it
+	g.try_spread(adult, infant, 1.0)
+	check("an infant picks up a simple idea", infant.knowledge.has("fire"))
+	check("...but not a craft", not infant.knowledge.has("pottery"))
+	var child := Agent.new(10, 10)
+	child.age = child.max_age * 0.15
+	child._update_life_stage()
+	child.knowledge["pottery"] = true
+	var learner := _adult()
+	g.try_spread(child, learner, 1.0)
+	check("a child can't teach a craft", not learner.knowledge.has("pottery"))
+	g.try_spread(adult, learner, 1.0)
+	check("an adult can", learner.knowledge.has("pottery"))
+	ConceptGraph.spread_pace = old_pace
+
+	# Hunting: a hungry hunter next to a deer brings it down and shares it.
+	var w := World.new(99)
+	var pts: Array = w.get_spawn_points(2)
+	var hunter := _adult(float(pts[0]["x"]), float(pts[0]["z"]))
+	hunter.knowledge["hunting"] = true
+	hunter.needs["hunger"] = 0.3
+	var friend := _adult(hunter.pos.x + 1.0, hunter.pos.y)
+	friend.needs["hunger"] = 0.3
+	var sim := AnimalSim.new()
+	var deer := sim.spawn_one(AnimalSim.AnimalType.DEER, hunter.pos.x + 0.5, hunter.pos.y)
+	var hunts := HuntingSystem.new()
+	var kills: Array = hunts.tick(0.1, [hunter, friend], sim)
+	check("a hungry hunter brings down a deer", kills.size() == 1 and deer.state == AnimalSim.AnimalState.DEAD)
+	check("...eats", hunter.needs["hunger"] > 0.9)
+	check("...and shares it", friend.needs["hunger"] > 0.5 and int(kills[0]["shared"]) == 1)
+	var fed := _adult(hunter.pos.x, hunter.pos.y)
+	fed.knowledge["hunting"] = true
+	fed.needs["hunger"] = 0.9
+	sim.spawn_one(AnimalSim.AnimalType.DEER, fed.pos.x + 0.5, fed.pos.y)
+	check("a well-fed hunter leaves the deer alone", HuntingSystem.new().tick(0.1, [fed], sim).is_empty())
+
+	# Migration: a camp on stripped land moves, and keeps its people.
+	var ss := SettlementSystem.new()
+	ss.world = w
+	var camp := SettlementSystem.Settlement.new()
+	camp.id = 9
+	camp.centre = hunter.pos
+	camp.member_ids = [hunter.agent_id, friend.agent_id]
+	ss.settlements = [camp]
+	ss._reindex_members()
+	for dz in range(-6, 7):
+		for dx in range(-6, 7):
+			var t := w.get_tile(int(camp.centre.x) + dx, int(camp.centre.y) + dz)
+			if not t.is_empty(): t["resource"] = 0.0
+	var start := camp.centre
+	var hist := HistoryLog.new()
+	for d in range(1, 4):
+		ss._last_eval_day = d
+		ss._check_migration(d, hist)
+	check("a camp on stripped land moves (%.1f tiles)" % camp.centre.distance_to(start), camp.centre.distance_to(start) >= SettlementSystem.MOVE_MIN - 0.1)
+	check("...and says so", hist.entries.any(func(e): return str(e["msg"]).contains("packed up and moved")))
+	ss._update_membership([hunter, friend])
+	check("...keeping its people while they walk", camp.member_ids.size() == 2)
+	hunter.pos = camp.centre
+	friend.pos = camp.centre + Vector2(1, 0)
+	ss._update_membership([hunter, friend])
+	check("...and settling once they arrive", camp.moving_until_day == -1 and camp.member_ids.size() == 2)
+
+	# Grief.
+	var widow := _adult()
+	var base := widow.speed_mult
+	widow.grieve("Oru")
+	check("grief slows them", widow.speed_mult < base)
+	check("...and fills their thoughts", AgentThoughts.thought(widow).contains("Oru"))
+	var other := _adult()
+	other.reproduction_cooldown = 0.0
+	widow.reproduction_cooldown = 0.0
+	var births := g.birth_events.size()
+	widow._try_reproduce(other, g)
+	check("...and nobody starts a family while grieving", g.birth_events.size() == births)
 
 # ── Integration ──────────────────────────────────────────────────────────────
 

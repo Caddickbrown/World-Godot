@@ -13,6 +13,15 @@ enum State {
 }
 
 const AGENT_SPEED    := 1.8   # tiles/sec
+## Evening at the hearth: settled people sit in a ring round the fire from
+## dusk until they sleep, and ideas pass faster in the stories told there.
+const FIRE_RING_MIN := 1.6
+const FIRE_RING_MAX := 3.2
+const FIRE_STORY_MULT := 2.0
+## Children keep within this many tiles of a parent.
+const CHILD_TETHER := 3.0
+## A parent with food to spare feeds a hungry child this much at a time.
+const FEED_CHILD_AMOUNT := 0.2
 const LIFESPAN_DAYS_MIN := 6.0
 const LIFESPAN_DAYS_SPREAD := 4.0
 const HUNGER_DRAIN   := 1.0 / 90.0
@@ -61,6 +70,13 @@ var speech_bubble_timer: float = 0.0
 var speech_bubble: String = ""
 var night_sleeping: bool = false
 var selected: bool = false  # picked in the observer view (Main sets it)
+var at_fire: bool = false   # sitting at the evening hearth
+var fed_children: int = 0   # times they fed a hungry child (the story reads it)
+## Grief: after a partner, child or parent dies, for MOURNING_DAYS they move
+## slowly, don't pair or have children, and think of who they lost.
+var mourning: float = 0.0
+var mourning_for: String = ""
+const MOURNING_DAYS := 0.5
 
 # An agent holds ONE vocation, stored here. Tier 1 vocations unlock with
 # "organisation"; tier 2 are specialisations gated on a settlement knowing the
@@ -267,11 +283,16 @@ var is_elderly: bool:
 
 var speed_mult: float:
 	get:
-		match life_stage:
-			"infant": return 0.5
-			"child":  return 0.8
-			"elder":  return 0.65
-		return 1.0
+		if mourning > 0.0:
+			return _base_speed_mult() * 0.75
+		return _base_speed_mult()
+
+func _base_speed_mult() -> float:
+	match life_stage:
+		"infant": return 0.5
+		"child":  return 0.8
+		"elder":  return 0.65
+	return 1.0
 
 var gather_mult: float:
 	get:
@@ -349,6 +370,7 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 		needs["energy"] = maxf(0.0, needs["energy"] - ENERGY_DRAIN * delta * env_mult)
 
 	if discovery_flash > 0.0:  discovery_flash -= delta
+	if mourning > 0.0:         mourning -= delta
 	if fire_cooldown > 0.0:    fire_cooldown -= delta
 	if ritual_cooldown > 0.0:  ritual_cooldown -= delta
 	if ritual_morale > 0.0:    ritual_morale -= delta
@@ -369,6 +391,9 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 		if not tile.is_empty() and tile["type"] in [World.TileType.FOREST, World.TileType.WOODLAND, World.TileType.GRASS]:
 			fire_cooldown = 45.0 + randf() * 30.0
 			world.campfire_events.append({"tx": tile["x"], "tz": tile["z"], "agent_name": agent_name})
+
+	if state != State.SOCIALIZING:
+		at_fire = false
 
 	# State machine
 	match state:
@@ -397,6 +422,21 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 				_pick_wander_target(world, all_agents)
 			_try_socialise(delta, all_agents, concept_graph)
 			return
+
+		State.SOCIALIZING:
+			# Sitting round the hearth until night (or the timer) ends it.
+			rest_timer -= delta
+			at_fire = true
+			var hearth := _home_position(world)
+			if hearth.x >= 0.0 and (hearth - pos).length() > 0.01:
+				facing = (hearth - pos).normalized()
+			if rest_timer <= 0.0 or (time_system != null and time_system.is_night()):
+				at_fire = false
+				state = State.WANDERING
+				needs_check_timer = 0.0
+			else:
+				_try_socialise(delta, all_agents, concept_graph)
+				return
 
 		State.PERFORMING:
 			rest_timer -= delta
@@ -506,10 +546,20 @@ func _decide_action(world: World, all_agents: Array, concept_graph: ConceptGraph
 			_pick_gather_target(world)
 			return
 
-		# At dusk, head back toward shelter rather than being caught out in
-		# the open when night falls.
+		# At dusk, head home. Settled people sit round their hearth until
+		# night; others shelter wherever home is.
 		if time_system.is_dusk():
 			var home := _home_position(world)
+			var settled := _settlement_system != null and _settlement_system.get_settlement_for_agent(agent_id) != null
+			if settled and needs["hunger"] > 0.2:
+				var seat := home + Vector2.from_angle(float(agent_id) * 2.39996) * lerpf(FIRE_RING_MIN, FIRE_RING_MAX, fmod(agent_id * 0.618, 1.0))
+				if pos.distance_to(seat) > 0.6:
+					state = State.WANDERING
+					target = seat
+				else:
+					state = State.SOCIALIZING
+					rest_timer = maxf(5.0, (20.0 - time_system.hour) / 24.0 * TimeSystem.DAY_LENGTH)
+				return
 			if home.x >= 0.0 and pos.distance_to(home) > 2.0:
 				state = State.WANDERING
 				target = home
@@ -557,6 +607,14 @@ func _decide_action(world: World, all_agents: Array, concept_graph: ConceptGraph
 		state = State.GATHERING
 		_pick_gather_target(world)
 		return
+
+	# Children stay close to a parent.
+	if (life_stage == "infant" or life_stage == "child") and not parents.is_empty():
+		var parent := _nearest_parent(all_agents)
+		if parent and pos.distance_to(parent.pos) > CHILD_TETHER:
+			state = State.WANDERING
+			target = parent.pos + Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0))
+			return
 
 	# Fishing near water
 	if knowledge.has("fishing") and needs["hunger"] < 0.7:
@@ -687,6 +745,22 @@ func _neighbours(all_agents: Array, radius: float) -> Array:
 
 # The settlement centre if the agent belongs to one, otherwise the nearest
 # sheltering tile. Returns (-1, -1) when there is nowhere in particular to go.
+func _nearest_parent(all_agents: Array) -> Agent:
+	var best: Agent = null
+	var grid = _grid()
+	for pid in parents:
+		var p: Agent = grid.get_agent(int(pid)) if grid != null else null
+		if p == null:
+			for other in all_agents:
+				if other.agent_id == int(pid):
+					p = other
+					break
+		if p == null or p.is_dead or p.health <= 0.0:
+			continue
+		if best == null or pos.distance_to(p.pos) < pos.distance_to(best.pos):
+			best = p
+	return best
+
 func _home_position(world: World) -> Vector2:
 	if _settlement_system != null:
 		var st = _settlement_system.get_settlement_for_agent(agent_id)
@@ -929,9 +1003,16 @@ func _try_socialise(delta: float, all_agents: Array, concept_graph: ConceptGraph
 	social_timer = (SOCIAL_COOLDOWN + randf() * 2.0) / social_mult
 
 	for other in _neighbours(all_agents, 5.0):
-		if other == self or other.health <= 0.0: continue
+		if other == self or other.health <= 0.0 or other.is_dead: continue
 		var dist := pos.distance_to(other.pos)
-		concept_graph.try_spread(self, other, SOCIAL_COOLDOWN)
+		# Stories round the fire carry ideas further than chat in the fields.
+		var story := FIRE_STORY_MULT if at_fire and other.at_fire else 1.0
+		concept_graph.try_spread(self, other, SOCIAL_COOLDOWN * story)
+		# Parents feed their hungry children when they have food to spare.
+		if is_adult and other.agent_id in children and other.needs["hunger"] < 0.35 and needs["hunger"] > 0.55:
+			needs["hunger"] -= FEED_CHILD_AMOUNT * 0.5
+			other.needs["hunger"] = minf(1.0, other.needs["hunger"] + FEED_CHILD_AMOUNT)
+			fed_children += 1
 		_try_spread_infection(other)
 		_track_social_and_bond(other)
 		if dist < 3.5: _try_reproduce(other, concept_graph)
@@ -945,7 +1026,13 @@ func _track_social_and_bond(other: Agent) -> void:
 		bonded_partner_id = other.agent_id
 		other.bonded_partner_id = agent_id
 
+## Someone close to them died.
+func grieve(for_name: String) -> void:
+	mourning = TimeSystem.DAY_LENGTH * MOURNING_DAYS
+	mourning_for = for_name
+
 func _try_reproduce(other: Agent, concept_graph: ConceptGraph) -> void:
+	if mourning > 0.0 or other.mourning > 0.0: return
 	if not is_adult or not other.is_adult: return
 	if reproduction_cooldown > 0.0 or other.reproduction_cooldown > 0.0: return
 	if needs["hunger"] < 0.40 or other.needs["hunger"] < 0.40: return

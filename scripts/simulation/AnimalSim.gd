@@ -51,6 +51,9 @@ class Animal extends RefCounted:
 
 var animals: Array = []
 var _next_id: int = 0
+## The world they live on. Targets used to be clamped to (31, 31), a leftover
+## of the 32x32 map, so every animal drifted into one corner (now open sea).
+var _world: World = null
 
 static func type_base_speed(t: int) -> float:
 	match t:
@@ -67,6 +70,7 @@ static func type_base_speed(t: int) -> float:
 	return 1.5
 
 func spawn_wildlife(world: World) -> void:
+	_world = world
 	animals.clear()
 	_next_id = 0
 
@@ -132,7 +136,9 @@ func _pick_type_for_biome(tile_type: int, idx: int) -> int:
 
 # ── Tick ─────────────────────────────────────────────────────────────────────
 
-func tick(delta: float, _world: World) -> void:
+func tick(delta: float, world: World) -> void:
+	if world != null:
+		_world = world
 	for a in animals:
 		var animal: Animal = a as Animal
 		if animal == null: continue
@@ -174,7 +180,9 @@ func _tick_eagle(animal: Animal, delta: float) -> void:
 	animal.state = AnimalState.SOAR
 	animal.wander_timer -= delta
 	if animal.wander_timer <= 0.0:
-		animal.target = Vector2(3.0 + randf() * 26.0, 3.0 + randf() * 26.0)
+		var w := float(_world.width) if _world else 32.0
+		var h := float(_world.height) if _world else 32.0
+		animal.target = Vector2(3.0 + randf() * (w - 6.0), 3.0 + randf() * (h - 6.0))
 		animal.wander_timer = 4.0 + randf() * 6.0
 	_move_toward(animal, delta, 1.0)
 
@@ -185,8 +193,7 @@ func _tick_herbivore(animal: Animal, delta: float) -> void:
 		animal.state = AnimalState.FLEE
 		animal.flee_timer = 3.5
 		var flee_dir: Vector2 = (animal.pos - threat.pos).normalized()
-		var new_target: Vector2 = animal.pos + flee_dir * 10.0
-		animal.target = new_target.clamp(Vector2(1.0, 1.0), Vector2(31.0, 31.0))
+		animal.target = _land_target(animal, animal.pos + flee_dir * 10.0)
 
 	animal.flee_timer -= delta
 	if animal.flee_timer > 0.0:
@@ -215,9 +222,21 @@ func _wander(animal: Animal, delta: float) -> void:
 		animal.state = AnimalState.WALK
 		var dx: float = (randf() - 0.5) * 8.0
 		var dz: float = (randf() - 0.5) * 8.0
-		var new_target: Vector2 = animal.pos + Vector2(dx, dz)
-		animal.target = new_target.clamp(Vector2(1.0, 1.0), Vector2(31.0, 31.0))
+		animal.target = _land_target(animal, animal.pos + Vector2(dx, dz))
 		animal.wander_timer = 2.0 + randf() * 4.0
+
+## A target inside the world and on land the animal can walk on; falls back
+## to standing still rather than wading into the sea.
+func _land_target(animal: Animal, want: Vector2) -> Vector2:
+	if _world == null:
+		return want.clamp(Vector2(1.0, 1.0), Vector2(31.0, 31.0))
+	var hi := Vector2(_world.width - 1.5, _world.height - 1.5)
+	var t := want.clamp(Vector2(1.5, 1.5), hi)
+	for attempt in 4:
+		if _world.is_walkable(t.x, t.y):
+			return t
+		t = (animal.pos + (t - animal.pos) * 0.5).clamp(Vector2(1.5, 1.5), hi)
+	return animal.pos
 
 func _move_toward(animal: Animal, delta: float, speed_mult: float) -> void:
 	var diff: Vector2 = animal.target - animal.pos
@@ -227,7 +246,13 @@ func _move_toward(animal: Animal, delta: float, speed_mult: float) -> void:
 		animal.wander_timer = 1.0 + randf() * 2.0
 		return
 	var dir: Vector2 = diff / len
-	animal.pos += dir * animal.speed * speed_mult * delta
+	var next: Vector2 = animal.pos + dir * animal.speed * speed_mult * delta
+	# Land animals stop at the water's edge; eagles fly over anything.
+	if animal.animal_type != AnimalType.EAGLE and _world and not _world.is_walkable(next.x, next.y):
+		animal.state = AnimalState.IDLE
+		animal.wander_timer = 0.5
+		return
+	animal.pos = next
 	animal.facing = atan2(dir.x, dir.y)
 
 func _find_nearest_of_types(animal: Animal, types: Array, max_dist: float) -> Animal:

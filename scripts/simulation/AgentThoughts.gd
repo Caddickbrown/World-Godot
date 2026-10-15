@@ -19,6 +19,10 @@ const DOING := {
 static func doing(a: Agent) -> String:
 	if a.is_dead:
 		return "gone (" + a.death_cause.replace("_", " ") + ")"
+	if a.at_fire:
+		return "sitting by the fire"
+	if a.mourning > 0.0:
+		return "mourning " + a.mourning_for
 	if a.trader_state == "outbound":
 		return "on a trading journey"
 	if a.trader_state == "returning":
@@ -34,6 +38,8 @@ static func thought(a: Agent) -> String:
 	var energy: float = float(a.needs.get("energy", 1.0))
 	if a.state == Agent.State.SLEEPING:
 		return "Zzz…"
+	if a.mourning > 0.0 and a.mourning_for != "":
+		return "I keep looking for %s by the fire." % a.mourning_for
 	if a.infected:
 		return "I feel feverish. I should keep away from the little ones."
 	if hunger < 0.2:

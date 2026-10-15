@@ -19,6 +19,9 @@ class Settlement extends RefCounted:
 	var wood_store: float = 0.0
 	var last_contact_day: int = 0
 	var founding_day: int = 0
+	var lean_days: int = 0           # days in a row the land round the hearth was stripped
+	var moving_until_day: int = -1   # while moving, members are kept though far from the new hearth
+	var moves: int = 0
 
 # ---------------------------------------------------------------------------
 # Naming tables
@@ -66,6 +69,14 @@ const FOUNDING_SPACING: float = 12.0
 const ABANDON_DAYS: int = 2
 ## A hamlet needs writing AND this many people to become a town.
 const TOWN_SIZE: int = 10
+## Migration: when the land round a hearth stays stripped, the camp moves.
+const FOOD_RADIUS := 6
+const LEAN_BELOW := 0.3          # average food on the land round the hearth
+const LEAN_DAYS_TO_MOVE := 2
+const MOVE_MIN := 10.0
+const MOVE_MAX := 28.0
+var world: World = null          # set by Main; migration needs the land
+var _last_eval_day := -1
 var _met_pairs: Dictionary = {}     # "lo:hi" settlement ids that have met
 var _empty_since: Dictionary = {}   # settlement id -> day it emptied
 
@@ -109,6 +120,10 @@ func tick(delta: float, agents: Array, concept_graph: ConceptGraph, day: int, hi
 	_tick_inter_contact(day, history_log)
 	# 9. Abandon camps nobody lives in any more
 	_abandon_empty(day, history_log)
+	# 10. Once a day, camps on stripped land move to better ground
+	if day != _last_eval_day:
+		_last_eval_day = day
+		_check_migration(day, history_log)
 
 
 func get_settlement_for_agent(agent_id: int) -> RefCounted:
@@ -197,6 +212,17 @@ func _create_settlement(group: Array, centroid: Vector2, day: int, history_log: 
 
 func _update_membership(agents: Array, spatial_grid = null) -> void:
 	for s: Settlement in settlements:
+		if s.moving_until_day >= 0:
+			# On the move: keep who they are until most have reached the new
+			# hearth (or two days pass), or a night's sleep would orphan them.
+			var arrived := 0
+			for entry in agents:
+				var m := entry as Agent
+				if m and m.agent_id in s.member_ids and not m.is_dead and m.pos.distance_to(s.centre) <= MEMBERSHIP_RADIUS:
+					arrived += 1
+			if arrived * 2 < s.member_ids.size() and _last_eval_day < s.moving_until_day:
+				continue
+			s.moving_until_day = -1
 		var new_members: Array = []
 		if spatial_grid != null:
 			# Only agents near the settlement centre can be members, so ask the
@@ -351,6 +377,66 @@ func _tick_inter_contact(day: int, history_log: HistoryLog) -> void:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+## Average food left on the land round a point (walkable tiles only).
+func food_around(c: Vector2, radius: int = FOOD_RADIUS) -> float:
+	if world == null:
+		return 1.0
+	var total := 0.0
+	var n := 0
+	for dz in range(-radius, radius + 1):
+		for dx in range(-radius, radius + 1):
+			var x := int(c.x) + dx
+			var z := int(c.y) + dz
+			if not world.is_walkable(x + 0.5, z + 0.5):
+				continue
+			var t := world.get_tile(x, z)
+			if int(t["type"]) in [World.TileType.GRASS, World.TileType.WOODLAND, World.TileType.FOREST]:
+				total += float(t.get("resource", 0.0))
+			n += 1
+	return total / float(n) if n > 0 else 0.0
+
+func _check_migration(day: int, history_log: HistoryLog) -> void:
+	if world == null:
+		return
+	for s: Settlement in settlements:
+		if s.member_ids.is_empty() or s.moving_until_day >= 0:
+			continue
+		var here := food_around(s.centre)
+		s.lean_days = s.lean_days + 1 if here < LEAN_BELOW else 0
+		if s.lean_days < LEAN_DAYS_TO_MOVE:
+			continue
+		var best := Vector2(-1, -1)
+		var best_food := here + 0.15
+		for i in 40:
+			var a := randf() * TAU
+			var r := randf_range(MOVE_MIN, MOVE_MAX)
+			var c := s.centre + Vector2(cos(a), sin(a)) * r
+			if not world.is_walkable(c.x, c.y):
+				continue
+			var crowded := false
+			for other: Settlement in settlements:
+				if other != s and other.centre.distance_to(c) < FOUNDING_SPACING:
+					crowded = true
+					break
+			if crowded:
+				continue
+			var f := food_around(c)
+			if f > best_food:
+				best_food = f
+				best = c
+		if best.x < 0.0:
+			continue
+		var heading := _heading(best - s.centre)
+		s.centre = best
+		s.lean_days = 0
+		s.moves += 1
+		s.moving_until_day = day + 2
+		history_log.add("settlement", "The people of '%s' packed up and moved %s, to better land." % [s.name, heading], day)
+
+static func _heading(v: Vector2) -> String:
+	var a := fposmod(rad_to_deg(atan2(v.x, -v.y)), 360.0)  # 0 = north (-z)
+	return ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"][int(round(a / 45.0)) % 8]
 
 ## A name no living settlement already has (hamlet style, then town style).
 func _unique_name() -> String:

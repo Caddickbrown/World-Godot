@@ -11,6 +11,12 @@ var birth_events: Array = []    # { x, z, parent_name, parent_a_id, parent_b_id,
 ## last holder. Measured with tools/balance.gd; see the commit that set them.
 static var discovery_pace := 0.35
 static var spread_pace := 0.45
+## Crafts (era 2 and later) have to be taught: only an adult can pass one on,
+## infants can't take one up, and they spread more slowly than ideas anyone
+## can copy by watching. That makes them fragile: a craft held by a few can
+## die with them. Children learn fastest from their own parents.
+static var craft_pace := 0.4
+const PARENT_TEACHING := 2.0
 
 func _init(concepts_data: Array) -> void:
 	for c in concepts_data:
@@ -96,7 +102,14 @@ func try_spread(agent_a: Agent, agent_b: Agent, delta_time: float = 5.0) -> void
 		var learner: Agent = agent_b if a_knows else agent_a
 		var teacher: Agent = agent_a if a_knows else agent_b
 
+		var craft := int(concept.get("era", 1)) >= 2
+		if craft and (not teacher.is_adult or learner.life_stage == "infant"):
+			continue
 		var spread_rate: float = float(concept.get("spread_rate", 0.01)) * delta_time * spread_pace
+		if craft:
+			spread_rate *= craft_pace
+		if learner.agent_id in teacher.children:
+			spread_rate *= PARENT_TEACHING
 		if teacher.knowledge.has("language"): spread_rate *= 2.0
 		if teacher.knowledge.has("writing"):  spread_rate *= 1.5
 		if teacher.task == "teacher":         spread_rate *= 1.1

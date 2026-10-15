@@ -39,6 +39,7 @@ var history_log           # HistoryLog
 var achievements          # Achievements
 var audio_system          # AudioSystem
 var lineage_tracker       # LineageTracker
+var hunting_system: HuntingSystem
 ## The player-facing story (chronicle, lives, ideas, moments, hunches). Reads
 ## the simulation, never writes to it.
 var story: StoryKeeper
@@ -192,6 +193,8 @@ func _init_world() -> void:
 	crafting_system = CraftingSystem.new()
 	settlement_system = SettlementSystem.new()
 	conflict_system.settlement_system = settlement_system
+	settlement_system.world = world
+	hunting_system = HuntingSystem.new()
 	agent_renderer.settlement_system = settlement_system
 	tile_items = TileItems.new()
 	spatial_grid = SpatialGrid.new()
@@ -314,6 +317,8 @@ func _process(delta: float) -> void:
 		else:
 			_push_notification("The sickness has passed.")
 	trading_system.tick(game_delta, agents, item_defs, time_system.day, history_log, spatial_grid)
+	for kill in hunting_system.tick(game_delta, agents, animal_sim, spatial_grid):
+		story.on_hunt(kill["hunter"], int(kill["prey_type"]), int(kill["shared"]))
 	crafting_system.tick(game_delta, agents, item_defs, time_system.day, history_log)
 	settlement_system.tick(game_delta, agents, concept_graph, time_system.day, history_log, spatial_grid)
 	tile_items.tick_spoilage(game_delta, item_defs, disaster_system.get_spoilage_mult())
@@ -354,6 +359,7 @@ func _process(delta: float) -> void:
 			a.set_meta("death_logged", true)
 			history_log.add("death", history_log.format_death(a.agent_name, a.death_cause), time_system.day)
 			story.on_death(a)
+			_grieve_for(a)
 			audio_system.play_death()
 
 	# Game over detection
@@ -444,7 +450,7 @@ func _handle_events() -> void:
 ## (the systems already write it) into the story, with the moment it unlocks.
 const WORLD_NEWS := {
 	"settlement": [["New camp founded", "first_camp"], ["grown into hamlet", "hamlet"],
-		["elevated to named", "hamlet"], ["made contact", "contact"]],
+		["elevated to named", "hamlet"], ["made contact", "contact"], ["packed up and moved", "camp_moves"]],
 	"fire": [["Lightning", "lightning"]],
 	"disease": [], "disaster": [], "trade": [], "war": [], "ecology": [], "craft": [],
 }
@@ -483,6 +489,9 @@ static func _reword(msg: String) -> String:
 	var town := RegEx.create_from_string("Hamlet elevated to named settlement '(.*)'").search(m)
 	if town:
 		return "%s has writing now, and has become a town." % town.get_string(1)
+	var moved := RegEx.create_from_string("The people of '(.*)' packed up and moved (.*), to better land").search(m)
+	if moved:
+		return "The land round %s was stripped bare, so its people packed up and walked %s to better ground." % [moved.get_string(1), moved.get_string(2)]
 	var met := RegEx.create_from_string("Settlements '(.*)' and '(.*)' made contact").search(m)
 	if met:
 		return "The people of %s and %s have met." % [met.get_string(1), met.get_string(2)]
@@ -694,6 +703,19 @@ func listen_to_nearest() -> Agent:
 	agent_renderer.listening_id = a.agent_id if a else -1
 	if a: story.on_player("listen", a.agent_name)
 	return a
+
+## Partner, children and parents grieve when someone dies.
+func _grieve_for(dead: Agent) -> void:
+	for a in agents:
+		if a.is_dead or a == dead:
+			continue
+		var relation := ""
+		if a.bonded_partner_id == dead.agent_id: relation = "partner"
+		elif a.agent_id in dead.children: relation = "parent"
+		elif a.agent_id in dead.parents: relation = "child"
+		if relation != "":
+			a.grieve(dead.agent_name)
+			story.on_grief(a, dead, relation)
 
 ## Point the sky camera at a tile (chronicle entries are clickable).
 func look_at_tile(tile_pos: Vector2) -> void:

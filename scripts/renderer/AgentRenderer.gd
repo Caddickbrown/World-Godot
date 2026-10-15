@@ -199,7 +199,7 @@ func update() -> void:
 		var moved: float = (agent.pos - (e["last_pos"] as Vector2)).length()
 		e["last_pos"] = agent.pos
 		var walking: bool = moved > 0.0005 and not agent.is_dead and agent.state != Agent.State.SLEEPING
-		if walking:
+		if walking or agent.at_fire:
 			root.rotation.y = atan2(agent.facing.x, agent.facing.y)
 		var stage_scale := 0.55 if agent.life_stage == "infant" else (0.72 if agent.life_stage == "child" else 1.0)
 		root.scale = Vector3.ONE * stage_scale
@@ -208,7 +208,7 @@ func update() -> void:
 		if agent.is_dead:
 			root.rotation.x = deg_to_rad(88.0)
 			body_root.position.y = 0.0
-		elif agent.state == Agent.State.SLEEPING:
+		elif agent.state == Agent.State.SLEEPING or agent.at_fire:
 			root.rotation.x = 0.0
 			body_root.position.y = -0.45   # sitting, curled by the fire
 			for leg in legs: leg.rotation.x = -PI / 2.0

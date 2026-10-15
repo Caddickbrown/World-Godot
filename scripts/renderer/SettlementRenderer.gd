@@ -33,10 +33,11 @@ func sync(settlements: Array, fires: Dictionary) -> void:
 		live[s.id] = true
 		var count := clampi(int(ceil(float(s.member_ids.size()) / PEOPLE_PER_DWELLING)), 2, MAX_DWELLINGS)
 		var e: Dictionary = _built.get(s.id, {})
-		if e.is_empty() or int(e["tier"]) != int(s.tier) or int(e["count"]) != count:
+		if e.is_empty() or int(e["tier"]) != int(s.tier) or int(e["count"]) != count \
+				or (e["centre"] as Vector2).distance_to(s.centre) > 0.5:
 			if not e.is_empty():
 				(e["node"] as Node).queue_free()
-			_built[s.id] = {"node": _build_settlement(s, count), "tier": int(s.tier), "count": count}
+			_built[s.id] = {"node": _build_settlement(s, count), "tier": int(s.tier), "count": count, "centre": s.centre}
 	for id in _built.keys():
 		if not live.has(id):
 			(_built[id]["node"] as Node).queue_free()

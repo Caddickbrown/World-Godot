@@ -15,6 +15,8 @@ const KINDS := ["people", "ideas", "world"]
 const RECOUNT_INTERVAL := 2.0   # game seconds between living-holder recounts
 const TEACHER_THRESHOLD := 10
 const MAX_CHRONICLE := 300
+const FIRE_CIRCLE := 6          # people round one evening fire for the moment
+const FED_TO_TELL := 5          # meals given to hungry children before it's in their story
 
 var chronicle: Array = []       # {day, hour, kind, text, pos, agent_ids}
 var lives: Dictionary = {}      # agent_id -> life record (see _life)
@@ -34,6 +36,8 @@ var _partner_seen: Dictionary = {}   # agent_id -> partner id we've already told
 var _founders: Dictionary = {}       # agent_id -> true
 var _founders_left := 0
 var _seen_year := false
+var _hunts := 0
+var _fed_told: Dictionary = {}       # agent_id -> true once their caring is told
 
 func setup(concept_graph: ConceptGraph, agents: Array, album_path: String = "user://world_album.json") -> void:
 	concepts = concept_graph.concepts
@@ -120,6 +124,21 @@ func on_spread(learner: Agent, teacher: Agent, concept_id: String) -> void:
 	if learner and tl.taught.size() == 1 and n == 1:
 		_event(teacher, "Taught %s to %s, the first idea they passed on." % [ledger.name_of(concept_id).to_lower(), learner.agent_name], "ideas")
 
+func on_hunt(hunter: Agent, prey_type: int, shared: int) -> void:
+	var prey := HuntingSystem.prey_name(prey_type)
+	var line := "Brought down %s%s." % [prey, (" and shared it with %d" % shared) if shared > 0 else ""]
+	_event(hunter, line, "people")
+	_hunts += 1
+	if _hunts == 1:
+		add("people", "%s brought down %s: the first hunt." % [hunter.agent_name, prey], hunter.pos, [hunter.agent_id])
+		_try_moment("first_hunt", hunter.pos, [hunter.agent_id], "%s, day %d" % [hunter.agent_name, day])
+	else:
+		add("people", "%s brought down %s%s." % [hunter.agent_name, prey, (", and %d ate well" % shared) if shared > 1 else ""], hunter.pos, [hunter.agent_id], false)
+
+func on_grief(mourner: Agent, dead: Agent, relation: String) -> void:
+	var what: String = {"partner": "their partner", "parent": "their parent", "child": "their child"}.get(relation, "someone close")
+	_event(mourner, "Lost %s, %s." % [what, dead.agent_name], "people")
+
 ## World events (weather, fire, settlements). moment: optional moment id.
 func on_world(text: String, pos: Vector2 = Vector2(-1, -1), moment: String = "") -> void:
 	add("world", text, pos, [])
@@ -171,6 +190,18 @@ func tick(game_delta: float, agents: Array, p_day: int, p_hour: float, alive: in
 		hunches.offer(agents, ledger, concepts, day)
 	if alive >= 100:
 		_try_moment("hundred", Vector2(-1, -1), [], "day %d" % day)
+	# The evening fire, and the parents who kept their children fed.
+	var at_fire: Array = []
+	for a in agents:
+		if a.is_dead:
+			continue
+		if a.at_fire:
+			at_fire.append(a)
+		if a.fed_children >= FED_TO_TELL and not _fed_told.has(a.agent_id):
+			_fed_told[a.agent_id] = true
+			_event(a, "Kept their children fed when food was short.", "people")
+	if at_fire.size() >= FIRE_CIRCLE:
+		_try_moment("fire_circle", at_fire[0].pos, at_fire.map(func(x): return x.agent_id), "day %d" % day)
 	if day > TimeSystem.SEASON_DAYS * 4 and not _seen_year:
 		_seen_year = true
 		_try_moment("full_year", Vector2(-1, -1), [], "day %d" % day)
