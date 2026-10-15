@@ -417,7 +417,7 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 		State.FISHING:
 			rest_timer -= delta
 			if rest_timer <= 0.0:
-				var fish_yield := 0.5
+				var fish_yield := 0.5 * AmbientLife.fish_catch(world, pos)
 				if knowledge.has("stone_tools"): fish_yield *= 1.2
 				if knowledge.has("cooking"):     fish_yield *= 1.5
 				needs["hunger"] = minf(1.0, needs["hunger"] + fish_yield)

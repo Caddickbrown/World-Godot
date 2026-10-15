@@ -17,7 +17,8 @@ var field: Heightfield
 var chunk_count := 0
 var _chunks: Dictionary = {}      # Vector2i -> MeshInstance3D
 var _dirty: Dictionary = {}       # Vector2i -> true
-var _material: StandardMaterial3D
+var _material: ShaderMaterial
+var _season: Dictionary = {}
 var _water: MeshInstance3D
 ## Settlement centres (world metres) for trampled ground; set by Main.
 var camps: Array = []
@@ -51,10 +52,11 @@ func rebuild() -> void:
 		ch.queue_free()
 	_chunks.clear()
 	_dirty.clear()
-	_material = StandardMaterial3D.new()
-	_material.vertex_color_use_as_albedo = true
-	_material.vertex_color_is_srgb = true
-	_material.roughness = 0.95
+	# Vertex colours (LookStyle.ground) with the season laid over in the shader,
+	# so the year turns through uniforms (set_season), not rebuilds.
+	_material = ShaderMaterial.new()
+	_material.shader = preload("res://shaders/terrain_season.gdshader")
+	SeasonLook.apply(_material, _season)
 	chunk_count = int(ceil(field.size_m / CHUNK_M))
 	for cz in chunk_count:
 		for cx in chunk_count:
@@ -78,6 +80,11 @@ func flush_dirty() -> void:
 		_build_chunk(c)
 		done += 1
 
+## Everything waiting, now (captures and tests; the game spreads it over frames).
+func flush_all() -> void:
+	while not _dirty.is_empty():
+		flush_dirty()
+
 func _build_chunk(c: Vector2i) -> void:
 	if _chunks.has(c):
 		(_chunks[c] as Node).queue_free()
@@ -96,6 +103,7 @@ func _build_chunk(c: Vector2i) -> void:
 			var tile := world.get_tile_f(x / TILE_SIZE, z / TILE_SIZE)
 			var wob := sin(x * 0.07 + z * 0.05) * cos(z * 0.09 - x * 0.03) * 0.5 + 0.5
 			var col := LookStyle.ground(field.biome_at(x, z), h, nrm, tile, wob)
+			col = LookStyle.disaster_tint(col, _field_at(x, z, "drought"), _field_at(x, z, "blight"))
 			col = _trample(col, x, z)
 			st.set_color(col)
 			st.set_normal(nrm)
@@ -110,6 +118,41 @@ func _build_chunk(c: Vector2i) -> void:
 	mi.material_override = _material
 	add_child(mi)
 	_chunks[c] = mi
+
+## A per-tile amount (DisasterSystem's drought / blight) read smoothly between
+## tile centres, so a drought's edge is a gradient, never a staircase.
+func _field_at(x: float, z: float, key: String) -> float:
+	var tx := x / TILE_SIZE - 0.5
+	var tz := z / TILE_SIZE - 0.5
+	var x0 := floori(tx)
+	var z0 := floori(tz)
+	var fx := tx - x0
+	var fz := tz - z0
+	var a := _tile_val(x0, z0, key)
+	var b := _tile_val(x0 + 1, z0, key)
+	var c := _tile_val(x0, z0 + 1, key)
+	var d := _tile_val(x0 + 1, z0 + 1, key)
+	if a == 0.0 and b == 0.0 and c == 0.0 and d == 0.0:
+		return 0.0
+	return lerpf(lerpf(a, b, fx), lerpf(c, d, fx), fz)
+
+func _tile_val(x: int, z: int, key: String) -> float:
+	var t := world.get_tile(x, z)
+	return 0.0 if t.is_empty() else float(t.get(key, 0.0))
+
+## The season's look (SeasonLook.blend): a few uniforms, set when they move.
+func set_season(b: Dictionary) -> void:
+	var changed := _season.is_empty()
+	for k in b:
+		if absf(float(b[k]) - float(_season.get(k, -1.0))) > 0.004:
+			changed = true
+	if not changed:
+		return
+	_season = b.duplicate()
+	SeasonLook.apply(_material, _season)
+
+func season_value(key: String) -> float:
+	return float(_season.get(key, 0.0))
 
 func _trample(col: Color, x: float, z: float) -> Color:
 	for p in camps:

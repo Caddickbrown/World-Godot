@@ -50,6 +50,9 @@ var _history_seen := 0
 var _was_storm := false
 var disease_system        # DiseaseSystem
 var population_manager    # PopulationManager
+## Whales, fish, birds, frogs, bees: the small wild things (AmbientLife.gd).
+var ambient_life: AmbientLife
+var ambient_renderer: AmbientRenderer
 
 # Views: the observer's eye in the sky, and the wanderer on the ground.
 enum ViewMode { OBSERVE, WALK }
@@ -62,6 +65,7 @@ const LISTEN_RADIUS := 2.5
 
 # Lighting
 var sky: SkyLook
+var disaster_view: DisasterView   # a flood's water over the land
 
 # Game state
 var game_over: bool = false
@@ -78,7 +82,7 @@ func _ready() -> void:
 ## A real game (Main is the scene the game launched, not a test or a capture)
 ## opens on the look picker with the clock held until you begin.
 func _begin() -> void:
-	if get_tree().current_scene != self:
+	if not is_inside_tree() or get_tree().current_scene != self:
 		return
 	var hud := get_node_or_null("HUD")
 	if hud and hud.has_method("open_look"):
@@ -105,6 +109,8 @@ func _setup_scene() -> void:
 	# Sky, sun, moon and haze (follows the look style).
 	sky = SkyLook.new()
 	add_child(sky)
+	disaster_view = DisasterView.new()
+	add_child(disaster_view)
 
 func _load_data() -> void:
 	# Load concepts
@@ -196,6 +202,14 @@ func _init_world() -> void:
 	add_child(environment_renderer)
 	environment_renderer.setup(world)
 
+	# Small wild things, with their own dice (never the simulation's).
+	if ambient_renderer:
+		ambient_renderer.queue_free()
+	ambient_life = AmbientLife.new().setup(world)
+	ambient_renderer = AmbientRenderer.new()
+	add_child(ambient_renderer)
+	ambient_renderer.setup(ambient_life, world)
+
 	# Simulation systems
 	history_log = HistoryLog.new()
 	achievements = Achievements.new()
@@ -259,7 +273,7 @@ func _process(delta: float) -> void:
 		return
 
 	var season := time_system.season.to_lower()
-	weather_system.update(game_delta, time_system.season)
+	weather_system.update(game_delta, time_system.season, world, time_system.hour)
 	world.day = time_system.day
 	world.update_resources(game_delta, season)
 	world.update_depletion(game_delta)
@@ -288,7 +302,7 @@ func _process(delta: float) -> void:
 
 	# Disaster system
 	var prev_disaster: int = disaster_system.current
-	disaster_system.tick(game_delta, time_system.day, history_log)
+	disaster_system.tick(game_delta, time_system.day, history_log, world, agents)
 	if disaster_system.current != prev_disaster:
 		if disaster_system.current != 0:
 			_push_notification(disaster_system.label + " has begun!")
@@ -393,6 +407,9 @@ func _process(delta: float) -> void:
 
 	# Tick wildlife
 	animal_sim.tick(game_delta, world)
+	ambient_life.tick(game_delta, time_system.hour, time_system.season, agents, weather_system.is_raining)
+	for evt in ambient_life.drain_events():
+		story.on_wild(evt, agents)
 	_tick_population(game_delta)
 	_tick_animal_minds(game_delta)
 
@@ -583,14 +600,21 @@ func _handle_campfires(delta: float) -> void:
 			world.natural_fires[key] = {"end_time": time_system.game_time + 40.0 + randf() * 20.0}
 	world.campfire_events.clear()
 
-func _maybe_lightning(_delta: float) -> void:
-	# Simple: random forest tile catches fire during storm
-	if randf() > 0.001: return
+## In a storm, now and then lightning sets a wood alight. A per-second chance
+## (it was rolled per frame, so it depended on the frame rate).
+const LIGHTNING_FIRE_PER_SECOND := 0.02
+
+func _maybe_lightning(delta: float) -> void:
+	if randf() > LIGHTNING_FIRE_PER_SECOND * delta: return
 	var forest_tiles := world.get_tiles_of_type([World.TileType.FOREST])
 	if forest_tiles.is_empty(): return
 	var tile: Dictionary = forest_tiles[randi() % forest_tiles.size()]
 	var key := "%d,%d" % [tile["x"], tile["z"]]
 	world.natural_fires[key] = {"end_time": time_system.game_time + 28.0 + randf() * 18.0}
+	if sky and sky.weather_view:
+		var tx := float(tile["x"]) + 0.5
+		var tz := float(tile["z"]) + 0.5
+		sky.weather_view.strike_at(Vector3(tx * TILE_SIZE, world.surface_y(tx, tz), tz * TILE_SIZE))
 	_push_notification("Lightning strikes the forest!")
 
 # ── Notifications ─────────────────────────────────────────────────────────────
@@ -688,8 +712,13 @@ func _show_game_over() -> void:
 
 func _update_sun() -> void:
 	var focus: Vector3 = wanderer.world_position() if view_mode == ViewMode.WALK else observer.target
-	var goal := 1.0 if weather_system.is_storm else (0.6 if weather_system.is_raining else 0.0)
-	sky.set_weather(goal, weather_system.is_raining, focus, get_process_delta_time() * time_system.speed)
+	# What you see is the weather where you're looking (and clouds, rain and
+	# rainbows over the rest of the island), not the worst zone anywhere.
+	sky.watch_weather(weather_system, focus, get_process_delta_time() * time_system.speed)
+	var season_look := SeasonLook.blend(time_system.game_time / TimeSystem.DAY_LENGTH)
+	terrain_renderer.set_season(season_look)
+	environment_renderer.set_season(season_look)
+	disaster_view.update(disaster_system, world)
 	sky.set_time(time_system.time_of_day)
 
 # ── Views and input ──────────────────────────────────────────────────────────
@@ -782,6 +811,8 @@ func apply_style() -> void:
 	agent_renderer.restyle()
 	animal_renderer.restyle()
 	settlement_renderer.restyle()
+	disaster_view.apply_style()
+	ambient_renderer.restyle()
 
 func follow(agent: Agent) -> void:
 	_select(agent)
