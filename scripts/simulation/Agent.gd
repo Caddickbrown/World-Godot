@@ -122,6 +122,20 @@ var death_cause: String = ""
 var facing: Vector2 = Vector2(0, 1)
 
 var inventory: Inventory
+
+## What the ideas they know add up to (ConceptEffects), cached until they learn
+## something: knowledge only grows, so its size is the cache key.
+var _fx: Dictionary = {}
+var _fx_n: int = -1
+## On the water: "" (dry land), "wading" (swimming in the shallows), "boat".
+## The renderer draws a little boat under someone afloat.
+var afloat: String = ""
+var on_mountain: bool = false
+var voyage: bool = false          # a seafarer bound for a far shore
+var poisoned: float = 0.0         # seconds since a bad mushroom (thoughts read it)
+var healed_by: String = ""        # who last tended them (thoughts read it)
+var mourning_rite: bool = false   # they buried their dead with a rite (animism)
+var _concept_graph = null         # for telling the chronicle about firsts (deeds)
 var _last_weather_mult: float = 1.0
 var _item_defs: Dictionary = {}
 var _season: String = ""
@@ -256,7 +270,25 @@ func _init(x: float, z: float) -> void:
 # ── Accessors ──────────────────────────────────────────────────────────────
 
 var curiosity: float:
-	get: return personality["curiosity"]
+	get: return minf(1.0, personality["curiosity"] + fxf("curiosity_bonus"))
+
+## The aggregate effects of every idea they know (see ConceptEffects.RULES).
+func fx() -> Dictionary:
+	if _fx_n != knowledge.size():
+		_fx = ConceptEffects.aggregate(knowledge)
+		_fx_n = knowledge.size()
+	return _fx
+
+func fxf(key: String) -> float:
+	return float(fx().get(key, 0.0))
+
+func fxb(key: String) -> bool:
+	return bool(fx().get(key, false))
+
+## Horse taming. The riding itself (mounting a horse) belongs to the animals
+## work; until then a horse-tamer ranges further (see _pick_wander_target).
+var rides_horses: bool:
+	get: return fxb("can_ride_horses")
 
 var social_mult: float:
 	get: return 0.7 + personality["sociability"] * 0.6
@@ -265,18 +297,7 @@ var discovery_mult: float:
 	get: return 0.8 + personality["curiosity"] * 0.4
 
 var age_bonus: float:
-	get:
-		var b := 0.0
-		if knowledge.has("fire"):         b += 0.10
-		if knowledge.has("shelter"):      b += 0.10
-		if knowledge.has("cooking"):      b += 0.15
-		if knowledge.has("medicine"):     b += 0.20
-		if knowledge.has("clothing"):     b += 0.08
-		if knowledge.has("housing"):      b += 0.12
-		if knowledge.has("community"):    b += 0.10
-		if knowledge.has("agriculture"):  b += 0.15
-		if knowledge.has("preservation"): b += 0.10
-		return b
+	get: return fxf("max_age_bonus")
 
 var life_expectancy: float:
 	get: return max_age * (1.0 + age_bonus)
@@ -286,9 +307,11 @@ var is_elderly: bool:
 
 var speed_mult: float:
 	get:
+		# The sick and poisoned drag their feet.
+		var frail := 1.0 if health >= 0.5 else 0.6 + health * 0.8
 		if mourning > 0.0:
-			return _base_speed_mult() * 0.75
-		return _base_speed_mult()
+			return _base_speed_mult() * 0.75 * frail
+		return _base_speed_mult() * frail
 
 func _base_speed_mult() -> float:
 	match life_stage:
@@ -321,6 +344,7 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 	_tile_items = tile_items
 	_settlement_system = settlement_system
 	_spatial_grid_ref = weakref(spatial_grid) if spatial_grid != null else null
+	_concept_graph = concept_graph
 	age += delta
 
 	# Starvation
@@ -339,12 +363,27 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 	if immune_timer > 0.0: immune_timer -= delta
 	if infected:
 		infection_timer += delta
-		health = maxf(0.0, health - 0.0005 * delta)
+		# A fever costs about a seventh of their health; the very young and the
+		# old take it harder. Health used to be cosmetic (nothing below 1 did
+		# anything), so medicine and herbs healed nothing anyone could see.
+		var frail := 1.8 if (life_stage == "elder" or life_stage == "infant") else 1.0
+		health = maxf(0.0, health - SICKNESS_DRAIN * frail * delta)
 		needs["energy"] = maxf(0.0, needs["energy"] - 0.001 * delta)
 		if infection_timer >= 60.0:
 			infected = false
 			infection_timer = 0.0
 			immune_timer = 120.0
+	elif health < 1.0 and needs["hunger"] > 0.3:
+		# Fed people mend; medicine (vitality_regen) mends faster.
+		var mend := HEALTH_REGEN * (0.5 if life_stage == "elder" else 1.0) + fxf("vitality_regen")
+		health = minf(1.0, health + mend * delta)
+	if poisoned > 0.0: poisoned -= delta
+	if health <= 0.0:
+		_drop_all_items(world)
+		is_dead = true
+		death_cause = "disease" if infected or poisoned <= 0.0 else "poison"
+		health = 0.0
+		return
 
 	# Old age
 	if age > life_expectancy:
@@ -359,12 +398,11 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 	if reproduction_cooldown > 0.0: reproduction_cooldown -= delta
 	if not _life_stage_can_reproduce(): reproduction_cooldown = maxf(reproduction_cooldown, 5.0)
 
-	# Weather protection
-	var env_mult := weather_mult
-	if knowledge.has("fire"):     env_mult = maxf(1.0, env_mult - 0.25)
-	if knowledge.has("shelter"):  env_mult = maxf(1.0, env_mult - 0.35)
-	if knowledge.has("clothing"): env_mult = maxf(1.0, env_mult - 0.20)
-	if knowledge.has("housing"):  env_mult = maxf(1.0, env_mult - 0.20)
+	# Weather protection (fire, shelter, clothing, housing, masonry...)
+	var env_mult := maxf(1.0, weather_mult - fxf("weather_protection"))
+	# Good spirits (a ritual, music or art round the fire) keep them going.
+	if ritual_morale > 0.0:
+		env_mult *= 0.85
 
 	# Drain needs
 	needs["hunger"] = maxf(0.0, needs["hunger"] - HUNGER_DRAIN * delta)
@@ -382,17 +420,23 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 		speech_bubble_timer -= delta
 		if speech_bubble_timer <= 0.0: speech_bubble = ""
 
-	# Inventory max weight from knowledge
-	inventory.max_weight = 10.0 + (2.0 if knowledge.has("weaving") else 0.0) + \
-							(4.0 if knowledge.has("animal_domestication") else 0.0)
+	# Pack weight: baskets (weaving), pack animals, fields to carry from...
+	inventory.max_weight = Inventory.DEFAULT_MAX_WEIGHT * fxf("carrying_capacity_bonus")
+	# Carried food goes off; pots, smoke and salt (preserves_food) slow it.
+	if not inventory.stacks.is_empty() and not _item_defs.is_empty():
+		inventory.tick_spoilage(delta, _item_defs, 0.4 if fxb("preserves_food") else 1.0)
 
 	_last_weather_mult = env_mult
 
-	# Fire lighting
-	if knowledge.has("fire") and env_mult >= 1.2 and fire_cooldown <= 0.0:
+	# Fire lighting (warmth_satisfied: fire). A campfire kit lights one anywhere.
+	var kit := _warm_item()
+	if (fxb("warmth_satisfied") or kit != "") and env_mult >= 1.2 and fire_cooldown <= 0.0:
 		var tile := world.get_tile_f(pos.x, pos.y)
-		if not tile.is_empty() and tile["type"] in [World.TileType.FOREST, World.TileType.WOODLAND, World.TileType.GRASS]:
+		var dry: bool = not tile.is_empty() and tile["type"] in [World.TileType.FOREST, World.TileType.WOODLAND, World.TileType.GRASS]
+		if not tile.is_empty() and (dry or kit != "") and afloat == "":
 			fire_cooldown = 45.0 + randf() * 30.0
+			if not dry:
+				inventory.remove(kit, 1.0)
 			world.campfire_events.append({"tx": tile["x"], "tz": tile["z"], "agent_name": agent_name})
 
 	if state != State.SOCIALIZING:
@@ -401,8 +445,9 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 	# State machine
 	match state:
 		State.SLEEPING:
-			var sleep_mult := 1.6 if knowledge.has("shelter") else 1.0
-			if knowledge.has("housing"): sleep_mult *= 1.15
+			var sleep_mult := fxf("rest_efficiency")
+			if fxb("sleeps_in_trees") and World.has_woods(world.get_tile_f(pos.x, pos.y)):
+				sleep_mult *= 1.25   # a tree house: up in the branches, safe
 			if night_sleeping: sleep_mult *= 1.5
 			var task_bonus: float = float(get_tasks().get(task, {}).get("rest_bonus", 1.0))
 			sleep_mult *= task_bonus
@@ -415,12 +460,20 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 			return
 
 		State.FISHING:
+			# Boat fishers row out to their spot first; others fish from where they stand.
+			if afloat == "boat" or (target.distance_to(pos) > 0.1 and _boat_reach() > 0):
+				_step(delta, world, all_agents, false)
 			rest_timer -= delta
 			if rest_timer <= 0.0:
-				var fish_yield := 0.5
-				if knowledge.has("stone_tools"): fish_yield *= 1.2
-				if knowledge.has("cooking"):     fish_yield *= 1.5
+				var fish_yield := 0.5 * sqrt(fxf("gather_efficiency")) * fxf("hunger_efficiency")
+				fish_yield *= inventory.tool_mult("fishing", _item_defs)   # a fishing rod
+				if afloat == "boat":
+					# Out on the water the fish are bigger; out of sight of land, bigger still.
+					fish_yield *= 1.5 if fxb("unlocks_deep_water_travel") else 1.3
+					_deed("first_boat_fishing", "%s rowed out and fished from a boat." % agent_name)
 				needs["hunger"] = minf(1.0, needs["hunger"] + fish_yield)
+				if randf() < 0.35 and _item_defs.has("fish"):
+					inventory.add("fish", 1.0, _item_defs)
 				state = State.WANDERING
 				_pick_wander_target(world, all_agents)
 			_try_socialise(delta, all_agents, concept_graph)
@@ -438,6 +491,7 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 				state = State.WANDERING
 				needs_check_timer = 0.0
 			else:
+				_hearth_evening(delta, all_agents)
 				_try_socialise(delta, all_agents, concept_graph)
 				return
 
@@ -460,7 +514,7 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 				for other in _neighbours(all_agents, 6.0):
 					if other != self and not other.is_dead and other.state == State.RITUAL:
 						companions += 1
-				ritual_morale = 40.0 + float(companions) * 12.0
+				ritual_morale = (40.0 + float(companions) * 12.0) * (1.0 + fxf("settlement_morale_bonus") * 4.0)
 				ritual_cooldown = 90.0 + randf() * 90.0
 				state = State.WANDERING
 				_pick_wander_target(world, all_agents)
@@ -475,24 +529,100 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 			_decide_action(world, all_agents, concept_graph, time_system)
 
 	# Movement
+	_step(delta, world, all_agents, true)
+
+	_try_discover(delta, world, concept_graph, all_agents)
+	_try_socialise(delta, all_agents, concept_graph)
+
+## One step toward the target over whatever the ground allows them (see
+## _can_go): wading is slow, boats a little quicker than walking, mountains
+## and unbridged rivers slow. Arriving calls _on_arrival when `arrive` is set.
+func _step(delta: float, world: World, all_agents: Array, arrive: bool) -> void:
 	var dx := target.x - pos.x
 	var dz := target.y - pos.y
 	var dist := sqrt(dx * dx + dz * dz)
 	if dist > 0.04:
-		var move := minf(AGENT_SPEED * speed_mult * delta, dist)
+		var move := minf(AGENT_SPEED * speed_mult * _ground_speed(world) * delta, dist)
 		var new_x := pos.x + (dx / dist) * move
 		var new_z := pos.y + (dz / dist) * move
-		if world.can_traverse(new_x, new_z, knowledge):
+		if _can_go(world, new_x, new_z):
 			pos = Vector2(new_x, new_z)
 			facing = Vector2(dx / dist, dz / dist)
+			_note_ground(world)
 		else:
 			_pick_wander_target(world, all_agents)
-	else:
+	elif arrive:
 		pos = target
-		_on_arrival(world, all_agents, concept_graph)
+		_on_arrival(world, all_agents, _concept_graph)
 
-	_try_discover(delta, world, concept_graph, all_agents)
-	_try_socialise(delta, all_agents, concept_graph)
+# ── Travel ───────────────────────────────────────────────────────────────────
+
+const WADE_SPEED := 0.5
+const BOAT_SPEED := 1.15
+const CLIMB_SPEED := 0.55
+const RIVER_SPEED := 0.7
+
+## How far from land their boats go (tiles): 0 without one.
+func _boat_reach() -> int:
+	if fxb("unlocks_ocean_crossing"): return 255
+	if fxb("unlocks_deep_water_travel"): return ConceptEffects.OPEN_SEA_REACH
+	if fxb("unlocks_water_travel"): return ConceptEffects.COAST_REACH
+	return 0
+
+## Can they be here? Swimmers wade the shallows (or anyone with a raft: rope
+## in hand); boats (sailing, boat building) hug the coast, navigation takes
+## them out of sight of land and seafaring anywhere; climbers go up mountains.
+## Glaciers and lava stop everyone. Replaces World.can_traverse for people,
+## which only knew "sailing means any water".
+func _can_go(world: World, x: float, z: float) -> bool:
+	var tile := world.get_tile_f(x, z)
+	if tile.is_empty(): return false
+	match int(tile["type"]):
+		World.TileType.WATER:
+			return _boat_reach() > 0 or fxb("unlocks_wading") or inventory.has_activity("raft", _item_defs)
+		World.TileType.DEEP_WATER:
+			var reach := _boat_reach()
+			return reach > 0 and ConceptEffects.land_distance(world, int(floor(x)), int(floor(z))) <= reach
+		World.TileType.MOUNTAIN:
+			return fxb("unlocks_mountain_travel")
+		World.TileType.GLACIER, World.TileType.LAVA:
+			return false
+	return true
+
+func _ground_speed(world: World) -> float:
+	var tile := world.get_tile_f(pos.x, pos.y)
+	if tile.is_empty(): return 1.0
+	match int(tile["type"]):
+		World.TileType.WATER, World.TileType.DEEP_WATER:
+			return BOAT_SPEED if _boat_reach() > 0 else WADE_SPEED
+		World.TileType.MOUNTAIN:
+			return CLIMB_SPEED
+	if bool(tile.get("river", false)) and not fxb("unlocks_bridge_building") \
+			and not inventory.has_activity("river_crossing", _item_defs):
+		return RIVER_SPEED
+	return 1.0
+
+## Where they are now: afloat, up a mountain. The first of each is a deed.
+func _note_ground(world: World) -> void:
+	var tile := world.get_tile_f(pos.x, pos.y)
+	var t := int(tile.get("type", -1))
+	var was := afloat
+	if t == World.TileType.WATER or t == World.TileType.DEEP_WATER:
+		afloat = "boat" if _boat_reach() > 0 else "wading"
+	else:
+		afloat = ""
+		if voyage and was == "boat":
+			voyage = false
+			_deed("first_landfall", "%s sailed across the sea and stepped ashore on a far beach." % agent_name)
+	if afloat != was:
+		if afloat == "wading":
+			_deed("first_swim", "%s waded out into the sea and swam." % agent_name)
+		elif afloat == "boat":
+			_deed("first_boat", "%s pushed a boat out onto the water: the first boat." % agent_name)
+	var up := t == World.TileType.MOUNTAIN
+	if up and not on_mountain:
+		_deed("first_climb", "%s climbed up onto the mountain and looked out over the whole island." % agent_name)
+	on_mountain = up
 
 # ── Arrival ─────────────────────────────────────────────────────────────────
 
@@ -500,15 +630,29 @@ func _on_arrival(world: World, all_agents: Array, concept_graph: ConceptGraph) -
 	if state == State.GATHERING:
 		var tile := world.get_tile_f(pos.x, pos.y)
 		if not tile.is_empty() and tile["type"] in [World.TileType.GRASS, World.TileType.FOREST, World.TileType.WOODLAND]:
-			var tool_mult := 1.25 if knowledge.has("stone_tools") else 1.0
-			if knowledge.has("metal_tools"):    tool_mult *= 1.25
-			if knowledge.has("agriculture") and tile["type"] == World.TileType.GRASS: tool_mult *= 1.35
-			var cook_mult := 1.6 if knowledge.has("cooking") else 1.0
+			var tool_mult := gather_yield_mult(tile, world)
+			var cook_mult := fxf("hunger_efficiency")
 			var yield_val: float = maxf(0.15, float(tile["resource"]))
 			var gained: float = 0.60 * tool_mult * cook_mult * yield_val
-			# What they can't eat they carry home (SettlementSystem puts it by).
-			carrying_food = minf(MAX_CARRY, carrying_food + maxf(0.0, needs["hunger"] + gained - 1.0))
+			# Honey from the woods (honey gathering, beekeeping).
+			if fxb("honey_food") and int(tile["type"]) != World.TileType.GRASS and randf() < 0.25:
+				gained += 0.12
+				_deed("first_honey", "%s came back from the woods with honey, and the stings to show for it." % agent_name)
+			# What they can't eat they carry home (SettlementSystem puts it by);
+			# a tithe (taxation) sends a share home even when they're hungry,
+			# and those who keep a calendar put more by before winter.
+			var carry_cap := MAX_CARRY * fxf("carrying_capacity_bonus")
+			if fxb("times_seasons") and (_season == "summer" or _season == "autumn"):
+				carry_cap *= 1.5
+			var tithe := gained * fxf("tithe")
+			gained -= tithe
+			carrying_food = minf(carry_cap, carrying_food + tithe + maxf(0.0, needs["hunger"] + gained - 1.0))
 			needs["hunger"] = minf(1.0, needs["hunger"] + gained)
+			# Healers stop where the herbs grow (medicine, herbalism).
+			if fxb("herb_healing") and health < 0.85 and float(tile.get("herbs", -1.0)) > 0.0:
+				health = minf(1.0, health + 0.08 * fxf("herb_healing_mult"))
+				_deed("first_herb_cure", "%s chewed the bitter herbs that grow in the woods, and felt better." % agent_name)
+			_forage_items(tile, world)
 			tile["resource"] = maxf(0.0, tile["resource"] - 0.28 / tool_mult)
 			if tile.get("depletion_level", -1.0) >= 0.0:
 				tile["depletion_level"] = minf(1.0, tile.get("depletion_level", 0.0) + 0.1 / tool_mult)
@@ -517,6 +661,11 @@ func _on_arrival(world: World, all_agents: Array, concept_graph: ConceptGraph) -
 				_remember_food_source(int(tile["x"]), int(tile["z"]), int(tile["type"]))
 
 	_pick_up_ground_items(world)
+	# Passing over bare rock, people pocket a good stone (for tools).
+	if state == State.WANDERING and randf() < 0.2:
+		var here := world.get_tile_f(pos.x, pos.y)
+		if not here.is_empty() and int(here["type"]) == World.TileType.STONE:
+			_forage_items(here, world)
 
 	if not trader_state.is_empty() and _settlement_system != null:
 		_advance_trader_journey(world)
@@ -572,13 +721,13 @@ func _decide_action(world: World, all_agents: Array, concept_graph: ConceptGraph
 				return
 
 	# Rituals: a shared gathering once the idea exists and others are near.
-	if knowledge.has("ritual") and ritual_cooldown <= 0.0 and needs["hunger"] > 0.35 \
+	if fxb("holds_rituals") and ritual_cooldown <= 0.0 and needs["hunger"] > 0.35 \
 	   and needs["energy"] > 0.25:
 		if _try_start_ritual(world, all_agents):
 			return
 
 	# Trade journeys between settlements.
-	if knowledge.has("trade") and trader_cooldown <= 0.0 and _settlement_system != null:
+	if fxb("trades") and trader_cooldown <= 0.0 and _settlement_system != null:
 		if _try_start_trader_journey(world):
 			return
 
@@ -601,7 +750,7 @@ func _decide_action(world: World, all_agents: Array, concept_graph: ConceptGraph
 		return
 
 	# Cold/exposed
-	if env_mult >= 1.3 and not knowledge.has("fire") and not knowledge.has("shelter"):
+	if env_mult >= 1.3 and not fxb("warmth_satisfied") and fxf("weather_protection") < 0.3:
 		var warm_tile := world.find_nearest(pos.x, pos.y, [World.TileType.FOREST, World.TileType.WOODLAND], 10.0)
 		if not warm_tile.is_empty():
 			state = State.WANDERING
@@ -622,14 +771,36 @@ func _decide_action(world: World, all_agents: Array, concept_graph: ConceptGraph
 			target = parent.pos + Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0))
 			return
 
-	# Fishing near water
-	if knowledge.has("fishing") and needs["hunger"] < 0.7:
+	# Fishing near water; with a boat, from out on the water.
+	if fxb("can_fish") and needs["hunger"] < 0.7:
 		var water_tile := world.find_nearest(pos.x, pos.y, [World.TileType.WATER, World.TileType.BEACH], 4.0)
 		if not water_tile.is_empty():
 			state = State.FISHING
 			rest_timer = 6.0 + randf() * 4.0
 			target = Vector2(water_tile["x"] + 0.5, water_tile["z"] + 0.5)
+			if _boat_reach() > 0:
+				var spot := _fishing_spot(world)
+				if spot.x >= 0.0:
+					target = spot
+					rest_timer += 6.0
 			return
+
+	# Seafarers set out for a far shore; climbers go up for the view.
+	if is_adult and needs["hunger"] > 0.6 and needs["energy"] > 0.5:
+		if fxb("unlocks_ocean_crossing") and randf() < VOYAGE_CHANCE:
+			var shore := _far_shore(world)
+			if shore.x >= 0.0:
+				state = State.WANDERING
+				target = shore
+				voyage = true
+				_deed("first_voyage", "%s set sail for a far shore." % agent_name)
+				return
+		if fxb("unlocks_mountain_travel") and curiosity > 0.5 and randf() < CLIMB_CHANCE:
+			var peak := world.find_nearest(pos.x, pos.y, [World.TileType.MOUNTAIN], 14.0)
+			if not peak.is_empty():
+				state = State.WANDERING
+				target = Vector2(peak["x"] + 0.5, peak["z"] + 0.5)
+				return
 
 	state = State.WANDERING
 	_pick_wander_target(world, all_agents)

@@ -16,7 +16,8 @@
     "spread_rate": 0.05,
     "effects": {
       "max_age_bonus": 0.15,
-      "warmth_satisfied": true
+      "warmth_satisfied": true,
+      "weather_protection": 0.25
     }
   },
   {
@@ -38,7 +39,7 @@
     "discovery_probability": 0.0005,
     "spread_rate": 0.05,
     "effects": {
-      "gather_efficiency": 1.4
+      "gather_efficiency": 1.25
     }
   },
   {
@@ -79,7 +80,8 @@
     "spread_rate": 0.04,
     "effects": {
       "rest_efficiency": 1.5,
-      "max_age_bonus": 0.1
+      "max_age_bonus": 0.1,
+      "weather_protection": 0.35
     }
   },
   {
@@ -100,7 +102,9 @@
     "discovery_probability": 0.0003,
     "spread_rate": 0.04,
     "effects": {
-      "weather_protection": 0.2
+      "weather_protection": 0.2,
+      "rest_efficiency": 1.15,
+      "max_age_bonus": 0.1
     }
   },
   {
@@ -123,7 +127,9 @@
     "spread_rate": 0.035,
     "effects": {
       "rest_efficiency": 1.08,
-      "weather_protection": 0.05
+      "weather_protection": 0.05,
+      "sleeps_in_trees": true,
+      "builds": ["tree_houses"]
     }
   },
   {
@@ -149,7 +155,8 @@
     "discovery_probability": 0.0002,
     "spread_rate": 0.03,
     "effects": {
-      "spread_rate_multiplier": 1.1
+      "spread_rate_multiplier": 1.1,
+      "builds": ["temple"]
     }
   },
   {
@@ -175,7 +182,8 @@
     "discovery_probability": 0.0002,
     "spread_rate": 0.007,
     "effects": {
-      "spread_rate_multiplier": 1.12
+      "spread_rate_multiplier": 1.12,
+      "builds": ["church"]
     }
   },
   {
@@ -197,7 +205,8 @@
     "spread_rate": 0.05,
     "effects": {
       "hunger_efficiency": 1.6,
-      "max_age_bonus": 0.2
+      "max_age_bonus": 0.2,
+      "cooks_food": true
     }
   },
   {
@@ -258,7 +267,8 @@
     "discovery_probability": 0.0004,
     "spread_rate": 0.05,
     "effects": {
-      "weather_protection": 0.2
+      "weather_protection": 0.2,
+      "max_age_bonus": 0.08
     }
   },
   {
@@ -284,9 +294,9 @@
     "discovery_probability": 0.00035,
     "spread_rate": 0.04,
     "effects": {
-      "max_age_bonus": 0.25,
+      "max_age_bonus": 0.2,
       "herb_healing": true,
-      "vitality_regen": 0.005
+      "vitality_regen": 0.0008
     }
   },
   {
@@ -307,7 +317,8 @@
     "discovery_probability": 0.0004,
     "spread_rate": 0.05,
     "effects": {
-      "rest_efficiency": 1.2
+      "rest_efficiency": 1.2,
+      "carrying_capacity_bonus": 1.2
     }
   },
   {
@@ -328,7 +339,9 @@
     "discovery_probability": 0.00035,
     "spread_rate": 0.05,
     "effects": {
-      "hunger_efficiency": 1.15
+      "hunger_efficiency": 1.15,
+      "preserves_food": true,
+      "builds": ["kiln"]
     }
   },
   {
@@ -349,7 +362,8 @@
     "discovery_probability": 0.00035,
     "spread_rate": 0.05,
     "effects": {
-      "gather_efficiency": 1.1
+      "gather_efficiency": 1.1,
+      "can_fish": true
     }
   },
   {
@@ -370,7 +384,7 @@
     "discovery_probability": 0.0004,
     "spread_rate": 0.05,
     "effects": {
-      "gather_efficiency": 1.35,
+      "gather_efficiency": 1.1,
       "forest_bonus": true
     }
   },
@@ -392,7 +406,10 @@
     ],
     "discovery_probability": 0.00025,
     "spread_rate": 0.06,
-    "effects": {}
+    "effects": {
+      "fire_morale": true,
+      "builds": ["murals"]
+    }
   },
   {
     "id": "animal_domestication",
@@ -412,7 +429,9 @@
     "discovery_probability": 0.00038,
     "spread_rate": 0.04,
     "effects": {
-      "gather_efficiency": 1.25
+      "gather_efficiency": 1.1,
+      "carrying_capacity_bonus": 1.3,
+      "builds": ["pens"]
     }
   },
   {
@@ -434,9 +453,11 @@
     "discovery_probability": 0.00025,
     "spread_rate": 0.05,
     "effects": {
-      "gather_efficiency": 1.35,
+      "gather_efficiency": 1.1,
       "grass_bonus": true,
-      "carrying_capacity_bonus": 1.25
+      "carrying_capacity_bonus": 1.25,
+      "max_age_bonus": 0.1,
+      "builds": ["fields"]
     }
   },
   {
@@ -479,7 +500,8 @@
     "discovery_probability": 0.0002,
     "spread_rate": 0.04,
     "effects": {
-      "gather_efficiency": 1.25
+      "gather_efficiency": 1.25,
+      "builds": ["forge"]
     }
   },
   {
@@ -500,7 +522,8 @@
     "discovery_probability": 0.00025,
     "spread_rate": 0.05,
     "effects": {
-      "gather_efficiency": 1.15
+      "gather_efficiency": 1.05,
+      "builds": ["pens"]
     }
   },
   {
@@ -522,7 +545,8 @@
     "discovery_probability": 0.00025,
     "spread_rate": 0.05,
     "effects": {
-      "reproduction_cooldown_mult": 0.82
+      "reproduction_cooldown_mult": 0.82,
+      "max_age_bonus": 0.05
     }
   },
   {
@@ -544,7 +568,10 @@
     "discovery_probability": 0.00025,
     "spread_rate": 0.05,
     "effects": {
-      "hunger_efficiency": 1.12
+      "hunger_efficiency": 1.12,
+      "preserves_food": true,
+      "max_age_bonus": 0.1,
+      "builds": ["smokehouse"]
     }
   },
   {
@@ -566,7 +593,8 @@
     "discovery_probability": 0.00035,
     "spread_rate": 0.05,
     "effects": {
-      "rest_efficiency": 1.1
+      "rest_efficiency": 1.1,
+      "carrying_capacity_bonus": 1.1
     }
   },
   {
@@ -633,7 +661,9 @@
     "spread_rate": 0.06,
     "effects": {
       "hunger_efficiency": 1.1,
-      "spread_rate_multiplier": 1.3
+      "spread_rate_multiplier": 1.3,
+      "trades": true,
+      "builds": ["market"]
     }
   },
   {
@@ -656,7 +686,8 @@
     "discovery_probability": 0.00012,
     "spread_rate": 0.04,
     "effects": {
-      "discovery_bonus": 1.15
+      "discovery_bonus": 1.15,
+      "builds": ["standing_stones"]
     }
   },
   {
@@ -678,8 +709,9 @@
     "discovery_probability": 0.00015,
     "spread_rate": 0.05,
     "effects": {
-      "gather_efficiency": 1.1,
-      "discovery_bonus": 1.1
+      "gather_efficiency": 1.05,
+      "discovery_bonus": 1.1,
+      "store_bonus": 1.2
     }
   },
   {
@@ -703,7 +735,9 @@
     "spread_rate": 0.04,
     "effects": {
       "reproduction_cooldown_mult": 0.88,
-      "spread_rate_multiplier": 1.2
+      "spread_rate_multiplier": 1.2,
+      "keeps_peace": 0.2,
+      "builds": ["hall"]
     }
   },
   {
@@ -726,7 +760,8 @@
     "spread_rate": 0.04,
     "effects": {
       "weather_protection": 0.3,
-      "rest_efficiency": 1.2
+      "rest_efficiency": 1.2,
+      "builds": ["walls"]
     }
   },
   {
@@ -749,7 +784,8 @@
     "spread_rate": 0.07,
     "effects": {
       "reproduction_cooldown_mult": 0.92,
-      "discovery_bonus": 1.05
+      "discovery_bonus": 1.05,
+      "plays_music": true
     }
   },
   {
@@ -794,8 +830,9 @@
     "discovery_probability": 0.00012,
     "spread_rate": 0.05,
     "effects": {
-      "gather_efficiency": 1.15,
-      "max_age_bonus": 0.1
+      "gather_efficiency": 1.05,
+      "max_age_bonus": 0.05,
+      "times_seasons": true
     }
   },
   {
@@ -817,7 +854,7 @@
     "discovery_probability": 0.0001,
     "spread_rate": 0.04,
     "effects": {
-      "discovery_bonus": 1.25,
+      "discovery_bonus": 1.15,
       "curiosity_bonus": 0.15
     }
   },
@@ -839,7 +876,8 @@
     "discovery_probability": 0.00022,
     "spread_rate": 0.04,
     "effects": {
-      "can_ride_horses": true
+      "can_ride_horses": true,
+      "builds": ["stables"]
     }
   },
   {
@@ -961,7 +999,9 @@
     "discovery_probability": 0.00022,
     "spread_rate": 0.04,
     "effects": {
-      "gather_efficiency": 1.1
+      "gather_efficiency": 1.05,
+      "store_bonus": 1.5,
+      "builds": ["barn"]
     }
   },
   {
@@ -987,7 +1027,8 @@
     "discovery_probability": 0.00022,
     "spread_rate": 0.04,
     "effects": {
-      "gather_efficiency": 1.1
+      "hunger_efficiency": 1.05,
+      "builds": ["dairy"]
     }
   },
   {
@@ -1013,7 +1054,8 @@
     "discovery_probability": 0.00025,
     "spread_rate": 0.04,
     "effects": {
-      "hunger_efficiency": 1.08
+      "hunger_efficiency": 1.05,
+      "builds": ["coop"]
     }
   },
   {
@@ -1031,7 +1073,9 @@
     ],
     "discovery_probability": 0.0005,
     "spread_rate": 0.05,
-    "effects": {}
+    "effects": {
+      "unlocks_wading": true
+    }
   },
   {
     "id": "tracking",
@@ -1055,7 +1099,8 @@
     "discovery_probability": 0.0004,
     "spread_rate": 0.05,
     "effects": {
-      "gather_efficiency": 1.2
+      "gather_efficiency": 1.05,
+      "reads_tracks": true
     }
   },
   {
@@ -1081,7 +1126,8 @@
     "discovery_probability": 0.00035,
     "spread_rate": 0.05,
     "effects": {
-      "weather_protection": 0.1
+      "weather_protection": 0.1,
+      "builds": ["drying_racks"]
     }
   },
   {
@@ -1107,7 +1153,8 @@
     "discovery_probability": 0.00025,
     "spread_rate": 0.04,
     "effects": {
-      "gather_efficiency": 1.15
+      "gather_efficiency": 1.05,
+      "reads_tracks": true
     }
   },
   {
@@ -1129,7 +1176,8 @@
     "spread_rate": 0.04,
     "effects": {
       "hunger_efficiency": 1.1,
-      "max_age_bonus": 0.05
+      "max_age_bonus": 0.05,
+      "preserves_food": true
     }
   },
   {
@@ -1155,8 +1203,10 @@
     "discovery_probability": 0.00025,
     "spread_rate": 0.04,
     "effects": {
-      "gather_efficiency": 1.25,
-      "carrying_capacity_bonus": 1.15
+      "gather_efficiency": 1.05,
+      "carrying_capacity_bonus": 1.15,
+      "field_near_water": true,
+      "builds": ["ditches"]
     }
   },
   {
@@ -1177,7 +1227,8 @@
     "discovery_probability": 0.0002,
     "spread_rate": 0.05,
     "effects": {
-      "discovery_bonus": 1.15
+      "discovery_bonus": 1.15,
+      "map_memory": true
     }
   },
   {
@@ -1202,7 +1253,8 @@
     "discovery_probability": 0.0003,
     "spread_rate": 0.04,
     "effects": {
-      "gather_efficiency": 1.2
+      "gather_efficiency": 1.05,
+      "builds": ["quarry"]
     }
   },
   {
@@ -1229,7 +1281,8 @@
     "discovery_probability": 0.00012,
     "spread_rate": 0.04,
     "effects": {
-      "gather_efficiency": 1.3
+      "gather_efficiency": 1.1,
+      "builds": ["forge"]
     }
   },
   {
@@ -1251,7 +1304,8 @@
     "spread_rate": 0.04,
     "effects": {
       "spread_rate_multiplier": 1.8,
-      "discovery_bonus": 1.1
+      "discovery_bonus": 1.1,
+      "builds": ["press"]
     }
   },
   {
@@ -1276,8 +1330,9 @@
     "discovery_probability": 0.00012,
     "spread_rate": 0.04,
     "effects": {
-      "gather_efficiency": 1.1,
-      "carrying_capacity_bonus": 1.1
+      "gather_efficiency": 1.05,
+      "carrying_capacity_bonus": 1.1,
+      "spares_depleted_land": true
     }
   },
   {
@@ -1303,9 +1358,10 @@
     "discovery_probability": 0.0001,
     "spread_rate": 0.04,
     "effects": {
-      "carrying_capacity_bonus": 1.2,
+      "carrying_capacity_bonus": 1.1,
       "max_age_bonus": 0.05,
-      "enables_reintroduction": true
+      "enables_reintroduction": true,
+      "spares_depleted_land": true
     }
   },
   {
@@ -1332,7 +1388,8 @@
     "spread_rate": 0.04,
     "effects": {
       "spread_rate_multiplier": 1.15,
-      "reproduction_cooldown_mult": 0.9
+      "reproduction_cooldown_mult": 0.9,
+      "keeps_peace": 0.35
     }
   },
   {
@@ -1360,7 +1417,8 @@
     "spread_rate": 0.05,
     "effects": {
       "curiosity_bonus": 0.1,
-      "discovery_bonus": 1.05
+      "discovery_bonus": 1.05,
+      "fire_story_bonus": 0.3
     }
   },
   {
@@ -1405,7 +1463,8 @@
     "discovery_probability": 0.0003,
     "spread_rate": 0.05,
     "effects": {
-      "gather_efficiency": 1.1
+      "gather_efficiency": 1.05,
+      "builds": ["workshop"]
     }
   },
   {
@@ -1452,7 +1511,8 @@
     "discovery_probability": 0.0004,
     "spread_rate": 0.05,
     "effects": {
-      "unlocks_burial_ritual": true
+      "unlocks_burial_ritual": true,
+      "builds": ["shrine"]
     }
   },
   {
@@ -1478,6 +1538,7 @@
     "spread_rate": 0.04,
     "effects": {
       "unlocks_temple_use": true,
+      "holds_rituals": true,
       "spread_rate_multiplier": 1.05
     }
   },
@@ -1530,7 +1591,8 @@
     "discovery_probability": 0.0004,
     "spread_rate": 0.06,
     "effects": {
-      "concept_spread_rate_mult": 1.25
+      "concept_spread_rate_mult": 1.25,
+      "fire_story_bonus": 0.25
     }
   },
   {
@@ -1584,7 +1646,8 @@
     "spread_rate": 0.04,
     "effects": {
       "unlocks_ocean_crossing": true,
-      "discovery_bonus": 1.2
+      "unlocks_water_travel": true,
+      "discovery_bonus": 1.1
     }
   },
   {
@@ -1611,7 +1674,7 @@
     "spread_rate": 0.04,
     "effects": {
       "unlocks_stone_buildings": true,
-      "weather_protection": 0.4
+      "weather_protection": 0.3
     }
   },
   {
@@ -1630,7 +1693,8 @@
     "discovery_probability": 0.0004,
     "spread_rate": 0.025,
     "effects": {
-      "gather_efficiency": 1.1
+      "gather_efficiency": 1.1,
+      "safe_foraging": true
     }
   },
   {
@@ -1696,7 +1760,9 @@
     "spread_rate": 0.012,
     "effects": {
       "hunger_efficiency": 1.08,
-      "gather_efficiency": 1.05
+      "gather_efficiency": 1.05,
+      "honey_food": true,
+      "builds": ["hives"]
     }
   },
   {
@@ -1713,7 +1779,8 @@
     "discovery_probability": 0.0002,
     "spread_rate": 0.015,
     "effects": {
-      "spread_rate_multiplier": 1.05
+      "spread_rate_multiplier": 1.05,
+      "builds": ["dye_vats"]
     }
   },
   {
@@ -1735,8 +1802,9 @@
     "discovery_probability": 0.00008,
     "spread_rate": 0.008,
     "effects": {
-      "carrying_capacity_bonus": 1.2,
-      "spread_rate_multiplier": 1.1
+      "carrying_capacity_bonus": 1.1,
+      "spread_rate_multiplier": 1.1,
+      "tithe": 0.15
     }
   },
   {
@@ -1754,8 +1822,9 @@
     "discovery_probability": 0.00006,
     "spread_rate": 0.006,
     "effects": {
-      "gather_efficiency": 1.2,
-      "carrying_capacity_bonus": 1.15
+      "gather_efficiency": 1.1,
+      "carrying_capacity_bonus": 1.15,
+      "unlocks_bridge_building": true
     }
   },
   {
@@ -1777,8 +1846,9 @@
     "discovery_probability": 0.00008,
     "spread_rate": 0.009,
     "effects": {
-      "hunger_efficiency": 1.15,
-      "spread_rate_multiplier": 1.2
+      "hunger_efficiency": 1.1,
+      "spread_rate_multiplier": 1.2,
+      "trade_reach": true
     }
   },
   {
@@ -1802,7 +1872,8 @@
     "spread_rate": 0.008,
     "effects": {
       "spread_rate_multiplier": 1.25,
-      "reproduction_cooldown_mult": 0.92
+      "reproduction_cooldown_mult": 0.92,
+      "keeps_peace": 0.5
     }
   },
   {
@@ -1824,7 +1895,8 @@
     "discovery_probability": 0.0001,
     "spread_rate": 0.012,
     "effects": {
-      "gather_efficiency": 1.1
+      "wins_clashes": true,
+      "builds": ["watchtower"]
     }
   },
   {
@@ -1842,7 +1914,7 @@
     "discovery_probability": 0.0001,
     "spread_rate": 0.01,
     "effects": {
-      "gather_efficiency": 1.2,
+      "gather_efficiency": 1.1,
       "carrying_capacity_bonus": 1.1
     }
   },
@@ -1861,8 +1933,9 @@
     "discovery_probability": 0.00004,
     "spread_rate": 0.005,
     "effects": {
-      "max_age_bonus": 0.4,
-      "vitality_regen": 0.015
+      "max_age_bonus": 0.2,
+      "vitality_regen": 0.0015,
+      "herb_healing_mult": 1.3
     }
   },
   {
@@ -1885,8 +1958,10 @@
     "discovery_probability": 0.00003,
     "spread_rate": 0.004,
     "effects": {
-      "carrying_capacity_bonus": 1.4,
-      "weather_protection": 0.5
+      "carrying_capacity_bonus": 1.1,
+      "weather_protection": 0.2,
+      "store_bonus": 1.2,
+      "builds": ["streets"]
     }
   },
   {
@@ -1905,7 +1980,9 @@
     "spread_rate": 0.005,
     "effects": {
       "spread_rate_multiplier": 1.5,
-      "hunger_efficiency": 1.15
+      "hunger_efficiency": 1.15,
+      "trade_reach": true,
+      "builds": ["roads"]
     }
   }
 ]
