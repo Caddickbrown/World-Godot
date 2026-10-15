@@ -65,9 +65,19 @@ var _total_time: float = 0.0
 # Dominant (most-severe) zone state, kept for the legacy global API.
 var current: int = WeatherType.CLEAR
 
-# CAD-121: Rainbow state.
+# Rainbows: a zone whose rain clears by day (sun up, 07:00-18:00) shows one
+# for RAINBOW_SECONDS. rainbow is true while any zone has one; rainbow_zone
+# is the newest, rainbow_strength its fade (0..1, in and out).
+const RAINBOW_SECONDS := 36.0           # game-seconds (~7 in-game hours at 1x)
+const RAINBOW_HOURS := Vector2(7.0, 18.0)
+## How grey the sky is under each state (what SkyLook eases toward).
+const OVERCAST := {
+	WeatherType.CLEAR: 0.0, WeatherType.CLOUDY: 0.3, WeatherType.RAIN: 0.6, WeatherType.STORM: 1.0,
+}
 var rainbow: bool = false
 var _rainbow_timer: float = 0.0
+var rainbow_zone := Vector2i(-1, -1)    # (row, col)
+var rainbows_started := 0
 
 # ── Legacy / global accessors (dominant zone) ─────────────────────────────────
 
@@ -144,7 +154,7 @@ func _sample_state(season: String, r: int, c: int) -> int:
 ## project's FireSystem already owns lightning-strike-on-forest behaviour
 ## driven off `is_storm`, so WeatherSystem does not duplicate a world scan
 ## here). Returns true if the dominant (global) weather state changed.
-func update(delta: float, season: String, _world: World = null) -> bool:
+func update(delta: float, season: String, _world: World = null, hour: float = -1.0) -> bool:
 	_season = season
 	_total_time += delta
 
@@ -156,24 +166,86 @@ func update(delta: float, season: String, _world: World = null) -> bool:
 			if zone.timer >= zone.duration:
 				zone.timer = 0.0
 				zone.duration = 25.0 + randf() * 55.0
+				var was: int = zone.state
 				zone.state = _sample_state(season, r, c)
+				if _wet(was) and not _wet(zone.state):
+					_maybe_rainbow(Vector2i(r, c), hour)
 			if SEVERITY[zone.state] > SEVERITY[dominant]:
 				dominant = zone.state
 
 	var prev_dominant := current
 	current = dominant
 
-	# CAD-121: Rainbow — trigger when rain/storm clears to CLEAR.
-	if (prev_dominant == WeatherType.RAIN or prev_dominant == WeatherType.STORM) and dominant == WeatherType.CLEAR:
-		rainbow = true
-		_rainbow_timer = 60.0
 	if rainbow:
 		_rainbow_timer -= delta
 		if _rainbow_timer <= 0.0:
 			rainbow = false
 			_rainbow_timer = 0.0
+			rainbow_zone = Vector2i(-1, -1)
 
 	return current != prev_dominant
+
+static func _wet(state: int) -> bool:
+	return state == WeatherType.RAIN or state == WeatherType.STORM
+
+## The rain over a zone has just cleared: a rainbow, if the sun is up to make one.
+func _maybe_rainbow(rc: Vector2i, hour: float) -> void:
+	if hour >= 0.0 and (hour < RAINBOW_HOURS.x or hour > RAINBOW_HOURS.y):
+		return
+	rainbow = true
+	_rainbow_timer = RAINBOW_SECONDS
+	rainbow_zone = rc
+	rainbows_started += 1
+
+## Fade of the current rainbow: up over its first tenth, down over its last third.
+var rainbow_strength: float:
+	get:
+		if not rainbow:
+			return 0.0
+		var age := RAINBOW_SECONDS - _rainbow_timer
+		return clampf(age / (RAINBOW_SECONDS * 0.1), 0.0, 1.0) * clampf(_rainbow_timer / (RAINBOW_SECONDS * 0.33), 0.0, 1.0)
+
+## Tile-space centre of a zone (row, col).
+func zone_centre(rc: Vector2i) -> Vector2:
+	return Vector2((rc.y + 0.5) * float(_world_width) / ZONES, (rc.x + 0.5) * float(_world_height) / ZONES)
+
+## Where the rainbow stands (tile coords), or (-1, -1).
+func rainbow_pos() -> Vector2:
+	return zone_centre(rainbow_zone) if rainbow else Vector2(-1, -1)
+
+## Force a rainbow over the zone at a tile (captures, tests).
+func force_rainbow(x: float, z: float) -> void:
+	_maybe_rainbow(_zone_of(x, z), -1.0)
+
+func zone_state(r: int, c: int) -> int:
+	return (_zones[clampi(r, 0, ZONES - 1)][clampi(c, 0, ZONES - 1)] as Zone).state
+
+func set_zone_state(r: int, c: int, state: int) -> void:
+	(_zones[r][c] as Zone).state = state
+
+## How overcast the sky looks at a tile: the zones round it blended by
+## distance from their centres, so panning across a front eases the grey in.
+func overcast_at(x: float, z: float) -> float:
+	var fx := x / float(_world_width) * ZONES - 0.5
+	var fz := z / float(_world_height) * ZONES - 0.5
+	var c0 := floori(fx)
+	var r0 := floori(fz)
+	var tx := clampf(fx - c0, 0.0, 1.0)
+	var tz := clampf(fz - r0, 0.0, 1.0)
+	# Hold the zone you're in at full weight over its middle half.
+	tx = smoothstep(0.25, 0.75, tx)
+	tz = smoothstep(0.25, 0.75, tz)
+	var a: float = OVERCAST[zone_state(r0, c0)]
+	var b: float = OVERCAST[zone_state(r0, c0 + 1)]
+	var c: float = OVERCAST[zone_state(r0 + 1, c0)]
+	var d: float = OVERCAST[zone_state(r0 + 1, c0 + 1)]
+	return lerpf(lerpf(a, b, tx), lerpf(c, d, tx), tz)
+
+func label_at(x: float, z: float) -> String:
+	return WEATHER_LABELS.get(get_weather_at(x, z), "Clear")
+
+func temperature_at(x: float, z: float) -> float:
+	return SEASON_TEMP.get(_season, 13.0) + WEATHER_TEMP.get(get_weather_at(x, z), 0.0)
 
 ## Return the WeatherType for a given world position (O(1) zone lookup).
 func get_weather_at(x: float, z: float) -> int:

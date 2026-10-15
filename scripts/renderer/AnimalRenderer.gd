@@ -48,15 +48,6 @@ const FALLBACK_COLORS: Dictionary = {
 	9: Color(0.38, 0.32, 0.28),  # BEAR  - dark brown
 }
 
-# Candidate animation names tried in order; first match wins
-const ANIM_IDLE:  Array = ["Idle_A", "Idle", "idle"]
-const ANIM_WALK:  Array = ["Walk_A", "Walk_B", "Walk", "walk"]
-const ANIM_RUN:   Array = ["Run_A",  "Run_B",  "Run",  "run",  "Walk_B"]
-const ANIM_EAT:   Array = ["Eat_A",  "Eat",    "eat",  "Idle_A", "Idle"]
-const ANIM_FLEE:  Array = ["Run_A",  "Run_B",  "Run",  "run"]
-const ANIM_HUNT:  Array = ["Run_A",  "Run_B",  "Run",  "run"]
-const ANIM_SOAR:  Array = ["Fly_A",  "Fly",    "fly",  "Walk_A", "Walk", "Idle_A"]
-const ANIM_DEAD:  Array = ["Death_A","Death",  "death","Idle_A"]
 
 var _sim: AnimalSim
 var _scenes: Dictionary = {}     # AnimalType int → PackedScene (null if not imported yet)
@@ -169,35 +160,47 @@ func _spawn(animal: AnimalSim.Animal) -> void:
 
 # ── Animation ────────────────────────────────────────────────────────────────
 
-func _play_for_state(player: AnimationPlayer, state: int, animal_type: int) -> void:
-	var candidates: Array
-	match state:
-		AnimalSim.AnimalState.IDLE: candidates = ANIM_IDLE
-		AnimalSim.AnimalState.WALK: candidates = ANIM_WALK
-		AnimalSim.AnimalState.RUN:  candidates = ANIM_RUN
-		AnimalSim.AnimalState.EAT:  candidates = ANIM_EAT
-		AnimalSim.AnimalState.FLEE: candidates = ANIM_FLEE
-		AnimalSim.AnimalState.HUNT: candidates = ANIM_HUNT
-		AnimalSim.AnimalState.SOAR: candidates = ANIM_SOAR
-		AnimalSim.AnimalState.DEAD: candidates = ANIM_DEAD
-		_: candidates = ANIM_IDLE
+## The pack's clips are named every which way ("deer_idle breath", "Idle1",
+## "Pig_walk", "Eagle_Flying"), so a clip is found by keyword, skipping the
+## transitions ("idle to walk") and the attacks. Matching exact names used to
+## fall through to the first clip in the file: deer played their attack
+## forever and cows "Attack" when standing still.
+const STATE_KEYWORDS := {
+	AnimalSim.AnimalState.IDLE: ["idle breath", "idle"],
+	AnimalSim.AnimalState.WALK: ["walk"],
+	AnimalSim.AnimalState.RUN:  ["run", "flying"],
+	AnimalSim.AnimalState.FLEE: ["run", "flying"],
+	AnimalSim.AnimalState.HUNT: ["run", "flying attack", "flying"],
+	AnimalSim.AnimalState.EAT:  ["eat", "idle breath", "idle"],
+	AnimalSim.AnimalState.SOAR: ["flying", "fly idle"],
+	AnimalSim.AnimalState.DEAD: ["death", "dead"],
+}
 
-	var prefix: String = _type_prefix(animal_type)
+static func clip_for(names: Array, state: int) -> String:
+	for kw in STATE_KEYWORDS.get(state, ["idle"]):
+		var best := ""
+		for n in names:
+			var low := str(n).to_lower()
+			if not low.contains(kw) or low.contains(" to ") or low.contains("_to_"):
+				continue
+			if not kw.contains("attack") and low.contains("attack"):
+				continue
+			if best == "" or low.length() < best.length():
+				best = str(n)   # the plainest name: "Wolf_Idle" over "Wolf_Idle 2"
+		if best != "":
+			return best
+	# A model with one clip (the rabbit's "Take 001") plays it for everything
+	# but death.
+	if names.size() == 1 and state != AnimalSim.AnimalState.DEAD:
+		return str(names[0])
+	return ""
 
-	for cand in candidates:
-		var c: String = str(cand)
-		# Try "Wolf_Walk_A", then "Walk_A"
-		if player.has_animation(prefix + "_" + c):
-			player.play(prefix + "_" + c)
-			return
-		if player.has_animation(c):
-			player.play(c)
-			return
-
-	# Last resort: whatever is first in the library
-	var all := player.get_animation_list()
-	if all.size() > 0:
-		player.play(str(all[0]))
+func _play_for_state(player: AnimationPlayer, state: int, _animal_type: int) -> void:
+	var clip := clip_for(Array(player.get_animation_list()), state)
+	if clip != "":
+		player.play(clip)
+	else:
+		player.stop()
 
 func _type_prefix(t: int) -> String:
 	match t:

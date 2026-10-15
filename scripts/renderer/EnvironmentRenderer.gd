@@ -208,6 +208,9 @@ func _draw_tile(x: int, z: int, data: Dictionary) -> void:
 		var tint: Color = slot["tint"]
 		if f < 0.5:
 			tint = tint.lightened(0.12)   # young leaves are fresher
+		var blight := float(tile.get("blight", 0.0))
+		if blight > 0.0:
+			tint = tint.lerp(LookStyle.BLIGHT, blight * 0.8)   # DisasterSystem: sick, grey woods
 		if kind == "pine":
 			_add(data, "pine_lo", Transform3D(b.scaled(Vector3(s, s, s)), p + Vector3(0, 1.6 * s, 0)), tint)
 			if f > 0.35:
@@ -229,20 +232,41 @@ func _add(data: Dictionary, part: String, xf: Transform3D, col: Color) -> void:
 	d["xf"].append(xf)
 	d["col"].append(LookStyle.g(col))
 
-func _material(part: String) -> StandardMaterial3D:
+## Every part shares the season shader (shaders/flora_season.gdshader): the
+## year turns through its uniforms (set_season), never a chunk rebuild.
+const PART_KIND := {"crown": 0, "crown_small": 0, "pine_lo": 1, "pine_hi": 1, "bush": 2,
+	"trunk": 3, "stump": 3, "snag": 3, "rock": 3}
+var _season: Dictionary = {}
+
+func _material(part: String) -> ShaderMaterial:
 	if _mats.has(part):
 		return _mats[part]
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.vertex_color_is_srgb = true
-	mat.roughness = 0.9
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/flora_season.gdshader")
+	mat.set_shader_parameter("kind", int(PART_KIND.get(part, 3)))
 	# Anything right in front of the camera dithers away, so walking through a
 	# wood the trees never swallow the view (the sky camera is never this close).
-	mat.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_DITHER
-	mat.distance_fade_min_distance = 1.5
-	mat.distance_fade_max_distance = 5.0
+	mat.set_shader_parameter("fade_min", 1.5)
+	mat.set_shader_parameter("fade_max", 5.0)
+	SeasonLook.apply(mat, _season)
 	_mats[part] = mat
 	return mat
+
+## The season's look (SeasonLook.blend) for every flora material. Cheap: a
+## handful of uniforms, applied only when something moved.
+func set_season(b: Dictionary) -> void:
+	var changed := _season.is_empty()
+	for k in b:
+		if absf(float(b[k]) - float(_season.get(k, -1.0))) > 0.004:
+			changed = true
+	if not changed:
+		return
+	_season = b.duplicate()
+	for part in _mats:
+		SeasonLook.apply(_mats[part], _season)
+
+func season_value(key: String) -> float:
+	return float(_season.get(key, 0.0))
 
 # ── Bushes and rocks (they don't change) ─────────────────────────────────────
 

@@ -80,6 +80,15 @@ var fed_children: int = 0   # times they fed a hungry child (the story reads it)
 var mourning: float = 0.0
 var mourning_for: String = ""
 const MOURNING_DAYS := 0.5
+## Health. A fever (60 s) costs about a seventh of a person's health; fed
+## people mend it back over a few days. Medicine (vitality_regen) mends faster.
+const SICKNESS_DRAIN := (1.0 / 7.0) / 60.0
+const HEALTH_REGEN := 0.002
+## Per decision, for an adult with the idea and the energy to spare.
+const VOYAGE_CHANCE := 0.02
+const CLIMB_CHANCE := 0.03
+const FORAGE_CHANCE := 0.25        # an item found per gather (more in its season)
+const POISON_SECONDS := 30.0
 
 # An agent holds ONE vocation, stored here. Tier 1 vocations unlock with
 # "organisation"; tier 2 are specialisations gated on a settlement knowing the
@@ -310,8 +319,8 @@ var speed_mult: float:
 		# The sick and poisoned drag their feet.
 		var frail := 1.0 if health >= 0.5 else 0.6 + health * 0.8
 		if mourning > 0.0:
-			return _base_speed_mult() * 0.75 * frail
-		return _base_speed_mult() * frail
+			return _base_speed_mult() * 0.75 * frail * ride_mult
+		return _base_speed_mult() * frail * ride_mult
 
 func _base_speed_mult() -> float:
 	match life_stage:
@@ -465,7 +474,9 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 				_step(delta, world, all_agents, false)
 			rest_timer -= delta
 			if rest_timer <= 0.0:
-				var fish_yield := 0.5 * sqrt(fxf("gather_efficiency")) * fxf("hunger_efficiency")
+				# The shoals decide how good the spot is (AmbientLife); ideas and
+				# tools how well they fish it.
+				var fish_yield := 0.5 * AmbientLife.fish_catch(world, pos) * sqrt(fxf("gather_efficiency")) * fxf("hunger_efficiency")
 				fish_yield *= inventory.tool_mult("fishing", _item_defs)   # a fishing rod
 				if afloat == "boat":
 					# Out on the water the fish are bigger; out of sight of land, bigger still.
@@ -655,7 +666,9 @@ func _on_arrival(world: World, all_agents: Array, concept_graph: ConceptGraph) -
 			_forage_items(tile, world)
 			tile["resource"] = maxf(0.0, tile["resource"] - 0.28 / tool_mult)
 			if tile.get("depletion_level", -1.0) >= 0.0:
-				tile["depletion_level"] = minf(1.0, tile.get("depletion_level", 0.0) + 0.1 / tool_mult)
+				# Ecology, conservation: take less from land that's been picked over.
+				var spare := 0.5 if fxb("spares_depleted_land") and World.is_depleted(tile) else 1.0
+				tile["depletion_level"] = minf(1.0, tile.get("depletion_level", 0.0) + 0.1 / tool_mult * spare)
 			# Worth coming back to — remember it.
 			if yield_val > 0.3:
 				_remember_food_source(int(tile["x"]), int(tile["z"]), int(tile["type"]))
@@ -953,7 +966,7 @@ func _try_start_ritual(world: World, all_agents: Array) -> bool:
 	var site := Vector2(-1, -1)
 	if _settlement_system != null:
 		var st = _settlement_system.get_settlement_for_agent(agent_id)
-		if st != null and st.has_temple:
+		if st != null and st.has_temple and fxb("unlocks_temple_use"):
 			site = st.temple_pos
 		elif st != null:
 			site = st.centre
@@ -984,16 +997,19 @@ func _try_start_trader_journey(world: World) -> bool:
 	if all_settlements.size() < 2:
 		return false
 
-	# Pick the nearest settlement that is not our own.
+	# Pick the nearest settlement that is not our own; with currency or trade
+	# routes (trade_reach), any of them, far ones too.
+	var others: Array = all_settlements.filter(func(st): return st.id != home.id)
 	var best = null
-	var best_dist := INF
-	for st in all_settlements:
-		if st.id == home.id:
-			continue
-		var d: float = pos.distance_to(st.centre)
-		if d < best_dist:
-			best_dist = d
-			best = st
+	if fxb("trade_reach") and not others.is_empty():
+		best = others[randi() % others.size()]
+	else:
+		var best_dist := INF
+		for st in others:
+			var d: float = pos.distance_to(st.centre)
+			if d < best_dist:
+				best_dist = d
+				best = st
 	if best == null:
 		return false
 	if not world.can_traverse(best.centre.x, best.centre.y, knowledge):
@@ -1086,7 +1102,7 @@ func _remember_food_source(tx: int, tz: int, tile_type: int) -> void:
 			entry["last_visited"] = _current_day
 			return
 	food.append({"x": tx, "z": tz, "type": tile_type, "last_visited": _current_day})
-	if food.size() > MEMORY_FOOD_CAP:
+	if food.size() > MEMORY_FOOD_CAP * (2 if fxb("map_memory") else 1):   # cartography: a map in the head
 		# Forget the least recently visited.
 		food.sort_custom(func(a, b): return int(a["last_visited"]) < int(b["last_visited"]))
 		food.remove_at(0)
@@ -1103,8 +1119,9 @@ func _danger_penalty(tx: float, tz: float) -> float:
 	for d_v in dangers:
 		var d: Dictionary = d_v
 		var dist := Vector2(float(d["x"]), float(d["z"])).distance_to(Vector2(tx, tz))
-		if dist < DANGER_AVOID_RADIUS:
-			penalty += (DANGER_AVOID_RADIUS - dist) * 0.6
+		var avoid := DANGER_AVOID_RADIUS * (1.6 if fxb("reads_tracks") else 1.0)   # tracking: reads the signs
+		if dist < avoid:
+			penalty += (avoid - dist) * 0.6
 	return penalty
 
 # ── Seasonal preference ──────────────────────────────────────────────────────
@@ -1183,7 +1200,7 @@ func _try_socialise(delta: float, all_agents: Array, concept_graph: ConceptGraph
 		if other == self or other.health <= 0.0 or other.is_dead: continue
 		var dist := pos.distance_to(other.pos)
 		# Stories round the fire carry ideas further than chat in the fields.
-		var story := FIRE_STORY_MULT if at_fire and other.at_fire else 1.0
+		var story := (FIRE_STORY_MULT + fxf("fire_story_bonus")) if at_fire and other.at_fire else 1.0
 		concept_graph.try_spread(self, other, SOCIAL_COOLDOWN * story)
 		# Parents feed their hungry children when they have food to spare.
 		if is_adult and other.agent_id in children and other.needs["hunger"] < 0.35 and needs["hunger"] > 0.55:
@@ -1207,6 +1224,10 @@ func _track_social_and_bond(other: Agent) -> void:
 func grieve(for_name: String) -> void:
 	mourning = TimeSystem.DAY_LENGTH * MOURNING_DAYS
 	mourning_for = for_name
+	# A burial (animism) is a way to say goodbye: grief eases sooner.
+	if fxb("unlocks_burial_ritual"):
+		mourning *= 0.7
+		_deed("first_burial", "%s buried %s with care, and said goodbye." % [agent_name, for_name])
 
 func _try_reproduce(other: Agent, concept_graph: ConceptGraph) -> void:
 	if mourning > 0.0 or other.mourning > 0.0: return
@@ -1220,8 +1241,8 @@ func _try_reproduce(other: Agent, concept_graph: ConceptGraph) -> void:
 	if randf() > repro_chance: return
 
 	var base_cooldown := 45.0 + randf() * 45.0
-	var comm_mult := 0.82 if (knowledge.has("community") or other.knowledge.has("community")) else 1.0
-	var cooldown := base_cooldown * comm_mult
+	# Community, governance, law, music, diplomacy: a settled, safe life.
+	var cooldown := base_cooldown * minf(fxf("reproduction_cooldown_mult"), other.fxf("reproduction_cooldown_mult"))
 	reproduction_cooldown = cooldown
 	other.reproduction_cooldown = cooldown
 
@@ -1261,6 +1282,13 @@ func _try_eat() -> bool:
 	needs["hunger"] = minf(1.0, needs["hunger"] + def.get("effects", {}).get("hunger", 0.10))
 	if def.get("effects", {}).has("health"):
 		health = minf(1.0, health + def["effects"]["health"])
+	# The wrong mushroom: plant lore (safe_foraging) knows which are which.
+	var risk := float(def.get("poisonChance", 0.0))
+	if risk > 0.0 and not fxb("safe_foraging") and randf() < risk:
+		var harm: Dictionary = def.get("poisonEffect", {})
+		poisoned = float(harm.get("duration", POISON_SECONDS))
+		health = maxf(0.05, health - float(harm.get("health", 0.2)))
+		_deed("first_poison", "%s ate the wrong mushroom and was sick for a day." % agent_name)
 	return true
 
 func _try_use_medicine() -> void:
@@ -1348,3 +1376,127 @@ static func _random_name() -> String:
 			_names_given[name_] = true
 			return name_
 	return "Ael%d" % _names_given.size()
+
+# ── Animals (AnimalMinds sets these; see docs/features/animals.md) ───────────
+
+## The tame horse this person is riding (-1: on foot). AgentRenderer seats
+## them on it.
+var riding_horse_id: int = -1
+## Speed from the horse under them: 1.8 on open grass, about 1.0 in forest.
+var ride_mult: float = 1.0
+
+# ── Ideas in action (helpers for the effects in ConceptEffects) ──────────────
+
+## A first: told once per world to the chronicle (ConceptGraph collects them
+## for Main to pass on). key names the deed, text tells it.
+func _deed(key: String, text: String) -> void:
+	if _concept_graph != null and _concept_graph.has_method("note_deed"):
+		_concept_graph.note_deed(key, text, self)
+
+## How much food a gather here brings, from what they know and carry.
+func gather_yield_mult(tile: Dictionary, world: World) -> float:
+	var m := fxf("gather_efficiency")
+	var t := int(tile.get("type", -1))
+	if t == World.TileType.GRASS:
+		if fxb("grass_bonus"):
+			m *= 1.3
+		if fxb("field_near_water") and (bool(tile.get("river", false)) or ConceptGraph._type_within(world, tile, "WATER", 2)):
+			m *= 1.3
+	elif t == World.TileType.FOREST or t == World.TileType.WOODLAND:
+		if fxb("forest_bonus"):
+			m *= 1.25
+	if not _item_defs.is_empty():
+		m *= inventory.tool_mult("foraging", _item_defs)
+	return m
+
+## Something carried that lights a fire anywhere (items.json warmth_satisfied).
+func _warm_item() -> String:
+	for st in inventory.stacks:
+		if float(st["quantity"]) <= 0.0:
+			continue
+		var d: Dictionary = _item_defs.get(st["item_id"], {})
+		if bool(d.get("warmth_satisfied", false)) or bool(d.get("effects", {}).get("warmth_satisfied", false)):
+			return str(st["item_id"])
+	return ""
+
+## Things worth picking up where they gather: items.json gatherSource says
+## where each grows (tile types, near what), what you must know, and its
+## season (more then, less out of it).
+func _forage_items(tile: Dictionary, world: World) -> void:
+	if _item_defs.is_empty() or tile.is_empty():
+		return
+	var tname: String = World.TileType.keys()[int(tile["type"])]
+	for id in _item_defs:
+		var d: Dictionary = _item_defs[id]
+		var src: Dictionary = d.get("gatherSource", {})
+		if src.is_empty() or str(src.get("activity", "foraging")) in ["fishing", "hunting"]:
+			continue
+		if not (tname in (src.get("tileTypes", []) as Array)):
+			continue
+		var ok := true
+		for need in src.get("knowledge", []):
+			if not knowledge.has(need):
+				ok = false
+				break
+		if not ok:
+			continue
+		if src.has("adjacentTo") and not ConceptGraph._type_within(world, tile, str(src["adjacentTo"]), 1):
+			continue
+		var chance := FORAGE_CHANCE
+		var pref := str(d.get("seasonPreference", ""))
+		if pref != "":
+			chance *= 1.6 if pref.to_lower() == _season.to_lower() else 0.6
+		if randf() < chance:
+			var y: Array = src.get("baseYield", [1, 1])
+			inventory.add(str(id), float(randi_range(int(y[0]), int(y[-1]))), _item_defs)
+
+## The evening at the hearth: those who know cooking cook what they carry;
+## music and art lift everyone's spirits (and stories carry further,
+## fire_story_bonus, in _try_socialise).
+var _cook_timer := 0.0
+func _hearth_evening(delta: float, _all_agents: Array) -> void:
+	_cook_timer -= delta
+	if _cook_timer <= 0.0:
+		_cook_timer = 6.0
+		if fxb("cooks_food") and not _item_defs.is_empty():
+			for st in inventory.stacks.duplicate():
+				var d: Dictionary = _item_defs.get(st["item_id"], {})
+				if bool(d.get("cookable", false)) and str(d.get("cookedId", "")) != "" and float(st["quantity"]) >= 1.0:
+					inventory.remove(str(st["item_id"]), 1.0)
+					inventory.add(str(d["cookedId"]), 1.0, _item_defs)
+					_deed("first_cooking", "%s cooked over the hearth for the first time." % agent_name)
+					break
+	# Mythology: the camp tells its own story, of who they are and where from.
+	if fxb("cultural_identity") and ritual_morale < 15.0:
+		ritual_morale = 25.0
+		_deed("first_myth", "%s told the story of how their people came to the island." % agent_name)
+	if (fxb("plays_music") or fxb("fire_morale")) and ritual_morale < 15.0:
+		ritual_morale = 30.0 * (1.0 + fxf("settlement_morale_bonus") * 4.0)
+		if fxb("plays_music"):
+			_deed("first_music", "%s played music by the fire, and the others sang." % agent_name)
+
+## Open water within the boat's reach, to fish from.
+func _fishing_spot(world: World) -> Vector2:
+	var reach := _boat_reach()
+	for r in range(2, reach + 1):
+		for k in 12:
+			var a := TAU * float(k) / 12.0 + float(agent_id) * 0.37
+			var p := pos + Vector2.from_angle(a) * float(r)
+			var t := world.get_tile_f(p.x, p.y)
+			if not t.is_empty() and int(t["type"]) == World.TileType.WATER:
+				return p
+	return Vector2(-1, -1)
+
+## A beach far off across the water, for a voyage.
+func _far_shore(world: World) -> Vector2:
+	var beaches: Array = world.get_tiles_of_type([World.TileType.BEACH])
+	var best := Vector2(-1, -1)
+	var best_d := 30.0
+	for i in mini(24, beaches.size()):
+		var t: Dictionary = beaches[randi() % beaches.size()]
+		var p := Vector2(float(t["x"]) + 0.5, float(t["z"]) + 0.5)
+		var d := p.distance_to(pos)
+		if d > best_d:
+			best_d = d
+			best = p
+	return best

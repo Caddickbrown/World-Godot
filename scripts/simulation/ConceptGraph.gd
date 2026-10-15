@@ -91,8 +91,11 @@ func _conditions_met(agent: Agent, tile: Dictionary, concept: Dictionary, world:
 			"tile_has_resource":
 				if float(tile.get(str(value), -1.0)) <= 0.0: return false
 			"near_bee_hive":
-				# No hives are modelled: bees live in the woods.
-				if not _type_within(world, tile, ["WOODLAND", "FOREST"], int(value)): return false
+				# Real nests (AmbientLife); a world without them falls back
+				# to "bees live in the woods".
+				var hive := AmbientLife.hive_near(world, tile, float(value))
+				if hive == 0: return false
+				if hive < 0 and not _type_within(world, tile, ["WOODLAND", "FOREST"], int(value)): return false
 	return true
 
 const NEAR_TILES := 3
@@ -147,8 +150,10 @@ func try_spread(agent_a: Agent, agent_b: Agent, delta_time: float = 5.0) -> void
 			spread_rate *= craft_pace
 		if learner.agent_id in teacher.children:
 			spread_rate *= PARENT_TEACHING
-		if teacher.knowledge.has("language"): spread_rate *= 2.0
-		if teacher.knowledge.has("writing"):  spread_rate *= 1.5
+		# How well this teacher passes ideas on (language, writing, printing,
+		# temple, law...) and how ready this learner is to take them up (oral
+		# tradition): ConceptEffects, from what each knows.
+		spread_rate *= teacher.fxf("spread_rate_multiplier") * learner.fxf("concept_spread_rate_mult")
 		if teacher.task == "teacher":         spread_rate *= 1.1
 
 		if randf() < spread_rate:
@@ -175,4 +180,21 @@ func get_discovered_concepts() -> Array:
 			var c: Dictionary = concepts.get(id, {})
 			out.append({"id": id, "name": c.get("name", id), "icon": c.get("icon", ""),
 				"known_count": known_by[id].size()})
+	return out
+
+# ── Deeds ────────────────────────────────────────────────────────────────────
+## Firsts people do (the first boat, the first climb, the first cooked meal),
+## told once per world. Agents note them; Main passes them to the story.
+var deeds: Array = []              # [{key, text, who}]
+var _deeds_done: Dictionary = {}
+
+func note_deed(key: String, text: String, who) -> void:
+	if _deeds_done.has(key):
+		return
+	_deeds_done[key] = true
+	deeds.append({"key": key, "text": text, "who": who})
+
+func drain_deeds() -> Array:
+	var out := deeds
+	deeds = []
 	return out

@@ -356,7 +356,7 @@ func _tick_resources(delta: float, agents: Array = [], history_log: HistoryLog =
 	for a in agents:
 		by_id[a.agent_id] = a
 	for s: Settlement in settlements:
-		var cap: float = float(s.member_ids.size()) * STORE_PER_MEMBER
+		var cap: float = float(s.member_ids.size()) * STORE_PER_MEMBER * float(ConceptEffects.settlement_fx(s)["store_bonus"])   # barn, mathematics
 		# Fallen branches: a trickle anyone can pick up. Felling is the real supply.
 		s.wood_store = minf(s.wood_store + float(s.member_ids.size()) * DEADWOOD_PER_MEMBER * delta, float(s.member_ids.size()) * 100.0)
 		for id in s.member_ids:

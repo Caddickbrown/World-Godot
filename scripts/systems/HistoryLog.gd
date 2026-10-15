@@ -44,5 +44,7 @@ func format_death(agent_name: String, cause: String) -> String:
 			return agent_name + " succumbed to illness"
 		"conflict":
 			return agent_name + " fell in conflict"
+		"wolf", "bear":
+			return agent_name + " was killed by a " + cause
 		_:
 			return agent_name + " has died"

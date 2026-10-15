@@ -149,12 +149,19 @@ func _check_agent_conflict(agent_a: Agent, agent_b: Agent, day: int, history_log
 	# and the caller must ensure tick() is called roughly once per second for the
 	# stated semantics to hold.  We expose the raw check so callers can pass
 	# delta-weighted probability if desired — here we use a simple constant roll.
-	if randf() > CLASH_CHANCE_PER_SEC * _delta:
+	# Governance, law, diplomacy keep the peace (ConceptEffects.keeps_peace).
+	var peace := maxf(agent_a.fxf("keeps_peace"), agent_b.fxf("keeps_peace"))
+	if randf() > CLASH_CHANCE_PER_SEC * _delta * (1.0 - peace):
 		return
 
 	# Apply conflict effects
-	agent_a.needs["energy"] = maxf(0.0, float(agent_a.needs.get("energy", 1.0)) - 0.05)
-	agent_b.needs["energy"] = maxf(0.0, float(agent_b.needs.get("energy", 1.0)) - 0.05)
+	# Military tactics: the side that knows them holds its ground.
+	var a_cost := 0.02 if agent_a.fxb("wins_clashes") and not agent_b.fxb("wins_clashes") else 0.05
+	var b_cost := 0.02 if agent_b.fxb("wins_clashes") and not agent_a.fxb("wins_clashes") else 0.05
+	if a_cost < b_cost: b_cost = 0.1
+	if b_cost < a_cost: a_cost = 0.1
+	agent_a.needs["energy"] = maxf(0.0, float(agent_a.needs.get("energy", 1.0)) - a_cost)
+	agent_b.needs["energy"] = maxf(0.0, float(agent_b.needs.get("energy", 1.0)) - b_cost)
 
 	agent_a.set_meta("conflict_cooldown", 30.0)
 	agent_b.set_meta("conflict_cooldown", 30.0)
