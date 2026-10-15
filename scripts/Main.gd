@@ -50,6 +50,9 @@ var _history_seen := 0
 var _was_storm := false
 var disease_system        # DiseaseSystem
 var population_manager    # PopulationManager
+## Whales, fish, birds, frogs, bees: the small wild things (AmbientLife.gd).
+var ambient_life: AmbientLife
+var ambient_renderer: AmbientRenderer
 
 # Views: the observer's eye in the sky, and the wanderer on the ground.
 enum ViewMode { OBSERVE, WALK }
@@ -195,6 +198,14 @@ func _init_world() -> void:
 	environment_renderer = EnvironmentRenderer.new()
 	add_child(environment_renderer)
 	environment_renderer.setup(world)
+
+	# Small wild things, with their own dice (never the simulation's).
+	if ambient_renderer:
+		ambient_renderer.queue_free()
+	ambient_life = AmbientLife.new().setup(world)
+	ambient_renderer = AmbientRenderer.new()
+	add_child(ambient_renderer)
+	ambient_renderer.setup(ambient_life, world)
 
 	# Simulation systems
 	history_log = HistoryLog.new()
@@ -393,6 +404,9 @@ func _process(delta: float) -> void:
 
 	# Tick wildlife
 	animal_sim.tick(game_delta, world)
+	ambient_life.tick(game_delta, time_system.hour, time_system.season, agents, weather_system.is_raining)
+	for evt in ambient_life.drain_events():
+		story.on_wild(evt, agents)
 	_tick_population(game_delta)
 
 	# Push any tile changes this frame into the chunked terrain mesh.
@@ -781,6 +795,7 @@ func apply_style() -> void:
 	agent_renderer.restyle()
 	animal_renderer.restyle()
 	settlement_renderer.restyle()
+	ambient_renderer.restyle()
 
 func follow(agent: Agent) -> void:
 	_select(agent)
