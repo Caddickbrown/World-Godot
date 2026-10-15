@@ -31,10 +31,29 @@ func _ready() -> void:
 	_test_larder()
 	_test_living_woods()
 	_test_discovery_conditions()
+	_run_suites()
 	print("== integration")
 	await _test_main_views()
 	print("== %d checks, %d failures" % [_checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
+
+## Feature suites: every tests/suites/*.gd is a RefCounted with
+## `func run(t) -> void` that calls t.check(label, ok) (and may use the
+## helpers here: t._adult(x, z), t._graph(), t._first_tile(...)). New areas
+## add a file there instead of editing this one.
+func _run_suites() -> void:
+	var dir := DirAccess.open("res://tests/suites")
+	if dir == null:
+		return
+	var names: Array = []
+	for f in dir.get_files():
+		if f.ends_with(".gd"):
+			names.append(f)
+	names.sort()
+	for f in names:
+		print("== suite ", f)
+		var suite = load("res://tests/suites/" + f).new()
+		suite.run(self)
 
 # ── Unit ─────────────────────────────────────────────────────────────────────
 
