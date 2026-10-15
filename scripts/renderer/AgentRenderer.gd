@@ -39,6 +39,17 @@ var look_point := Vector3.INF         # where the camera looks (set by Main)
 var _tagged: Dictionary = {}          # agent_id -> true: may show a name this frame
 var _mats: Dictionary = {}
 
+# ── Discovery glow ──
+## A new idea: a burst of light round the thinker (a ring that spreads over
+## the ground, a soft column and, in the storybook look, a few rising sparks).
+## Started when Agent.discovery_flash jumps up (Main and Agent set it to 1.5
+## on a discovery); it then runs on real time, so it plays the same at 20x
+## and while paused. Scaled with the camera distance so it reads from the sky.
+const GLOW_SECONDS := 2.6
+const MAX_GLOWS := 10
+var glows: Array = []                 # {node, ring, column, sparks, light, agent_id, t}
+var _glow_mats: Dictionary = {}
+
 func _ready() -> void:
 	_pin_mesh = SphereMesh.new()
 	_pin_mesh.radius = 0.35
@@ -89,6 +100,10 @@ func restyle() -> void:
 			if n: n.queue_free()
 	_nodes.clear()
 	_mats.clear()
+	for g in glows:
+		(g["node"] as Node).queue_free()
+	glows.clear()
+	_glow_mats.clear()
 	for a in agents:
 		_add_node(a)
 
@@ -176,7 +191,7 @@ func _add_node(agent: Agent) -> void:
 	add_child(pin)
 	_nodes[agent.agent_id] = {"root": root, "body_root": body_root, "body": body, "legs": legs,
 		"label": label, "bubble": bubble, "pin": pin, "tribe": -2, "phase": fmod(float(agent.agent_id) * 2.399, TAU),
-		"last_pos": agent.pos}
+		"last_pos": agent.pos, "last_flash": agent.discovery_flash}
 
 func _make_label(font_size: int, color: Color) -> Label3D:
 	var l := Label3D.new()
@@ -292,6 +307,10 @@ func update() -> void:
 			_ring.visible = true
 			_ring.position = feet + Vector3(0, 0.05, 0)
 		_update_overlays(e, agent, feet)
+		if agent.discovery_flash > float(e.get("last_flash", 0.0)) + 0.01 and not agent.is_dead:
+			start_glow(agent)
+		e["last_flash"] = agent.discovery_flash
+	advance_glows(dt)
 	for id in _nodes:
 		if not active.has(id):
 			for key in ["root", "label", "bubble", "pin"]:
@@ -347,3 +366,118 @@ func _update_overlays(entry: Dictionary, agent: Agent, feet: Vector3) -> void:
 			pin.scale = Vector3(s, s, s)
 			pin.position = feet + Vector3(0, HEAD_HEIGHT + 0.6 * s, 0)
 			pin.material_override = _pin_mat_selected if agent.selected else _pin_mat
+
+# ── Discovery glow ───────────────────────────────────────────────────────────
+
+func _glow_mat(key: String, c: Color) -> StandardMaterial3D:
+	if not _glow_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		m.no_depth_test = key == "spark"
+		m.albedo_color = c
+		_glow_mats[key] = m
+	return _glow_mats[key]
+
+## Light up round someone who just had an idea (view only).
+func start_glow(agent: Agent) -> void:
+	if glows.size() >= MAX_GLOWS:
+		var old: Dictionary = glows.pop_front()
+		(old["node"] as Node).queue_free()
+	var nat := LookStyle.naturalist()
+	var warm := Color(0.79, 0.63, 0.31) if nat else Color(1.0, 0.82, 0.35)   # ochre / sun
+	var node := Node3D.new()
+	add_child(node)
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.86
+	torus.outer_radius = 1.0
+	torus.rings = 32
+	torus.ring_segments = 6
+	ring.mesh = torus
+	ring.scale = Vector3(1, 0.15, 1)
+	ring.material_override = _glow_mat("ring", warm)
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.add_child(ring)
+	var column := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.25
+	cyl.bottom_radius = 0.7
+	cyl.height = 1.0
+	cyl.cap_top = false
+	cyl.cap_bottom = false
+	cyl.radial_segments = 12
+	column.mesh = cyl
+	column.material_override = _glow_mat("column", Color(warm, 0.5))
+	column.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.add_child(column)
+	var sparks: Array = []
+	var n_sparks := 0 if nat else 6
+	for i in n_sparks:
+		var sp := MeshInstance3D.new()
+		var pm := PrismMesh.new()   # a little diamond: two prisms back to back would do; one reads as a glint
+		pm.size = Vector3(0.22, 0.32, 0.06)
+		sp.mesh = pm
+		sp.material_override = _glow_mat("spark", Color(1.0, 0.95, 0.7) if i % 2 == 0 else Color(0.94, 0.5, 0.24))
+		sp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.add_child(sp)
+		sparks.append(sp)
+	var light := OmniLight3D.new()
+	light.light_color = warm
+	light.omni_range = 9.0
+	light.shadow_enabled = false
+	node.add_child(light)
+	glows.append({"node": node, "ring": ring, "column": column, "sparks": sparks, "light": light,
+		"agent_id": agent.agent_id, "agent": agent, "t": 0.0, "nat": nat})
+	_place_glow(glows[-1])
+
+## Run every glow on by dt real seconds (update() calls it; capture and tests may too).
+func advance_glows(dt: float) -> void:
+	for g in glows.duplicate():
+		g["t"] = float(g["t"]) + dt
+		if float(g["t"]) >= GLOW_SECONDS:
+			(g["node"] as Node).queue_free()
+			glows.erase(g)
+			continue
+		_place_glow(g)
+
+func _place_glow(g: Dictionary) -> void:
+	var agent: Agent = g["agent"]
+	var node: Node3D = g["node"]
+	var feet := Vector3(agent.pos.x * TILE_SIZE, world.surface_y(agent.pos.x, agent.pos.y) if world else 0.0, agent.pos.y * TILE_SIZE)
+	node.position = feet
+	var k := float(g["t"]) / GLOW_SECONDS                 # 0 .. 1 through the burst
+	var fade := (1.0 - smoothstep(0.55, 1.0, k)) * smoothstep(0.0, 0.06, k)
+	var big := maxf(1.0, view_distance / 32.0)           # reads from the sky
+	var ring: MeshInstance3D = g["ring"]
+	var r := lerpf(0.6, 4.2, 1.0 - pow(1.0 - minf(k * 1.4, 1.0), 3.0)) * big
+	ring.scale = Vector3(r, 0.15 * big, r)
+	ring.position.y = 0.12
+	ring.transparency = 1.0 - fade
+	var col: MeshInstance3D = g["column"]
+	var h := (3.5 + 3.0 * smoothstep(0.0, 0.3, k)) * big
+	col.scale = Vector3(big * (1.0 + k * 0.6), h, big * (1.0 + k * 0.6))
+	col.position.y = h * 0.5
+	col.transparency = 1.0 - fade * (0.55 if bool(g["nat"]) else 0.75)
+	var i := 0
+	for sp in g["sparks"]:
+		var a := TAU * i / 6.0 + k * 3.0
+		var rise := (0.8 + k * 3.4 + float(i % 3) * 0.5) * big
+		(sp as MeshInstance3D).position = Vector3(cos(a) * 0.9 * big, HEAD_HEIGHT * 0.6 + rise, sin(a) * 0.9 * big)
+		(sp as MeshInstance3D).rotation.y = a + k * 6.0
+		(sp as MeshInstance3D).scale = Vector3.ONE * big * (1.0 - k * 0.5)
+		(sp as MeshInstance3D).transparency = 1.0 - fade
+		i += 1
+	var light: OmniLight3D = g["light"]
+	light.position.y = 1.4
+	light.light_energy = 3.5 * fade * (1.0 - k * 0.5)
+	light.omni_range = 9.0 * big
+
+## Glows playing now round this person (tests).
+func glowing(agent_id: int) -> bool:
+	for g in glows:
+		if int(g["agent_id"]) == agent_id:
+			return true
+	return false

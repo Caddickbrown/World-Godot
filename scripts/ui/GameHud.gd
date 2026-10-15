@@ -10,6 +10,11 @@ extends CanvasLayer
 const CHRONICLE_ROWS := 5
 const TOAST_SECONDS := 4.5
 const SETTINGS_PATH := "user://world_settings.json"
+const INSPECT_SECONDS := 8.0
+var minimap: Minimap
+var show_minimap := true
+var inspect_card: PanelContainer
+var _inspect_left := 0.0
 var _look_starting := false
 
 var main: Node = null
@@ -39,7 +44,7 @@ var _toasts: Array = []             # {node, t}
 var _last_speed := -1.0
 var _game_over := false
 
-const HINT_OBSERVE := "Click someone to follow · Tab walk among them · L lives · I ideas · J album · T look · Space pause"
+const HINT_OBSERVE := "Click someone to follow, anything else to see what it is · Tab walk among them · L lives · I ideas · J album · G island · M map · T look · Space pause"
 const HINT_FOLLOW  := "Following · F or Esc to let go · Tab walk beside them · L their story"
 const HINT_WALK    := "Walking unseen · WASD drift · Shift hurry · mouse look · E listen in · Tab back to the sky"
 
@@ -96,6 +101,28 @@ func build() -> void:
 	hint_lbl.offset_right = 1000
 	hint_lbl.offset_bottom = -10
 	root.add_child(hint_lbl)
+	# The island map, bottom left above the hints (M).
+	minimap = Minimap.new()
+	minimap.main = main
+	minimap.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	minimap.offset_left = 22
+	minimap.offset_right = 22 + Minimap.SIZE
+	minimap.offset_top = -44 - Minimap.SIZE
+	minimap.offset_bottom = -44
+	minimap.visible = show_minimap
+	root.add_child(minimap)
+	# What you clicked on (Inspect.describe), bottom centre.
+	inspect_card = UiTheme.panel()
+	inspect_card.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	inspect_card.offset_left = -160
+	inspect_card.offset_right = 160
+	inspect_card.offset_top = -200
+	inspect_card.offset_bottom = -60
+	inspect_card.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	inspect_card.custom_minimum_size = Vector2(320, 0)
+	inspect_card.visible = false
+	inspect_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(inspect_card)
 	_follow_id = -2
 	_chronicle_dirty = true
 	if screen_name != "":
@@ -122,7 +149,7 @@ func _build_bar() -> void:
 	bar.offset_right = -16
 	bar.offset_top = 12
 	root.add_child(bar)
-	var row := UiTheme.hbox(12)
+	var row := UiTheme.hbox(8)
 	row.alignment = BoxContainer.ALIGNMENT_BEGIN
 	bar.add_child(row)
 	_dial = SeasonDial.new()
@@ -143,20 +170,26 @@ func _build_bar() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(spacer)
-	for pair in [["lives", "Lives"], ["ideas", "Ideas"], ["album", "Album"]]:
+	# The screens together, then the clock, then the look: the bar must fit a
+	# 1280-wide window (adding Island pushed Look off the edge).
+	var screens := UiTheme.hbox(4)
+	for pair in [["lives", "Lives", "Lives (L)"], ["ideas", "Ideas", "The idea garden (I)"],
+			["album", "Album", "The album (J)"], ["island", "Island", "The island over time (G)"]]:
 		var b := UiTheme.button(pair[1], false, 14)
+		b.tooltip_text = pair[2]
 		b.pressed.connect(open_screen.bind(pair[0]))
-		row.add_child(b)
+		screens.add_child(b)
+	row.add_child(screens)
 	var speeds := UiTheme.hbox(2)
 	for sp in [[0.0, "II", "Hold the world still"], [1.0, "1×", "Normal pace"], [5.0, "5×", "Five times"], [20.0, "20×", "Twenty times"]]:
 		var b := UiTheme.button(sp[1], false, 14)
-		b.custom_minimum_size.x = 44
+		b.custom_minimum_size.x = 36
 		b.tooltip_text = sp[2]
 		b.pressed.connect(_set_speed.bind(sp[0]))
 		speeds.add_child(b)
 		_speed_buttons[sp[0]] = b
 	row.add_child(speeds)
-	var look := UiTheme.button("Look", false, 15)
+	var look := UiTheme.button("Look", false, 14)
 	look.tooltip_text = "Choose the look (T flips it)"
 	look.pressed.connect(open_look.bind(false))
 	row.add_child(look)
@@ -242,6 +275,10 @@ func update(data: Dictionary) -> void:
 		_chronicle_dirty = false
 		_fill_chronicle()
 	_tick_toasts()
+	if inspect_card and inspect_card.visible:
+		_inspect_left -= get_process_delta_time()
+		if _inspect_left <= 0.0:
+			inspect_card.visible = false
 
 static func _part_of_day(h: float) -> String:
 	if h < 5.0: return "night"
@@ -375,6 +412,21 @@ func set_view_hint(walking: bool, following: bool) -> void:
 		bar.visible = not walking or screen != null
 		hint_lbl.visible = screen == null
 
+## The inspect card: {title, lines} from Inspect.describe.
+func show_inspect(d: Dictionary) -> void:
+	if inspect_card == null:
+		return
+	for ch in inspect_card.get_children():
+		ch.queue_free()
+	var v := UiTheme.vbox(4)
+	inspect_card.add_child(v)
+	v.add_child(UiTheme.caps(str(d.get("kind", "")).capitalize(), "accent", 11))
+	v.add_child(UiTheme.label(str(d.get("title", "")), "display", 24))
+	for line in d.get("lines", []):
+		v.add_child(UiTheme.wrap(UiTheme.label(str(line), "hand", 17, "muted"), 290))
+	inspect_card.visible = true
+	_inspect_left = INSPECT_SECONDS
+
 func show_game_over(day: int, discoveries: int) -> void:
 	_game_over = true
 	var p := UiTheme.panel()
@@ -405,6 +457,7 @@ func open_screen(which: String) -> void:
 		"lives": screen = LifeStoryScreen.new()
 		"ideas": screen = IdeaGardenScreen.new()
 		"album": screen = AlbumScreen.new()
+		"island": screen = IslandScreen.new()
 		"look":
 			var ls := LookScreen.new()
 			ls.starting = _look_starting
@@ -456,6 +509,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_L: open_screen("lives")
 		KEY_I: open_screen("ideas")
 		KEY_J: open_screen("album")
+		KEY_G: open_screen("island")
+		KEY_M:
+			show_minimap = not show_minimap
+			if minimap: minimap.visible = show_minimap
+			_save_settings()
 		KEY_ESCAPE:
 			if screen:
 				close_screen()
@@ -471,8 +529,9 @@ func _load_settings() -> void:
 	var d = JSON.parse_string(f.get_as_text()) if f else null
 	if d is Dictionary:
 		UiTheme.set_style(str(d.get("style", UiTheme.style)))
+		show_minimap = bool(d.get("minimap", true))
 
 func _save_settings() -> void:
 	var f := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify({"style": UiTheme.style}))
+		f.store_string(JSON.stringify({"style": UiTheme.style, "minimap": show_minimap}))

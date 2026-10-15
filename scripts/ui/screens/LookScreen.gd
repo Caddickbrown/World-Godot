@@ -39,6 +39,8 @@ func build_screen() -> void:
 	for l in LOOKS:
 		cards.add_child(_card(l[0], l[1], l[2], l[0] == chosen))
 	UiTheme.set_style(chosen)   # the cards borrowed the style to draw themselves
+	if starting and main():
+		col.add_child(_seed_row())
 	var row := UiTheme.hbox(12)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	var go := UiTheme.button("Begin" if starting else "Done", true, 20)
@@ -88,6 +90,44 @@ func _card(id: String, name: String, blurb: String, selected: bool) -> Control:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			_choose(id))
 	return p
+
+## Which island: its seed (the same seed makes the same island), a field to
+## type one, and a button for a fresh one. Only before you begin.
+func _seed_row() -> Control:
+	var p := UiTheme.panel()
+	var row := UiTheme.hbox(12)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	p.add_child(row)
+	row.add_child(UiTheme.caps("Island", "accent", 12))
+	var field := LineEdit.new()
+	field.text = str(main().world.seed_val)
+	field.custom_minimum_size = Vector2(150, 0)
+	field.tooltip_text = "Type a seed to grow that island"
+	field.add_theme_font_override("font", UiTheme.font("strong"))
+	field.add_theme_font_size_override("font_size", 18)
+	field.add_theme_color_override("font_color", UiTheme.c("text"))
+	var fsb := UiTheme.panel_box(true, 10.0)
+	fsb.set_content_margin_all(8)
+	field.add_theme_stylebox_override("normal", fsb)
+	field.add_theme_stylebox_override("focus", fsb)
+	field.text_submitted.connect(func(txt): _grow(int(txt) if txt.is_valid_int() else txt.hash()))
+	row.add_child(field)
+	var again := UiTheme.button("A different island", false, 15)
+	again.pressed.connect(func():
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		_grow(rng.randi_range(1, 999999)))
+	row.add_child(again)
+	return p
+
+func _grow(seed_value: int) -> void:
+	var m := main()
+	if m == null or seed_value == m.world.seed_val:
+		return
+	m.world_seed = seed_value
+	m._init_world()
+	m._set_speed(0.0)
+	hud.open_look(true)   # rebuilt for the new island, clock still held
 
 func _choose(id: String) -> void:
 	if id == UiTheme.style:

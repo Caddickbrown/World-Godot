@@ -66,6 +66,9 @@ const LISTEN_RADIUS := 2.5
 # Lighting
 var sky: SkyLook
 var disaster_view: DisasterView   # a flood's water over the land
+var path_system: PathSystem       # footfall on the tiles (a picture only)
+var path_renderer: PathRenderer
+var island_history: IslandHistory  # samples for the Island screen's graphs
 
 # Game state
 var game_over: bool = false
@@ -201,6 +204,15 @@ func _init_world() -> void:
 	environment_renderer = EnvironmentRenderer.new()
 	add_child(environment_renderer)
 	environment_renderer.setup(world)
+
+	# Worn earth where people walk, and the island's history for the graphs.
+	path_system = PathSystem.new()
+	if path_renderer:
+		path_renderer.queue_free()
+	path_renderer = PathRenderer.new()
+	path_renderer.world = world
+	add_child(path_renderer)
+	island_history = IslandHistory.new()
 
 	# Small wild things, with their own dice (never the simulation's).
 	if ambient_renderer:
@@ -415,6 +427,9 @@ func _process(delta: float) -> void:
 
 	# Push any tile changes this frame into the chunked terrain mesh.
 	_flush_tile_changes()
+	path_system.tick(game_delta, agents, world, settlement_system.get_settlements(), time_system.day)
+	path_renderer.sync(path_system)
+	island_history.observe(self)
 
 	_feed_story(game_delta, alive_count)
 
@@ -818,6 +833,7 @@ func apply_style() -> void:
 	animal_renderer.restyle()
 	settlement_renderer.restyle()
 	disaster_view.apply_style()
+	path_renderer.restyle()
 	ambient_renderer.restyle()
 
 func follow(agent: Agent) -> void:
@@ -879,9 +895,7 @@ func _handle_click(screen_pos: Vector2) -> void:
 	var from := camera.project_ray_origin(screen_pos)
 	var dir  := camera.project_ray_normal(screen_pos)
 	if dir.y >= 0.0: return  # Ray going up, ignore
-	# Pick against the ground under the cursor (~grass height), not y = 0.
-	var t := (0.04 - from.y) / dir.y
-	var world_pos := from + dir * t
+	var world_pos := ground_hit(from, dir)
 
 	# Find nearest agent to click
 	var best: Agent = null
@@ -895,8 +909,36 @@ func _handle_click(screen_pos: Vector2) -> void:
 			best_dist = dist
 			best = a
 
-	# Picking someone follows them; clicking empty ground lets go.
+	# Picking someone follows them; clicking anything else lets go and says
+	# what's there (an animal, a building, the ground).
 	follow(best)
+	if best == null:
+		var hud := get_node_or_null("HUD")
+		if hud and hud.has_method("show_inspect"):
+			hud.show_inspect(Inspect.describe(self, world_pos))
+
+## Where a ray from the camera meets the ground (the heightfield, not y = 0,
+## which put clicks on a hillside metres away from what was under the cursor).
+func ground_hit(from: Vector3, dir: Vector3) -> Vector3:
+	var t := 0.0
+	var step := 1.0
+	for i in 600:
+		var p := from + dir * t
+		var gy := maxf(world.surface_y(p.x / TILE_SIZE, p.z / TILE_SIZE), 0.0)
+		if p.y <= gy:
+			# Back up and close in on the crossing.
+			var lo := t - step
+			var hi := t
+			for k in 8:
+				var mid := (lo + hi) * 0.5
+				var q := from + dir * mid
+				if q.y <= maxf(world.surface_y(q.x / TILE_SIZE, q.z / TILE_SIZE), 0.0):
+					hi = mid
+				else:
+					lo = mid
+			return from + dir * hi
+		t += step
+	return from + dir * ((0.0 - from.y) / dir.y)
 
 # ── Settlements ───────────────────────────────────────────────────────────────
 
