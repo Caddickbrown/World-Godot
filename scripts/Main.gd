@@ -666,6 +666,9 @@ func _show_game_over() -> void:
 # ── Sun ──────────────────────────────────────────────────────────────────────
 
 func _update_sun() -> void:
+	var focus: Vector3 = wanderer.world_position() if view_mode == ViewMode.WALK else observer.target
+	var goal := 1.0 if weather_system.is_storm else (0.6 if weather_system.is_raining else 0.0)
+	sky.set_weather(goal, weather_system.is_raining, focus, get_process_delta_time() * time_system.speed)
 	sky.set_time(time_system.time_of_day)
 
 # ── Views and input ──────────────────────────────────────────────────────────

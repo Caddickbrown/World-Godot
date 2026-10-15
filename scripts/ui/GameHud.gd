@@ -271,7 +271,7 @@ func _fill_follow_card(a: Agent) -> void:
 	v.add_child(UiTheme.label(" · ".join(bits), "body", 15, "muted"))
 	var doing := AgentThoughts.doing(a)
 	v.add_child(UiTheme.wrap(UiTheme.label(doing.left(1).to_upper() + doing.substr(1), "strong", 16, "warn" if float(a.needs["hunger"]) < 0.3 else "text"), 260))
-	v.add_child(UiTheme.wrap(UiTheme.label("“%s”" % AgentThoughts.thought(a), "hand", 19), 260))
+	v.add_child(UiTheme.wrap(UiTheme.label("(%s)" % AgentThoughts.thought(a), "hand", 19, "cool"), 260))
 	for m in [["Fed", float(a.needs["hunger"]), "warn"], ["Rested", float(a.needs["energy"]), "good"]]:
 		var row := UiTheme.vbox(2)
 		row.add_child(UiTheme.label(m[0], "body", 13, "muted"))

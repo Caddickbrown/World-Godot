@@ -26,9 +26,10 @@ your desk.
 | Element | Rule |
 |---|---|
 | Terrain | Smooth heightfield (1 m vertices), real relief: meadows roll, forests sit on hills, mountains rise steeply. Colour comes from the same continuous noise as the biome, so borders curve and never step along tile edges |
-| Coast | The world is an island: land falls to the sea at the map edge. Sand band by height; wet sand below the waterline |
+| Coast | The world is an island: land falls to the sea at the map edge. Sand band by height; wet sand below the waterline. The land/sea corrections are blurred (`Heightfield.BLUR_PASSES`) so the shore curves; only tile centres are held to their tile |
 | Water | Depth-coloured: turquoise shallows → teal → ink blue. A broken foam line breathes along the shore |
 | Sky and air | Procedural sky, a real sun with soft shadows, light haze into the distance, filmic tonemap. Dusk goes peach, never brown |
+| Weather | Rain and storms grey the sky, flatten the sun and thicken the haze (`SkyLook.overcast`, eased, never a cut); rain is streaks in a box over where you're looking. Shot `8_storm` |
 | Flora | Two tree families: pines (stacked cones, cool greens) on high ground, broadleaf (clustered balls, warm greens, the odd orange one) lower. Grouped by a slow noise into woods and clearings. Per-tree colour variation |
 | Camps | Hide tents (cones), a stone fire ring with a real light, trampled earth painted into the ground (never a decal slab) |
 

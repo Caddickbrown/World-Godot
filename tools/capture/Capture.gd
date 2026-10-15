@@ -12,6 +12,7 @@
 # --walk          walk among them, beside the followed person (or at the camera target)
 # --listen        (with --walk) listen in on the nearest person
 # --yaw=RAD       (with --walk) turn the walker's camera; --cam-distance=D its distance
+# --weather=W     clear | rain | storm (set after the sim, cloud fully drawn in)
 # --no-hud        hide the HUD
 # --style=S       UI look: storybook | fieldnotes
 # --screen=S      open a full screen: lives | ideas | album
@@ -51,6 +52,15 @@ func _ready() -> void:
 		ts.game_time += fposmod(want - now, 1.0) * TimeSystem.DAY_LENGTH
 	main.time_system.set_speed(0.0)
 	main._process(0.0)
+	if args.has("weather"):
+		var wx := {"clear": WeatherSystem.WeatherType.CLEAR, "rain": WeatherSystem.WeatherType.RAIN,
+			"storm": WeatherSystem.WeatherType.STORM}
+		var wt := int(wx.get(str(args["weather"]), WeatherSystem.WeatherType.CLEAR))
+		for row in main.weather_system._zones:
+			for z in row: z.state = wt
+		main.weather_system.current = wt
+		main.sky.overcast = {"rain": 0.6, "storm": 1.0}.get(str(args["weather"]), 0.0)
+		main._update_sun()
 	main._update_sun()
 	main._update_hud()
 

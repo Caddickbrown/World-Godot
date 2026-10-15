@@ -13,6 +13,7 @@ func _initialize() -> void:
 	var days := int(args.get("days", "12"))
 	if args.has("discovery"): ConceptGraph.discovery_pace = float(args["discovery"])
 	if args.has("spread"): ConceptGraph.spread_pace = float(args["spread"])
+	if args.has("craft"): ConceptGraph.craft_pace = float(args["craft"])
 	var speed := float(args.get("speed", "20"))   # game seconds per real second
 	var dt := float(args.get("dt", str(1.0 / 60.0)))  # real seconds per frame
 	var seeds: Array = str(args.get("seeds", "1,2,3")).split(",")

@@ -25,6 +25,7 @@ shot 3_follow         --seed=7 --sim=120 --hour=10 --follow --distance=22 --tilt
 shot 4_walk           --seed=7 --sim=120 --hour=10 --walk
 shot 5_listen         --seed=7 --sim=120 --hour=16 --walk --listen --cam-distance=4.5
 shot 6_walk_dusk      --seed=7 --sim=120 --hour=19.6 --walk --no-hud
+shot 8_storm          --seed=7 --sim=120 --hour=15 --distance=60 --tilt=45 --weather=storm --no-hud
 shot 7_settled        --seed=7 --sim=1500 --hour=12 --follow --distance=40 --tilt=50
 # The HUD and screens, in both looks (a world ~7 days on).
 for st in storybook fieldnotes; do

@@ -341,6 +341,8 @@ const SPOIL_DAYS := 2.0
 const SPOIL_DAYS_PRESERVED := 8.0
 const PRESERVING := ["fermentation", "pottery", "salting"]
 
+var _larder_told := false   # the chronicle tells of the first larder once per world
+
 func _tick_resources(delta: float, agents: Array = [], history_log: HistoryLog = null, day: int = 0) -> void:
 	var by_id: Dictionary = {}
 	for a in agents:
@@ -360,7 +362,8 @@ func _tick_resources(delta: float, agents: Array = [], history_log: HistoryLog =
 				s.food_store -= meal
 				a.needs["hunger"] = minf(1.0, a.needs["hunger"] + meal)
 				s.meals_served += 1
-				if s.meals_served == 1 and history_log:
+				if s.meals_served == 1 and history_log and not _larder_told:
+					_larder_told = true
 					history_log.add("settlement", "Food put by in '%s' fed someone hungry: the first larder." % s.name, day)
 		var days := SPOIL_DAYS
 		for k in PRESERVING:
