@@ -81,7 +81,7 @@ func _ready() -> void:
 ## A real game (Main is the scene the game launched, not a test or a capture)
 ## opens on the look picker with the clock held until you begin.
 func _begin() -> void:
-	if get_tree().current_scene != self:
+	if not is_inside_tree() or get_tree().current_scene != self:
 		return
 	var hud := get_node_or_null("HUD")
 	if hud and hud.has_method("open_look"):

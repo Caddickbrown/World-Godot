@@ -247,6 +247,7 @@ func _renderer(t, w: World, life: AmbientLife) -> void:
 		t.check("the wild things restyle in the %s look" % style, r.get_child_count() > 10)
 	UiTheme.set_style("storybook")
 	r.queue_free()
+	cam.get_parent().remove_child(cam)   # or the next scene's camera can't take over
 	cam.queue_free()
 
 func _moments(t) -> void:
@@ -286,5 +287,8 @@ func _main(t) -> void:
 	var c1: float = main.ambient_life.clock
 	main._process(0.5)
 	t.check("...which stand still while paused", main.ambient_life.clock == c1)
+	# Out of the tree now, so its camera stops being current before the
+	# integration tests build the next Main.
+	main.get_parent().remove_child(main)
 	main.queue_free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://test_wild_main.json"))

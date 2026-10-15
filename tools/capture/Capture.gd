@@ -17,6 +17,8 @@
 # --burn          set the wood nearest the founders alight before the sim, and look there
 # --camp          look at the biggest settlement (after --sim)
 # --animal=T      look at the nearest living animal of type T (deer, wolf, rabbit, ...)
+# --wild=K        look at the first of the small wild things: whales | shoals | flocks |
+#                 robins | butterflies | swarms | hives | frogs (AmbientLife)
 # --no-hud        hide the HUD
 # --style=S       UI look: storybook | fieldnotes
 # --screen=S      open a full screen: lives | ideas | album
@@ -106,6 +108,24 @@ func _ready() -> void:
 		if big:
 			obs.look_at_point(Vector3(big.centre.x, 0, big.centre.y) * World.TILE_SIZE)
 			print("[Capture] camp %s: %d people, tier %d, timber %.0f" % [big.name, big.member_ids.size(), big.tier, big.wood_store])
+	if args.has("no-wild") and main.ambient_renderer:
+		main.ambient_renderer.visible = false
+	if args.has("wild") and main.ambient_life:
+		var list = main.ambient_life.get(str(args["wild"]))
+		if list is Array and not list.is_empty() and "pos" in list[0]:
+			var pick = list[0]
+			for it in list:   # a whale at the surface, not one deep in a dive
+				if not ("y" in it) or float(it.y) > -1.5:
+					pick = it
+					break
+			if "y" in pick and float(pick.y) < -1.5 and "state" in pick:
+				# None up just now: bring this one to the surface for the shot
+				# (ambient life only; the people's world is untouched).
+				main.ambient_life._whale_state(pick, AmbientLife.WhaleState.SURFACE, 30.0)
+				pick.y = -0.45
+			var p: Vector2 = pick.pos
+			obs.look_at_point(Vector3(p.x, 0, p.y))
+			print("[Capture] wild %s at %s%s" % [args["wild"], str(p), (" y %.2f" % float(pick.y)) if "y" in pick else ""])
 	if args.has("animal"):
 		var want := str(args["animal"]).to_upper()
 		var pick = null

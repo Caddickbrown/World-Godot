@@ -52,9 +52,11 @@ func restyle() -> void:
 	_mat.vertex_color_is_srgb = true
 	_mat.roughness = 0.75
 	_mist = StandardMaterial3D.new()
-	_mist.albedo_color = Color(0.96, 0.98, 1.0, 0.7)
+	# Lit, not unshaded: pure white at full brightness tripped the bloom and
+	# a breach read as a blinding blob from the sky.
+	_mist.albedo_color = Color(0.88, 0.92, 0.95, 0.45)
 	_mist.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_mist.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_mist.roughness = 1.0
 	_mist.cull_mode = BaseMaterial3D.CULL_DISABLED
 	var n_fish := life.shoals.size() * AmbientLife.FISH_MAX
 	var n_birds := life.flocks.size() * AmbientLife.BIRDS_PER_FLOCK
@@ -155,7 +157,7 @@ func _draw_whales(eye: Vector3, c: float) -> void:
 		if splash.visible:
 			var k := 1.0 - w.splash
 			splash.position = Vector3(w.splash_pos.x, 0.05, w.splash_pos.y)
-			splash.scale = Vector3(1.0 + k * 2.5, maxf(0.05, w.splash * 1.2), 1.0 + k * 2.5)
+			splash.scale = Vector3(0.6 + k * 1.2, maxf(0.05, w.splash * 0.8), 0.6 + k * 1.2)
 	drawn["whales"] = up
 
 func _draw_fish(eye: Vector3, c: float) -> void:
