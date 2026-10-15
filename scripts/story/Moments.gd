@@ -38,6 +38,9 @@ const DEFS := {
 	"night_watch":   ["Night watch", "watch the island at midnight", "world", false],
 	"walk":          ["Among them", "walk among them for the first time", "world", false],
 	"listen":        ["Eavesdropper", "listen in on someone", "people", false],
+	"whale_breach":  ["A whale breaches", "see a whale leap clear of the sea", "world", true],
+	"frog_chorus":   ["The frog chorus", "be by the water when the frogs start up at dusk", "world", true],
+	"wild_honey":    ["Wild honey", "someone eats honey from a bees' nest in the woods", "firsts", true],
 }
 
 var save_path := "user://world_album.json"
