@@ -45,9 +45,11 @@ func fill() -> void:
 		grid.add_child(_sticker(e, i))
 		i += 1
 
-	var right := UiTheme.vbox(14)
-	right.custom_minimum_size.x = 340
-	row.add_child(right)
+	# Hunches can pile up; they scroll rather than push the jar off screen.
+	var rs: Array = scroll_column(340, 14)
+	(rs[0] as Control).size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.add_child(rs[0])
+	var right: VBoxContainer = rs[1]
 	right.add_child(UiTheme.caps("Hunches", "accent", 13))
 	var open: Array = m.story.hunches.open
 	if open.is_empty():

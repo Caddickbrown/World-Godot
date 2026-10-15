@@ -258,7 +258,8 @@ func _fill_follow_card(a: Agent) -> void:
 		return
 	var v := UiTheme.vbox(10)
 	follow_card.add_child(v)
-	v.add_child(UiTheme.caps("Following"))
+	var walking: bool = main != null and main.view_mode == main.ViewMode.WALK
+	v.add_child(UiTheme.caps("Listening to" if walking else "Following"))
 	v.add_child(UiTheme.label(a.agent_name, "display", 30))
 	var bits: Array = [a.life_stage.capitalize()]
 	if not a.task.is_empty():
@@ -371,7 +372,7 @@ func set_view_hint(walking: bool, following: bool) -> void:
 	if hint_lbl:
 		hint_lbl.text = HINT_WALK if walking else (HINT_FOLLOW if following else HINT_OBSERVE)
 		bar.visible = not walking or screen != null
-		follow_card.visible = follow_card.visible and not walking
+		hint_lbl.visible = screen == null
 
 func show_game_over(day: int, discoveries: int) -> void:
 	_game_over = true

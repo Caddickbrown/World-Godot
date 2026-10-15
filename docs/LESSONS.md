@@ -81,3 +81,15 @@ One line of cause, one line of rule.
   sleeping members. Rule: anything that relocates a group keeps the group until it arrives.
 - **Make randomness certain in tests** (`ConceptGraph.spread_pace = 1000`) to test the rules
   ("who can teach whom") rather than the dice.
+- **Two owners of one list.** `AgentRenderer.setup()` kept a reference to `Main.agents`, and
+  `add_agent()` appended to it, after Main already had: every child was in the list twice,
+  ticked twice a frame, counted twice (151 people under a cap of 150, duplicate names in
+  hunches). It dated from the original port. Rule: a shared array has one writer; a test
+  checks a birth adds exactly one entry with a unique id.
+- **Renderers must not touch the global RNG.** A figure's walk phase came from `randf()`,
+  so whether you were looking shifted the simulation's dice. Rule: visuals derive variety
+  from ids or a local `RandomNumberGenerator`.
+- **The dead never left.** Bodies lay forever and stayed in every per-frame loop. They are
+  now buried half a day after death (the story keeps them).
+- **A parse error in the test runner is a 10-minute hang**, not a failure: a scene whose
+  script fails to load never quits. CI now parse-checks `tests/*.gd` first.

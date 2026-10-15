@@ -23,6 +23,8 @@ const LABEL_VIEW_DISTANCE := 45.0     # names show when the camera is closer tha
 const LABEL_WALK_RADIUS := 14.0       # ...or when the wisp is within this (metres)
 const PIN_VIEW_DISTANCE := 60.0       # pins show when the camera is further than this
 const HEAD_HEIGHT := 1.7
+const FOCUS_LABEL_RADIUS := 12.0      # following someone: only names this close to them (metres)
+const FOCUS_BUBBLE_RADIUS := 5.0      # ...and only speech this close
 
 var _nodes: Dictionary = {}           # agent_id -> {root, body, legs, label, bubble, pin, tribe, phase}
 var _pin_mesh: SphereMesh
@@ -30,6 +32,7 @@ var _pin_mat: StandardMaterial3D
 var _pin_mat_selected: StandardMaterial3D
 var _ring: MeshInstance3D
 var _time := 0.0
+var _focus_pos := Vector3.INF         # whoever is selected, this frame
 var _mats: Dictionary = {}
 
 func _ready() -> void:
@@ -57,9 +60,22 @@ func setup(p_agents: Array) -> void:
 	for a in agents:
 		_add_node(a)
 
+## Main owns the list (`agents` is the same array); a newborn is already in
+## it by the time this is called, so only its figure is added here.
 func add_agent(agent: Agent) -> void:
-	agents.append(agent)
-	_add_node(agent)
+	if not agents.has(agent):
+		agents.append(agent)
+	if not _nodes.has(agent.agent_id):
+		_add_node(agent)
+
+## A buried person: drop their figure. Main has already taken them out of the list.
+func remove_agent(agent: Agent) -> void:
+	agents.erase(agent)
+	var e: Dictionary = _nodes.get(agent.agent_id, {})
+	for k in ["root", "label", "bubble", "pin"]:
+		var n: Node = e.get(k)
+		if n: n.queue_free()
+	_nodes.erase(agent.agent_id)
 
 ## Rebuild every figure (the look style changed).
 func restyle() -> void:
@@ -155,7 +171,7 @@ func _add_node(agent: Agent) -> void:
 	pin.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(pin)
 	_nodes[agent.agent_id] = {"root": root, "body_root": body_root, "body": body, "legs": legs,
-		"label": label, "bubble": bubble, "pin": pin, "tribe": -2, "phase": randf() * TAU,
+		"label": label, "bubble": bubble, "pin": pin, "tribe": -2, "phase": fmod(float(agent.agent_id) * 2.399, TAU),
 		"last_pos": agent.pos}
 
 func _make_label(font_size: int, color: Color) -> Label3D:
@@ -186,6 +202,10 @@ func update() -> void:
 	_time += dt
 	var active: Dictionary = {}
 	_ring.visible = false
+	_focus_pos = Vector3.INF
+	for agent in agents:
+		if agent.selected and not agent.is_dead:
+			_focus_pos = Vector3(agent.pos.x * TILE_SIZE, 0.0, agent.pos.y * TILE_SIZE)
 	for agent in agents:
 		active[agent.agent_id] = true
 		if not _nodes.has(agent.agent_id):
@@ -238,17 +258,21 @@ func _dress(e: Dictionary, agent: Agent) -> void:
 	if tribe == int(e["tribe"]):
 		return
 	e["tribe"] = tribe
-	var col := Color(0.66, 0.58, 0.46) if tribe < 0 else LookStyle.tribe(tribe)
+	var col := Color(0.82, 0.62, 0.40) if tribe < 0 else LookStyle.tribe(tribe)
 	(e["body"] as MeshInstance3D).material_override = _mat(LookStyle.g(col))
 
 func _update_overlays(entry: Dictionary, agent: Agent, feet: Vector3) -> void:
 	var alive: bool = not agent.is_dead and agent.health > 0.0
 	var near_walker: bool = walker_pos != Vector3.INF and feet.distance_to(walker_pos) < LABEL_WALK_RADIUS
 	var close: bool = view_distance < LABEL_VIEW_DISTANCE or near_walker
+	# Following someone in a crowd: the tags round them, not the whole camp's.
+	var flat := Vector3(feet.x, 0.0, feet.z)
+	var near_focus: bool = _focus_pos == Vector3.INF or flat.distance_to(_focus_pos) < FOCUS_LABEL_RADIUS
+	var speech_near_focus: bool = _focus_pos == Vector3.INF or flat.distance_to(_focus_pos) < FOCUS_BUBBLE_RADIUS
 
 	var label: Label3D = entry.get("label") as Label3D
 	if label:
-		label.visible = alive and (close or agent.selected)
+		label.visible = alive and ((close and near_focus) or agent.selected)
 		if label.visible:
 			label.text = agent.agent_name
 			label.position = feet + Vector3(0, HEAD_HEIGHT + 0.3, 0)
@@ -258,7 +282,7 @@ func _update_overlays(entry: Dictionary, agent: Agent, feet: Vector3) -> void:
 	if bubble:
 		var listening: bool = agent.agent_id == listening_id
 		var line: String = AgentThoughts.thought(agent) if listening else agent.speech_bubble
-		bubble.visible = alive and not line.is_empty() and (close or agent.selected or listening)
+		bubble.visible = alive and not line.is_empty() and ((close and speech_near_focus) or agent.selected or listening)
 		if bubble.visible:
 			bubble.text = ("(" + line + ")") if listening else ("“" + line + "”")
 			bubble.modulate = Color(0.75, 0.9, 1.0) if listening else Color(1.0, 0.96, 0.82)
@@ -268,7 +292,7 @@ func _update_overlays(entry: Dictionary, agent: Agent, feet: Vector3) -> void:
 	if pin:
 		pin.visible = alive and view_distance > PIN_VIEW_DISTANCE and walker_pos == Vector3.INF
 		if pin.visible:
-			var s: float = view_distance / 90.0 * (1.6 if agent.selected else 1.0)
+			var s: float = view_distance / 70.0 * (2.2 if agent.selected else 1.0)
 			pin.scale = Vector3(s, s, s)
 			pin.position = feet + Vector3(0, HEAD_HEIGHT + 0.6 * s, 0)
 			pin.material_override = _pin_mat_selected if agent.selected else _pin_mat

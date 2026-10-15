@@ -357,6 +357,7 @@ func _process(delta: float) -> void:
 	for a in agents:
 		if a.is_dead and not bool(a.get_meta("death_logged", false)):
 			a.set_meta("death_logged", true)
+			a.set_meta("died_at", time_system.game_time)
 			history_log.add("death", history_log.format_death(a.agent_name, a.death_cause), time_system.day)
 			story.on_death(a)
 			_grieve_for(a)
@@ -367,6 +368,8 @@ func _process(delta: float) -> void:
 	if not game_over and agents.size() > 0 and alive_count == 0:
 		game_over = true
 		_show_game_over()
+	elif alive_count > 0:
+		_bury_the_dead()
 
 	# Sun position (day/night)
 	_update_sun()
@@ -385,6 +388,21 @@ func _process(delta: float) -> void:
 	animal_renderer.update()
 	_update_settlements()
 	_update_hud()
+
+## The dead lie where they fell for a while (mourners gather), then are
+## buried: their figure goes and they stop being ticked. Their story stays in
+## StoryKeeper. The last bodies stay if no one is left to bury them.
+func _bury_the_dead() -> void:
+	var now := time_system.game_time
+	var buried: Array = []
+	for a in agents:
+		if a.is_dead and a.has_meta("died_at") and now - float(a.get_meta("died_at")) > BURY_AFTER:
+			buried.append(a)
+	for a in buried:
+		agents.erase(a)
+		agent_renderer.remove_agent(a)
+		if selected_agent == a:
+			follow(null)
 
 # ── Event handlers ─────────────────────────────────────────────────────────────
 
@@ -521,6 +539,7 @@ func _is_witnessed(tile_pos: Vector2, agent_ids: Array) -> bool:
 		return p.distance_to(wanderer.world_position()) < WITNESS_WALK_RANGE
 	return observer.distance < WITNESS_SKY_RANGE and camera.is_position_in_frustum(p)
 
+const BURY_AFTER := TimeSystem.DAY_LENGTH * 0.5   # game-seconds a body lies before burial
 const WITNESS_SKY_RANGE := 200.0
 const WITNESS_WALK_RANGE := 40.0
 

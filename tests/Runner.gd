@@ -502,6 +502,18 @@ func _test_main_views() -> void:
 	check("founders arrive as adults (%d/%d)" % [adults, main.agents.size()], adults == main.agents.size())
 	check("the observer starts in charge", main.observer.active and main.observer.camera.current)
 
+	# A birth adds exactly one person (the renderer once appended them a second
+	# time to the shared list, so every child was ticked and counted twice).
+	var mum: Agent = main.agents[0]
+	var pop_before: int = main.agents.size()
+	main.concept_graph.birth_events.append({"x": mum.pos.x, "z": mum.pos.y, "parent_name": mum.agent_name,
+		"parent_a_id": mum.agent_id, "parent_b_id": main.agents[1].agent_id})
+	main._handle_births()
+	var ids := {}
+	for a in main.agents: ids[a.agent_id] = true
+	check("a birth adds one person, once (%d -> %d)" % [pop_before, main.agents.size()],
+		main.agents.size() == pop_before + 1 and ids.size() == main.agents.size())
+
 	# Follow: the eye drifts to the person and stays with them.
 	var who: Agent = main.agents[0]
 	main.follow(who)
