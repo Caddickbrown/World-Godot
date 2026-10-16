@@ -13,3 +13,4 @@
 # Exports (tools/export/build_linux.sh)
 /build/
 /dist/
+/native/bin/

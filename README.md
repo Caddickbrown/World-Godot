@@ -26,16 +26,23 @@ Open the folder in Godot 4.7 and press Play (`scenes/Main.tscn`).
 
 ## Builds
 
-Every push that passes CI builds a Linux version (x86_64): open the run under
-**Actions**, then **Artifacts → World-linux-x86_64** (kept 14 days). Pushing a
-tag `v*` (`git tag v0.1.0 && git push origin v0.1.0`) also publishes it as a
-GitHub Release. Unpack and run `./World.x86_64`; keep `libworld_kernels.so`
-beside it.
+Every push that passes CI builds the game for **Linux** (x86_64), **Windows**
+(x86_64) and **macOS** (universal): open the run under **Actions**, then
+**Artifacts** (kept 14 days). Each build is started on its own OS in CI before
+it's offered. Pushing a tag `v*` (`git tag v0.2.0 && git push origin v0.2.0`)
+also publishes all three as a GitHub Release. Each package has a README.txt
+(the Windows and macOS builds aren't signed by a paid certificate, so each OS
+asks once before running them).
+
+The native kernels are compiled on each OS (`native/package.sh` → `native/bin/`:
+Linux against glibc 2.28, macOS as one universal library), then Godot exports
+all three from Linux.
 
 Locally: `tools/export/fetch_templates.py 4.7.2 linux_release.x86_64 linux_debug.x86_64`
-once (just the Linux export templates, not the 1.3 GB archive), then
-`GODOT=/path/to/godot tools/export/build_linux.sh` → `dist/`. The build is
-smoke-run headless before it's packed.
+once (just the templates you need, not the 1.3 GB archive; add
+`windows_release_x86_64.exe windows_debug_x86_64.exe macos.zip` for the others),
+`native/package.sh`, then `GODOT=/path/to/godot tools/export/export.sh linux`
+→ `dist/`. A Linux build is smoke-run (`tools/export/smoke.sh`) before it's packed.
 
 ## Layout
 

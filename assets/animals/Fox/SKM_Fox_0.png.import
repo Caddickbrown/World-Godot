@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://cww1jcj63fox3"
 path.s3tc="res://.godot/imported/SKM_Fox_0.png-f58aaea2e9e1ec99f0713db928254209.s3tc.ctex"
+path.etc2="res://.godot/imported/SKM_Fox_0.png-f58aaea2e9e1ec99f0713db928254209.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/animals/Fox/SKM_Fox_0.png"
-dest_files=["res://.godot/imported/SKM_Fox_0.png-f58aaea2e9e1ec99f0713db928254209.s3tc.ctex"]
+dest_files=["res://.godot/imported/SKM_Fox_0.png-f58aaea2e9e1ec99f0713db928254209.s3tc.ctex", "res://.godot/imported/SKM_Fox_0.png-f58aaea2e9e1ec99f0713db928254209.etc2.ctex"]
 
 [params]
 

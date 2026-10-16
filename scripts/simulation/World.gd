@@ -144,6 +144,8 @@ func _build_layers() -> void:
 		_kernels_checked = true
 		if ClassDB.class_exists("Kernels"):
 			kernels = ClassDB.instantiate("Kernels")
+		# Once a run, in the log: which passes this build uses.
+		print("native kernels: %s" % ("on" if kernels else "off (GDScript passes)"))
 
 func _i(tile: Dictionary) -> int:
 	return int(tile["z"]) * width + int(tile["x"])

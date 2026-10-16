@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://bh1bpgfc7cibh"
 path.s3tc="res://.godot/imported/SKM_Eagle_Animations_0.png-9c31fa75b4dc9f6d255e9db8fdb36e39.s3tc.ctex"
+path.etc2="res://.godot/imported/SKM_Eagle_Animations_0.png-9c31fa75b4dc9f6d255e9db8fdb36e39.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/animals/Eagle/SKM_Eagle_Animations_0.png"
-dest_files=["res://.godot/imported/SKM_Eagle_Animations_0.png-9c31fa75b4dc9f6d255e9db8fdb36e39.s3tc.ctex"]
+dest_files=["res://.godot/imported/SKM_Eagle_Animations_0.png-9c31fa75b4dc9f6d255e9db8fdb36e39.s3tc.ctex", "res://.godot/imported/SKM_Eagle_Animations_0.png-9c31fa75b4dc9f6d255e9db8fdb36e39.etc2.ctex"]
 
 [params]
 
