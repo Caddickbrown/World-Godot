@@ -27,9 +27,22 @@ var _dirty: Dictionary = {}        # Vector2i chunk -> true
 ## "x,z" -> [n trees standing, n stumps, n snags] as last drawn (tests read this)
 var _shown: Dictionary = {}
 
+## The native builder (lib.rs FloraBuilder) when built: a chunk's buffers in
+## a fraction of a millisecond. null: _draw_tile, per tree, in GDScript.
+var _builder: Object = null
+
+## Colours the native builder needs, in its palette order (lib.rs FP_*).
+static func palette() -> PackedColorArray:
+	return PackedColorArray([TRUNK_COL, CHAR_COL, LookStyle.BLIGHT, PINE_A, PINE_B, BROAD_A, BROAD_B, EARLY_AUTUMN])
+
 func setup(world: World) -> void:
 	_world = world
 	_field = world.heightfield
+	_builder = null
+	if World.kernels and ClassDB.class_exists("FloraBuilder"):
+		_builder = ClassDB.instantiate("FloraBuilder")
+		_builder.set_field(_field.heights, _field.n, Heightfield.STEP, TILE_SIZE, world.seed_val, world.width)
+		_builder.set_palette(palette(), LookStyle.naturalist())
 	clear()
 	_meshes = {
 		"pine_lo": _cone(1.3, 2.6), "pine_hi": _cone(0.95, 2.0), "trunk": _trunk(),
@@ -135,23 +148,26 @@ func tree_count_on(x: int, z: int) -> int:
 
 ## Where trees may stand on a tile, fixed by the seed: [{p, h, yaw, s, kind, tint}].
 ## kind: "pine" | "broad" | "meadow" | "" (no tree in this slot for this tile type).
+## Rolled with World.roll (seed, tile, k), the same numbers the native
+## builder (lib.rs FloraBuilder) uses, so both put every tree in one place.
 func _slots(x: int, z: int, tile: Dictionary) -> Array:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash(Vector3i(x, z, _world.seed_val))
+	var sd := _world.seed_val
+	var ti := z * _world.width + x
 	var t := int(tile["type"])
 	var planted := bool(tile.get("planted", false))
 	var burnt := float(tile.get("burnt", 0.0)) > 0.0
 	var nat := LookStyle.naturalist()
 	var out: Array = []
-	var slots := 2 if (t == World.TileType.FOREST or planted or burnt) and rng.randf() < 0.5 else 1
+	var slots := 2 if (t == World.TileType.FOREST or planted or burnt) and World.roll(sd, ti, 0) < 0.5 else 1
 	for k in slots:
-		var px := (x + rng.randf_range(0.1, 0.9)) * TILE_SIZE
-		var pz := (z + rng.randf_range(0.1, 0.9)) * TILE_SIZE
-		var roll := rng.randf()
-		var yaw := rng.randf() * TAU
-		var size := rng.randf()
-		var tint_r := rng.randf()
-		var odd := rng.randf()
+		var r := 1 + k * 7
+		var px := (x + 0.1 + 0.8 * World.roll(sd, ti, r)) * TILE_SIZE
+		var pz := (z + 0.1 + 0.8 * World.roll(sd, ti, r + 1)) * TILE_SIZE
+		var roll := World.roll(sd, ti, r + 2)
+		var yaw := World.roll(sd, ti, r + 3) * TAU
+		var size := World.roll(sd, ti, r + 4)
+		var tint_r := World.roll(sd, ti, r + 5)
+		var odd := World.roll(sd, ti, r + 6)
 		var h := _field.height_at(px, pz)
 		var nrm := _field.normal_at(px, pz)
 		var clump := sin(px * 0.11 + pz * 0.07) * cos(pz * 0.13 - px * 0.05) * 0.5 + 0.5
@@ -170,16 +186,25 @@ func _slots(x: int, z: int, tile: Dictionary) -> Array:
 		var s: float
 		if kind == "pine":
 			s = lerpf(0.8, 1.35, size) * (1.25 if nat else 1.0)
-			tint = Color(0.16, 0.36, 0.20).lerp(Color(0.26, 0.45, 0.22), tint_r)
+			tint = PINE_A.lerp(PINE_B, tint_r)
 		else:
 			s = lerpf(0.7, 1.1, size)
-			tint = Color(0.36, 0.58, 0.24).lerp(Color(0.58, 0.68, 0.26), tint_r * 0.6)
+			tint = BROAD_A.lerp(BROAD_B, tint_r * 0.6)
 			if odd < 0.025 and not nat:
-				tint = Color(0.86, 0.55, 0.22)  # the odd tree turning early
+				tint = EARLY_AUTUMN  # the odd tree turning early
 		out.append({"p": Vector3(px, h, pz), "yaw": yaw, "s": s, "kind": kind, "tint": tint})
 	return out
 
+const PINE_A := Color(0.16, 0.36, 0.20)
+const PINE_B := Color(0.26, 0.45, 0.22)
+const BROAD_A := Color(0.36, 0.58, 0.24)
+const BROAD_B := Color(0.58, 0.68, 0.26)
+const EARLY_AUTUMN := Color(0.86, 0.55, 0.22)
+
 func _rebuild_chunk(c: Vector2i) -> void:
+	if _builder:
+		_rebuild_chunk_native(c)
+		return
 	var data: Dictionary = {}
 	for part in TREE_PARTS:
 		data[part] = {"xf": [], "col": []}
@@ -210,6 +235,75 @@ func _rebuild_chunk(c: Vector2i) -> void:
 		inst.multimesh = mm
 		inst.visible = true
 	_chunks[c] = nodes
+
+## The chunk's tile state, packed for the builder.
+func _chunk_input(c: Vector2i) -> Array:
+	var x0 := c.x * CHUNK
+	var z0 := c.y * CHUNK
+	var w := mini(CHUNK, _world.width - x0)
+	var h := mini(CHUNK, _world.height - z0)
+	var ttype := PackedByteArray(); ttype.resize(w * h)
+	var flags := PackedByteArray(); flags.resize(w * h)
+	var growth := PackedFloat32Array(); growth.resize(w * h)
+	var blight := PackedFloat32Array(); blight.resize(w * h)
+	for wz in h:
+		var row: Array = _world.tiles[z0 + wz]
+		for wx in w:
+			var t: Dictionary = row[x0 + wx]
+			var i := wz * w + wx
+			ttype[i] = int(t["type"])
+			flags[i] = (1 if bool(t.get("planted", false)) else 0) | (2 if float(t.get("burnt", 0.0)) > 0.0 else 0) \
+				| (4 if bool(t.get("tree_cut", false)) else 0) | (8 if World.has_woods(t) else 0)
+			growth[i] = float(t.get("growth", 1.0))
+			blight[i] = float(t.get("blight", 0.0))
+	return [x0, z0, w, h, ttype, flags, growth, blight, _clearings.get(c, PackedVector3Array()), ForestSystem.VISUAL_STEPS]
+
+func _rebuild_chunk_native(c: Vector2i) -> void:
+	var a := _chunk_input(c)
+	var out: Array = _builder.callv("chunk", a)
+	var nodes: Dictionary = _chunks.get(c, {})
+	for k in TREE_PARTS.size():
+		var part: String = TREE_PARTS[k]
+		var buf: PackedFloat32Array = out[k]
+		var inst: MultiMeshInstance3D = nodes.get(part)
+		if buf.is_empty():
+			if inst:
+				inst.visible = false
+			continue
+		if inst == null:
+			inst = MultiMeshInstance3D.new()
+			inst.material_override = _material(part)
+			add_child(inst)
+			nodes[part] = inst
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_colors = true
+		mm.mesh = _meshes[part]
+		mm.instance_count = buf.size() / 16
+		mm.buffer = buf
+		inst.multimesh = mm
+		inst.visible = true
+	_chunks[c] = nodes
+	var counts: PackedInt32Array = out[TREE_PARTS.size()]
+	var w: int = a[2]
+	for i in counts.size() / 3:
+		var key := "%d,%d" % [a[0] + i % w, a[1] + i / w]
+		if counts[i * 3] == 0 and counts[i * 3 + 1] == 0 and counts[i * 3 + 2] == 0:
+			_shown.erase(key)
+		else:
+			_shown[key] = [counts[i * 3], counts[i * 3 + 1], counts[i * 3 + 2]]
+
+## A part's instances as the native builder lays them out (16 floats each:
+## the basis by rows with the origin, then the colour). For the parity test.
+static func pack(xfs: Array, cols: Array) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for i in xfs.size():
+		var xf: Transform3D = xfs[i]
+		var b := xf.basis
+		var c: Color = cols[i]
+		out.append_array([b.x.x, b.y.x, b.z.x, xf.origin.x, b.x.y, b.y.y, b.z.y, xf.origin.y,
+			b.x.z, b.y.z, b.z.z, xf.origin.z, c.r, c.g, c.b, c.a])
+	return out
 
 func _draw_tile(x: int, z: int, data: Dictionary) -> void:
 	var tile: Dictionary = _world.tiles[z][x]

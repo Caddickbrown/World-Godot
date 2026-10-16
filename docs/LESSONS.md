@@ -149,3 +149,11 @@ One line of cause, one line of rule.
   Rust (530 ns) costs more than one Dictionary read (375 ns). So: data in packed layers
   first, whole-grid passes to Rust in one call, single reads left in GDScript
   (native/README.md).
+- **Read before you port.** Of the eight whole-map sweeps profiled for Rust, three
+  did nothing: soil quality and tree ages that no code read, and a scan for a handful of
+  overgrazed tiles. Deleting is the fastest port. Growth needed a set of growing
+  tiles, not native code: on most days no tile was growing.
+- **Same numbers both ways.** Native passes roll with `World.roll` (a hash), not
+  Godot's RNG, so the GDScript twin produces the identical world and parity tests
+  compare exactly (terrain colours within 1e-7, trees within 2e-6).
+

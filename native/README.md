@@ -26,6 +26,31 @@ Measured with `tools/bench_kernels.gd` (128x128 tiles, one full regrowth pass):
   Dictionaries; moving a field into `World.layer_*` is step one, and it alone
   is worth 4-6x.
 
+## What's native now
+
+| Kernel | Class | GDScript twin | Before | After |
+|---|---|---|---|---|
+| Food, herb, mushroom regrowth | `Kernels.regrow` | `World.regrow_gd` | 2.3 ms/frame | 0.09 ms/frame |
+| Forest spread (seed, fade, succeed) | `Kernels.forest_spread` | `EcologySystem.forest_spread_gd` | 27 ms every 10 game s | 0.1 ms |
+| Depletion recovering | `Kernels.fade` | `World.fade_layer` | 5.7 ms a cycle + 10 ms slow tick | ~0 |
+| Terrain chunk (height, normal, colour) | `TerrainMesher` | `TerrainRenderer._chunk_arrays_gd` | 16 ms a chunk | 0.9 ms |
+| Flora chunk (MultiMesh buffers) | `FloraBuilder` | `EnvironmentRenderer._draw_tile` | 3.1 ms a chunk | 0.5 ms |
+
+Whole frame (150 people, 20x, `tools/profile.gd`): 36.6 ms -> 26.0 ms. Boot:
+4.8 s -> 2.8 s. Along the way three whole-map sweeps were deleted rather
+than ported: a soil value and tree ages nothing read, and a scan for the few
+overgrazed deserts (now a set). Growth visits only growing woods
+(`World.growing`).
+
+Random rolls in native passes come from `World.roll` (a hash of seed, tile and
+k, the same in both languages), so a pass gives the same world either way and
+the parity tests compare exactly. Trees use it too: their places moved once
+when this came in.
+
+**Not native, on purpose:** people, animals and conflict (per-person decisions
+read a tile or two at a time; a call into Rust costs more than the read), and
+the renderers' engine work.
+
 ## Adding a kernel
 
 1. Move the fields the pass touches into layers (`World._build_layers`, accessors,

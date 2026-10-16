@@ -22,6 +22,10 @@ var _season: Dictionary = {}
 var _water: MeshInstance3D
 ## Settlement centres (world metres) for trampled ground; set by Main.
 var camps: Array = []
+## The native mesher (native/world_kernels TerrainMesher) when built: a chunk
+## in ~1 ms instead of ~16 (and boot 1.7 s faster). null: _chunk_arrays_gd.
+var _mesher: Object = null
+var _index := PackedInt32Array()   # the same triangles for every chunk
 
 static func tile_color(tile_type: int) -> Color:
 	# Minimap and anything else that wants one colour per tile type.
@@ -45,7 +49,24 @@ func setup(p_world: World) -> void:
 	if field == null:
 		field = Heightfield.new().build(world)
 		world.heightfield = field
+	_mesher = null
+	if World.kernels and ClassDB.class_exists("TerrainMesher"):
+		_mesher = ClassDB.instantiate("TerrainMesher")
+		_mesher.set_field(field.heights, field.biome, field.n, Heightfield.STEP, field.size_m, TILE_SIZE)
 	rebuild()
+
+## The colours the native mesher needs, in its palette order (lib.rs P_*).
+## LookStyle stays the one place the look is defined.
+static func palette() -> PackedColorArray:
+	return PackedColorArray([LookStyle.MEADOW, LookStyle.MEADOW_DRY, LookStyle.WOOD, LookStyle.FOREST,
+		LookStyle.ROCK, LookStyle.DESERT, LookStyle.SNOW.lerp(Color(0.75, 0.86, 0.95), 0.3), LookStyle.LAVA,
+		LookStyle.BARREN, LookStyle.ASH, LookStyle.RIVER, LookStyle.FLOOD_MUD, LookStyle.SAND,
+		LookStyle.WET_SAND, LookStyle.ROCK_DARK, LookStyle.SNOW, LookStyle.g(LookStyle.PARCHED),
+		LookStyle.g(LookStyle.BLIGHT), LookStyle.g(LookStyle.TRAMPLED)])
+
+func _sync_palette() -> void:
+	if _mesher:
+		_mesher.set_palette(palette(), LookStyle.naturalist(), PackedVector2Array(camps))
 
 func rebuild() -> void:
 	for ch in get_children():
@@ -58,6 +79,7 @@ func rebuild() -> void:
 	_material.shader = preload("res://shaders/terrain_season.gdshader")
 	SeasonLook.apply(_material, _season)
 	chunk_count = int(ceil(field.size_m / CHUNK_M))
+	_sync_palette()
 	for cz in chunk_count:
 		for cx in chunk_count:
 			_build_chunk(Vector2i(cx, cz))
@@ -88,12 +110,65 @@ func flush_all() -> void:
 func _build_chunk(c: Vector2i) -> void:
 	if _chunks.has(c):
 		(_chunks[c] as Node).queue_free()
+	var steps := int(CHUNK_M / Heightfield.STEP)
+	if _index.is_empty():
+		var count := steps + 1
+		for iz in steps:
+			for ix in steps:
+				var i := iz * count + ix
+				_index.append_array([i, i + 1, i + count, i + 1, i + count + 1, i + count])
+	var arrays := _chunk_arrays(c)
+	var mesh_arrays := []
+	mesh_arrays.resize(Mesh.ARRAY_MAX)
+	mesh_arrays[Mesh.ARRAY_VERTEX] = arrays[0]
+	mesh_arrays[Mesh.ARRAY_NORMAL] = arrays[1]
+	mesh_arrays[Mesh.ARRAY_COLOR] = arrays[2]
+	mesh_arrays[Mesh.ARRAY_INDEX] = _index
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh_arrays)
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.material_override = _material
+	add_child(mi)
+	_chunks[c] = mi
+
+## A chunk's [vertices, normals, colours], natively when built.
+func _chunk_arrays(c: Vector2i) -> Array:
+	if _mesher == null:
+		return _chunk_arrays_gd(c)
+	var tiles := int(CHUNK_M / TILE_SIZE)
+	var win := Vector2i(c.x * tiles - 1, c.y * tiles - 1)
+	var w := tiles + 3
+	var ttype := PackedByteArray(); ttype.resize(w * w)
+	var flags := PackedByteArray(); flags.resize(w * w)
+	var depl := PackedFloat32Array(); depl.resize(w * w)
+	var drought := PackedFloat32Array(); drought.resize(w * w)
+	var blight := PackedFloat32Array(); blight.resize(w * w)
+	for wz in w:
+		for wx in w:
+			var i := wz * w + wx
+			var t := world.get_tile(win.x + wx, win.y + wz)
+			if t.is_empty():
+				ttype[i] = 255
+				continue
+			ttype[i] = int(t["type"])
+			flags[i] = (1 if bool(t.get("tree_cut", false)) else 0) | (2 if float(t.get("burnt", 0.0)) > 0.0 else 0) \
+				| (4 if bool(t.get("river", false)) else 0) | (8 if bool(t.get("flooded", false)) else 0)
+			depl[i] = world.depletion_of(t)
+			drought[i] = float(t.get("drought", 0.0))
+			blight[i] = float(t.get("blight", 0.0))
+	return _mesher.chunk(c.x * CHUNK_M, c.y * CHUNK_M, int(CHUNK_M / Heightfield.STEP), win, w,
+		ttype, flags, depl, drought, blight)
+
+## The GDScript chunk: the fallback, and what the native one is held to.
+func _chunk_arrays_gd(c: Vector2i) -> Array:
 	var x0 := c.x * CHUNK_M
 	var z0 := c.y * CHUNK_M
 	var steps := int(CHUNK_M / Heightfield.STEP)
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var count := steps + 1
+	var verts := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var colors := PackedColorArray()
 	for iz in count:
 		for ix in count:
 			var x := minf(x0 + ix * Heightfield.STEP, field.size_m)
@@ -102,22 +177,13 @@ func _build_chunk(c: Vector2i) -> void:
 			var nrm := field.normal_at(x, z)
 			var tile := world.get_tile_f(x / TILE_SIZE, z / TILE_SIZE)
 			var wob := sin(x * 0.07 + z * 0.05) * cos(z * 0.09 - x * 0.03) * 0.5 + 0.5
-			var col := LookStyle.ground(field.biome_at(x, z), h, nrm, tile, wob)
+			var col := LookStyle.ground(field.biome_at(x, z), h, nrm, tile, wob, world.depletion_of(tile))
 			col = LookStyle.disaster_tint(col, _field_at(x, z, "drought"), _field_at(x, z, "blight"))
 			col = _trample(col, x, z)
-			st.set_color(col)
-			st.set_normal(nrm)
-			st.add_vertex(Vector3(x, h, z))
-	for iz in steps:
-		for ix in steps:
-			var i := iz * count + ix
-			st.add_index(i); st.add_index(i + 1); st.add_index(i + count)
-			st.add_index(i + 1); st.add_index(i + count + 1); st.add_index(i + count)
-	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
-	mi.material_override = _material
-	add_child(mi)
-	_chunks[c] = mi
+			verts.append(Vector3(x, h, z))
+			normals.append(nrm)
+			colors.append(col)
+	return [verts, normals, colors]
 
 ## A per-tile amount (DisasterSystem's drought / blight) read smoothly between
 ## tile centres, so a drought's edge is a gradient, never a staircase.
@@ -173,6 +239,7 @@ func set_camps(centres: Array) -> void:
 		return
 	var touched: Array = camps.duplicate() + centres
 	camps = centres
+	_sync_palette()
 	for p in touched:
 		for dz in [-1, 0, 1]:
 			for dx in [-1, 0, 1]:

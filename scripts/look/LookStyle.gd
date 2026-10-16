@@ -46,7 +46,7 @@ static func tribe(i: int) -> Color:
 	return list[posmod(i, list.size())]
 
 ## Ground colour from the continuous biome field, then the tile's own state.
-static func ground(nv: float, h: float, nrm: Vector3, tile: Dictionary, wobble: float) -> Color:
+static func ground(nv: float, h: float, nrm: Vector3, tile: Dictionary, wobble: float, depletion: float = 0.0) -> Color:
 	var c := MEADOW
 	c = c.lerp(MEADOW_DRY, wobble * 0.45)
 	c = c.lerp(WOOD, smoothstep(0.14, 0.22, nv))
@@ -57,8 +57,8 @@ static func ground(nv: float, h: float, nrm: Vector3, tile: Dictionary, wobble: 
 			World.TileType.DESERT: c = c.lerp(DESERT, 0.85)
 			World.TileType.GLACIER: c = SNOW.lerp(Color(0.75, 0.86, 0.95), 0.3)
 			World.TileType.LAVA: c = LAVA
-		if float(tile.get("depletion_level", 0.0)) > 0.0:
-			c = c.lerp(BARREN, clampf(float(tile["depletion_level"]), 0.0, 1.0) * 0.7)
+		if depletion > 0.0:
+			c = c.lerp(BARREN, clampf(depletion, 0.0, 1.0) * 0.7)
 		if bool(tile.get("tree_cut", false)):
 			c = c.lerp(BARREN, 0.35)
 		if float(tile.get("burnt", 0.0)) > 0.0:

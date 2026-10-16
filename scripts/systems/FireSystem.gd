@@ -11,7 +11,6 @@ var lightning_fire_pos: Vector2 = Vector2(-1.0, -1.0)
 const SPREAD_INTERVAL    := 2.0
 const SPREAD_CHANCE      := 0.02   # per adjacent flammable tile per interval
 const LIGHTNING_CHANCE   := 0.001  # per second during storms (0.1 %)
-const SOIL_QUALITY_BOOST := 0.1
 # World.TileType.GRASS=3, WOODLAND=4, FOREST=5 — stored as ints to avoid cross-class const eval
 const FIRE_BURNOUT_TYPE  := 3
 const BURNT_SECONDS := 120.0   # about a day of black snags before they fall
@@ -126,14 +125,11 @@ func _extinguish(
 		tile["growth"]   = -1.0
 		tile["planted"]  = false
 		tile["burnt"]    = BURNT_SECONDS
+		world.mark_growing(tx, tz)
 		tile["burnt_once"] = true
 		world.cut_trees.erase(key)
 		world.mark_tile_dirty(tx, tz)
 		world.mark_flora_dirty(tx, tz)
-
-	# Boost soil quality (capped at 1.0).
-	var current_soil: float = float(tile.get("soil_quality", 1.0))
-	tile["soil_quality"] = minf(1.0, current_soil + SOIL_QUALITY_BOOST)
 
 func _lightning_strike(
 	world: World,

@@ -22,29 +22,15 @@ const OVERGRAZE_TIME_THRESH    := 300.0   # seconds before degradation
 const OVERGRAZE_DECAY          := 10.0    # sec/sec decay when tile is empty
 const OVERGRAZE_RECOVER_TIME   := 3600.0  # seconds before DESERT recovers to GRASS
 
-# Soil regeneration rates.
-const SOIL_REGEN_FOREST        := 0.001   # per second
-const SOIL_REGEN_BURNOUT       := 0.005   # per second for post-fire GRASS
-
 # Herb spawn chance when WOODLAND is created.
 const HERB_SPAWN_CHANCE        := 0.30
 
-# ── Public helpers ────────────────────────────────────────────────────────────
-
-func get_soil_quality(tile: Dictionary) -> float:
-	return float(tile.get("soil_quality", 1.0))
-
-func get_moisture(tile: Dictionary) -> float:
-	return float(tile.get("moisture", 0.4))
-
 # ── Main tick ─────────────────────────────────────────────────────────────────
 
-# Continuous full-world passes are striped across frames: each call handles one
-# row in STRIPE_COUNT and advances by STRIPE_COUNT * delta. These are linear
-# accumulators and rare-event checks, so the aggregate result is unchanged.
-const STRIPE_COUNT := 8
-var _soil_stripe: int = 0
-var _desert_stripe: int = 0
+# (A soil-quality sweep lived here: a striped pass over every tile's
+# Dictionary each frame, for a value nothing read. Removed.)
+## Overgrazed desert recovering: tile -> seconds since it turned.
+var _recovering: Dictionary = {}
 
 func tick(delta: float, world: World, agents: Array, day: int, history_log: HistoryLog) -> void:
 	_forest_timer += delta
@@ -57,7 +43,6 @@ func tick(delta: float, world: World, agents: Array, day: int, history_log: Hist
 		_graze_timer -= GRAZE_CHECK_INTERVAL
 		_do_overgraze_check(agents, world, day, history_log)
 
-	_tick_soil(delta, world)
 	_tick_overgraze_decay(delta, world, day, history_log)
 
 # ── Forest spread ─────────────────────────────────────────────────────────────
@@ -72,78 +57,104 @@ func _do_forest_spread(world: World, day: int = 0, history_log: HistoryLog = nul
 	var spread_prob: float = SPREAD_CHANCE_PER_DAY * (FOREST_SPREAD_INTERVAL / DAY_LENGTH)
 	var revert_prob: float = REVERT_CHANCE_PER_DAY * (FOREST_SPREAD_INTERVAL / DAY_LENGTH)
 	var succession_prob: float = SUCCESSION_CHANCE_PER_DAY * (FOREST_SPREAD_INTERVAL / DAY_LENGTH)
+	# The whole map is rolled from tile types alone (natively when built:
+	# 27 ms of Dictionaries before); the rest of each rule is checked here on
+	# the few tiles that rolled. Same odds: the roll and the rest are
+	# independent. Every hit is checked against the world as it is now, so
+	# two woods seeding one meadow make one wood.
+	var seed := randi()
+	var events: PackedInt32Array
+	if World.kernels:
+		events = World.kernels.forest_spread(world.layer_type, world.width, seed, spread_prob, revert_prob, succession_prob)
+	else:
+		events = forest_spread_gd(world.layer_type, world.width, seed, spread_prob, revert_prob, succession_prob)
+	var w := world.width
+	for k in range(0, events.size(), 3):
+		var i: int = events[k + 1]
+		var x := i % w
+		var z := i / w
+		var tile: Dictionary = world.tiles[z][x]
+		match events[k]:
+			SEED:
+				var o: int = events[k + 2]
+				var src: Dictionary = world.tiles[o / w][o % w]
+				var st := int(src["type"])
+				var grown_wood := st == World.TileType.WOODLAND and float(src.get("growth", 1.0)) >= 0.8 \
+					and not bool(src.get("tree_cut", false))
+				if not (st == World.TileType.FOREST or grown_wood):
+					continue
+				if int(tile["type"]) != World.TileType.GRASS or float(tile.get("burnt", 0.0)) > 0.0:
+					continue
+				# Seeded from the wood next door: it starts as seedlings.
+				world.set_type(tile, World.TileType.WOODLAND)
+				tile["growth"] = 0.0
+				tile["tree_cut"] = false
+				world.mark_growing(x, z)
+				world.mark_tile_dirty(x, z)
+				world.mark_flora_dirty(x, z)
+				if bool(tile.get("burnt_once", false)) and not _told_return and history_log:
+					_told_return = true
+					return_pos = Vector2(x + 0.5, z + 0.5)
+					history_log.add("ecology", "Seedlings are coming up where the woods burned.", day)
+				if randf() < HERB_SPAWN_CHANCE:
+					world.set_herbs(tile, 1.0)
+			REVERT:
+				# A lone wild wood fades back to grass; planted groves are tended.
+				if int(tile["type"]) != World.TileType.WOODLAND or bool(tile.get("planted", false)):
+					continue
+				world.set_type(tile, World.TileType.GRASS)
+				tile["growth"] = -1.0
+				world.mark_tile_dirty(x, z)
+				world.mark_flora_dirty(x, z)
+			SUCCEED:
+				# Grown woodland beside forest: pines come up through it.
+				if int(tile["type"]) != World.TileType.WOODLAND or float(tile.get("growth", 1.0)) < 0.95 \
+						or bool(tile.get("tree_cut", false)):
+					continue
+				world.set_type(tile, World.TileType.FOREST)
+				tile["growth"] = 0.5
+				world.mark_growing(x, z)
+				world.mark_tile_dirty(x, z)
+				world.mark_flora_dirty(x, z)
 
-	var dirs: Array = [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]
+## Forest spread events, as native/world_kernels forest_spread makes them.
+const SEED := 0
+const REVERT := 1
+const SUCCEED := 2
 
-	for z in range(World.WORLD_HEIGHT):
-		for x in range(World.WORLD_WIDTH):
-			var tile: Dictionary = world.get_tile(x, z)
-			if tile.is_empty():
+## The GDScript twin of the native forest_spread (the fallback, and what the
+## parity test holds it to): [kind, tile, other, ...].
+static func forest_spread_gd(types: PackedByteArray, w: int, seed: int, p_spread: float, p_revert: float, p_succeed: float) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var h := types.size() / w
+	var dirs := [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]
+	for z in h:
+		for x in w:
+			var i := z * w + x
+			var ty := types[i]
+			if ty != World.TileType.FOREST and ty != World.TileType.WOODLAND:
 				continue
-			var tile_type: int = int(tile.get("type", -1))
-
-			# --- FOREST, and grown WOODLAND (at half the rate), seed the GRASS
-			# next to them: it becomes WOODLAND, starting as seedlings ---
-			var seeds_out: bool = tile_type == World.TileType.FOREST or (tile_type == World.TileType.WOODLAND \
-				and float(tile.get("growth", 1.0)) >= 0.8 and not bool(tile.get("tree_cut", false)))
-			if seeds_out:
-				var p_seed: float = spread_prob if tile_type == World.TileType.FOREST else spread_prob * 0.5
-				for d in dirs:
-					var nx: int = x + d.x
-					var nz: int = z + d.y
-					if nx < 0 or nx >= World.WORLD_WIDTH or nz < 0 or nz >= World.WORLD_HEIGHT:
-						continue
-					var ntile: Dictionary = world.get_tile(nx, nz)
-					if ntile.is_empty():
-						continue
-					if int(ntile.get("type", -1)) == World.TileType.GRASS and float(ntile.get("burnt", 0.0)) <= 0.0:
-						if randf() < p_seed:
-							# Seeded from the wood next door: it starts as seedlings.
-							world.set_type(ntile, World.TileType.WOODLAND)
-							ntile["growth"] = 0.0
-							ntile["tree_cut"] = false
-							world.mark_tile_dirty(nx, nz)
-							world.mark_flora_dirty(nx, nz)
-							if bool(ntile.get("burnt_once", false)) and not _told_return and history_log:
-								_told_return = true
-								return_pos = Vector2(nx + 0.5, nz + 0.5)
-								history_log.add("ecology", "Seedlings are coming up where the woods burned.", day)
-							if randf() < HERB_SPAWN_CHANCE:
-								world.set_herbs(ntile, 1.0)
-
-			# --- A lone WOODLAND tile (no woods at all beside it) fades back to
-			# GRASS; WOODLAND beside FOREST slowly turns to forest ---
-			if tile_type == World.TileType.WOODLAND:
-				var has_forest_neighbour: bool = false
-				var has_woods_neighbour: bool = false
-				for d in dirs:
-					var nx: int = x + d.x
-					var nz: int = z + d.y
-					if nx < 0 or nx >= World.WORLD_WIDTH or nz < 0 or nz >= World.WORLD_HEIGHT:
-						continue
-					var ntile: Dictionary = world.get_tile(nx, nz)
-					if ntile.is_empty():
-						continue
-					var nt := int(ntile.get("type", -1))
-					if nt == World.TileType.FOREST:
-						has_forest_neighbour = true
-					if nt == World.TileType.FOREST or nt == World.TileType.WOODLAND:
-						has_woods_neighbour = true
-				if not has_woods_neighbour:
-					# Planted groves are tended; only wild ones fade back to grass.
-					if randf() < revert_prob and not bool(tile.get("planted", false)):
-						world.set_type(tile, World.TileType.GRASS)
-						tile["growth"] = -1.0
-						world.mark_tile_dirty(x, z)
-						world.mark_flora_dirty(x, z)
-				elif has_forest_neighbour and float(tile.get("growth", 1.0)) >= 0.95 and not bool(tile.get("tree_cut", false)) \
-						and randf() < succession_prob:
-					# Grown woodland beside forest: pines come up through it.
-					world.set_type(tile, World.TileType.FOREST)
-					tile["growth"] = 0.5
-					tile["tree_age"] = 0.0
-					world.mark_tile_dirty(x, z)
-					world.mark_flora_dirty(x, z)
+			var p := p_spread if ty == World.TileType.FOREST else p_spread * 0.5
+			var forest_near := false
+			var woods_near := false
+			for k in 4:
+				var nx: int = x + dirs[k].x
+				var nz: int = z + dirs[k].y
+				if nx < 0 or nz < 0 or nx >= w or nz >= h:
+					continue
+				var j := nz * w + nx
+				var nt := types[j]
+				if nt == World.TileType.GRASS and World.roll(seed, i, k) < p:
+					out.append_array([SEED, j, i])
+				forest_near = forest_near or nt == World.TileType.FOREST
+				woods_near = woods_near or nt == World.TileType.FOREST or nt == World.TileType.WOODLAND
+			if ty == World.TileType.WOODLAND:
+				if not woods_near:
+					if World.roll(seed, i, 4) < p_revert:
+						out.append_array([REVERT, i, i])
+				elif forest_near and World.roll(seed, i, 5) < p_succeed:
+					out.append_array([SUCCEED, i, i])
+	return out
 
 # ── Overgrazing ───────────────────────────────────────────────────────────────
 
@@ -180,8 +191,7 @@ func _do_overgraze_check(agents: Array, world: World, day: int, history_log: His
 				if not tile.is_empty() and int(tile.get("type", -1)) == World.TileType.GRASS:
 					world.set_type(tile, World.TileType.DESERT)
 					world.mark_tile_dirty(tx, tz)
-					tile["overgrazed"] = true
-					tile["overgraze_time"] = 0.0
+					_recovering[Vector2i(tx, tz)] = 0.0
 					_overgrazing.erase(key)
 					history_log.add(
 						"ecology",
@@ -211,48 +221,21 @@ func _tick_overgraze_decay(delta: float, world: World, day: int, history_log: Hi
 		else:
 			_overgrazing[key] = current
 
-	# Recovery of overgrazed DESERT tiles.
-	var dd := delta * float(STRIPE_COUNT)
-	var dstart := _desert_stripe
-	_desert_stripe = (_desert_stripe + 1) % STRIPE_COUNT
-	for z in range(dstart, world.height, STRIPE_COUNT):
-		for x in range(world.width):
-			var tile: Dictionary = world.tiles[z][x]
-			if int(tile.get("type", -1)) != World.TileType.DESERT:
-				continue
-			if not bool(tile.get("overgrazed", false)):
-				continue
-			var ot: float = float(tile.get("overgraze_time", 0.0)) + dd
-			tile["overgraze_time"] = ot
-			if ot >= OVERGRAZE_RECOVER_TIME:
-				world.set_type(tile, World.TileType.GRASS)
-				tile.erase("overgrazed")
-				tile.erase("overgraze_time")
-				world.mark_tile_dirty(x, z)
-				history_log.add(
-					"ecology",
-					"An overgrazed desert at (%d, %d) has recovered to grassland" % [x, z],
-					day
-				)
-
-# ── Soil quality ──────────────────────────────────────────────────────────────
-
-func _tick_soil(delta: float, world: World) -> void:
-	var d := delta * float(STRIPE_COUNT)
-	var start := _soil_stripe
-	_soil_stripe = (_soil_stripe + 1) % STRIPE_COUNT
-	for z in range(start, world.height, STRIPE_COUNT):
-		for x in range(world.width):
-			var tile: Dictionary = world.tiles[z][x]
-			var tile_type: int = int(tile.get("type", -1))
-
-			if tile_type == World.TileType.FOREST:
-				# Slow regeneration toward 1.0.
-				var sq: float = float(tile.get("soil_quality", 1.0))
-				tile["soil_quality"] = minf(1.0, sq + SOIL_REGEN_FOREST * d)
-
-			elif tile_type == World.TileType.GRASS:
-				# Post-fire tiles have elevated soil_quality; continue improving.
-				var sq: float = float(tile.get("soil_quality", 1.0))
-				if sq < 1.0:
-					tile["soil_quality"] = minf(1.0, sq + SOIL_REGEN_BURNOUT * d)
+	# Recovery of overgrazed desert: the few tiles it happened to, not a
+	# sweep of the map looking for them.
+	for key in _recovering.keys():
+		var tile: Dictionary = world.get_tile(key.x, key.y)
+		if tile.is_empty() or int(tile["type"]) != World.TileType.DESERT:
+			_recovering.erase(key)
+			continue
+		var ot: float = _recovering[key] + delta
+		_recovering[key] = ot
+		if ot >= OVERGRAZE_RECOVER_TIME:
+			_recovering.erase(key)
+			world.set_type(tile, World.TileType.GRASS)
+			world.mark_tile_dirty(key.x, key.y)
+			history_log.add(
+				"ecology",
+				"An overgrazed desert at (%d, %d) has recovered to grassland" % [key.x, key.y],
+				day
+			)

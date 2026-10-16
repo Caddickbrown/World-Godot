@@ -665,10 +665,10 @@ func _on_arrival(world: World, all_agents: Array, concept_graph: ConceptGraph) -
 				_deed("first_herb_cure", "%s chewed the bitter herbs that grow in the woods, and felt better." % agent_name)
 			_forage_items(tile, world)
 			world.set_food(tile, maxf(0.0, world.food_of(tile) - 0.28 / tool_mult))
-			if tile.get("depletion_level", -1.0) >= 0.0:
+			if world.depletion_of(tile) >= 0.0:
 				# Ecology, conservation: take less from land that's been picked over.
-				var spare := 0.5 if fxb("spares_depleted_land") and World.is_depleted(tile) else 1.0
-				tile["depletion_level"] = minf(1.0, tile.get("depletion_level", 0.0) + 0.1 / tool_mult * spare)
+				var spare := 0.5 if fxb("spares_depleted_land") and world.is_depleted(tile) else 1.0
+				world.set_depletion(tile, minf(1.0, world.depletion_of(tile) + 0.1 / tool_mult * spare))
 			# Worth coming back to — remember it.
 			if yield_val > 0.3:
 				_remember_food_source(int(tile["x"]), int(tile["z"]), int(tile["type"]))

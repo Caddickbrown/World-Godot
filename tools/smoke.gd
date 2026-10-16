@@ -241,6 +241,17 @@ func _init() -> void:
 			if world.layer_type[z * world.width + x] != int(world.tiles[z][x]["type"]):
 				drift += 1
 	_check("tile type layer matches the tiles after the soak (%d off)" % drift, drift == 0)
+	# Every wood still growing is on World.growing (or it would never grow).
+	var lost := 0
+	for z in world.height:
+		for x in world.width:
+			var t: Dictionary = world.tiles[z][x]
+			var g := float(t.get("growth", -1.0))
+			var needs := (World.has_woods(t) and g >= 0.0 and g < 1.0 and not bool(t.get("tree_cut", false))) \
+				or float(t.get("burnt", 0.0)) > 0.0
+			if needs and not world.growing.has(Vector2i(x, z)):
+				lost += 1
+	_check("every growing wood and smoking ruin is tracked (%d lost)" % lost, lost == 0)
 	print("=== smoke: %d checks, %d failures ===" % [_checks, _failures])
 	quit(1 if _failures > 0 else 0)
 

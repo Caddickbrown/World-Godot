@@ -1075,6 +1075,7 @@ func _flush_tile_changes() -> void:
 		terrain_renderer.rebuild_tile(cell.x, cell.y)
 		environment_renderer.mark_dirty(cell.x, cell.y)
 	terrain_renderer.flush_dirty()
+	_prof("~terrain redraw")
 	# Trees that grew a size, were felled, planted or burnt: their chunks redraw
 	# a few at a time.
 	for c in world.drain_flora_dirty():

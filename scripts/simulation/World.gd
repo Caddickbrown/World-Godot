@@ -113,7 +113,8 @@ var layer_type := PackedByteArray()
 var layer_resource := PackedFloat32Array()   # food to gather, 0..1
 var layer_herbs := PackedFloat32Array()      # -1 none ever, else 0..1
 var layer_mushrooms := PackedFloat32Array()  # -1 none ever, else 0..1
-const LAYER_KEYS := ["resource", "herbs", "mushrooms"]
+var layer_depletion := PackedFloat32Array()  # -1 not gathered here, else 0 fresh .. 1 stripped
+const LAYER_KEYS := ["resource", "herbs", "mushrooms", "depletion_level"]
 ## The native kernels, when the library is built (native/build.sh); null
 ## runs the same passes in GDScript.
 static var kernels: Object = null
@@ -127,6 +128,7 @@ func _build_layers() -> void:
 	layer_resource.resize(n)
 	layer_herbs.resize(n)
 	layer_mushrooms.resize(n)
+	layer_depletion.resize(n)
 	for z in height:
 		for x in width:
 			var tile: Dictionary = tiles[z][x]
@@ -135,6 +137,7 @@ func _build_layers() -> void:
 			layer_resource[i] = float(tile["resource"])
 			layer_herbs[i] = float(tile["herbs"])
 			layer_mushrooms[i] = float(tile["mushrooms"])
+			layer_depletion[i] = float(tile["depletion_level"])
 			for k in LAYER_KEYS:
 				tile.erase(k)
 	if not _kernels_checked:
@@ -159,6 +162,48 @@ func set_herbs(tile: Dictionary, v: float) -> void:
 
 func mushrooms_of(tile: Dictionary) -> float:
 	return layer_mushrooms[_i(tile)] if not tile.is_empty() else -1.0
+
+func depletion_of(tile: Dictionary) -> float:
+	return layer_depletion[_i(tile)] if not tile.is_empty() else -1.0
+
+func set_depletion(tile: Dictionary, v: float) -> void:
+	layer_depletion[_i(tile)] = v
+
+## Picked over (ecology: spare it).
+func is_depleted(tile: Dictionary) -> bool:
+	return depletion_of(tile) > 0.7
+
+## A roll in [0, 1) from (seed, tile index, k), the same in GDScript and in
+## native/world_kernels (lib.rs roll), so a pass gives the same world either
+## way. Whole-grid passes take one randi() as the seed and roll with this.
+static func roll(seed: int, i: int, k: int) -> float:
+	const M := 0xffffffff
+	var x := ((seed * 73856093) & M) ^ ((i * 19349663) & M) ^ ((k * 83492791) & M)
+	x ^= x >> 16
+	x = (x * 0x7feb352d) & M
+	x ^= x >> 15
+	x = (x * 0x2c1b3c6d) & M
+	x ^= x >> 16
+	return float(x) / 4294967296.0
+
+## Every positive value in a layer's rows falls by amount, not below zero.
+func fade_layer(values: PackedFloat32Array, start: int, stride: int, amount: float) -> PackedFloat32Array:
+	if kernels:
+		return kernels.fade(values, width, start, stride, amount)
+	for z in range(start, height, stride):
+		for i in range(z * width, (z + 1) * width):
+			if values[i] > 0.0:
+				values[i] = maxf(0.0, values[i] - amount)
+	return values
+
+## Woods still growing and burnt ground still smoking: the only tiles
+## ForestSystem's growth visits. (It swept all 16k tiles a frame for them,
+## and on most days there were none.) Whatever sets a tile's growth below 1
+## or its burnt above 0 marks it here.
+var growing: Dictionary = {}       # Vector2i -> true
+
+func mark_growing(x: int, z: int) -> void:
+	growing[Vector2i(x, z)] = true
 
 func set_type(tile: Dictionary, t: int) -> void:
 	tile["type"] = t
@@ -628,14 +673,9 @@ func _season_mult(season: String) -> float:
 	return 1.0
 
 func update_depletion(delta: float) -> void:
-	var d := delta * float(STRIPE_COUNT)
 	var start := _depletion_stripe
 	_depletion_stripe = (_depletion_stripe + 1) % STRIPE_COUNT
-	for z in range(start, height, STRIPE_COUNT):
-		for x in range(width):
-			var tile: Dictionary = tiles[z][x]
-			if tile["depletion_level"] > 0.0:
-				tile["depletion_level"] = maxf(0.0, tile["depletion_level"] - 0.002 * d)
+	layer_depletion = fade_layer(layer_depletion, start, STRIPE_COUNT, 0.002 * delta * float(STRIPE_COUNT))
 
 func update_cut_trees(delta: float) -> void:
 	var to_remove: Array = []
@@ -651,6 +691,7 @@ func update_cut_trees(delta: float) -> void:
 			# A stump sends up a sapling, which then has to grow (ForestSystem).
 			tile["tree_cut"] = false
 			tile["growth"] = SAPLING_GROWTH
+			mark_growing(int(tile["x"]), int(tile["z"]))
 			mark_tile_dirty(int(tile["x"]), int(tile["z"]))
 			mark_flora_dirty(int(tile["x"]), int(tile["z"]))
 
@@ -676,6 +717,7 @@ func replant(x: int, z: int) -> void:
 	tile["tree_cut"] = false
 	tile["growth"] = SAPLING_GROWTH
 	tile["planted"] = true
+	mark_growing(x, z)
 	mark_tile_dirty(x, z)
 	mark_flora_dirty(x, z)
 
@@ -774,16 +816,11 @@ func decay_trade_traffic(current_day: int) -> void:
 	for key in to_remove:
 		trade_traffic.erase(key)
 
+## Picked-over land recovers faster in the growing seasons. (This used to
+## age every forest tile's tree_age and tree_stage too, a whole-map sweep of
+## Dictionaries that nothing ever read: ForestSystem's growth is the woods.)
 func flora_slow_tick(delta: float, season: String) -> void:
-	var growth_mult := _flora_growth_mult(season)
-	for z in range(height):
-		for x in range(width):
-			var tile: Dictionary = tiles[z][x]
-			if tile["depletion_level"] > 0.0:
-				tile["depletion_level"] = maxf(0.0, tile["depletion_level"] - 0.02 * growth_mult * (delta / 10.0))
-			if tile["type"] == TileType.FOREST and tile["tree_age"] >= 0.0 and not tile["tree_cut"]:
-				tile["tree_age"] += delta / 120.0
-				tile["tree_stage"] = _tree_stage_from_age(tile["tree_age"])
+	layer_depletion = fade_layer(layer_depletion, 0, 1, 0.02 * _flora_growth_mult(season) * (delta / 10.0))
 
 func _flora_growth_mult(season: String) -> float:
 	match season:
@@ -799,8 +836,6 @@ static func _tree_stage_from_age(age: float) -> String:
 	if age < 200.0: return "mature"
 	return "old"
 
-static func is_depleted(tile: Dictionary) -> bool:
-	return tile.get("depletion_level", 0.0) > 0.7
 
 # ── Spawn points ─────────────────────────────────────────────────────────────
 

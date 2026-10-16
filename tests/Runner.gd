@@ -343,7 +343,7 @@ func _test_island_and_heightfield() -> void:
 	var tree_tile := Vector2i(-1, -1)
 	for z in w.height:
 		for x in w.width:
-			if env.tree_count_on(x, z) > 0:
+			if env.tree_count_on(x, z) > 0 and World.has_woods(w.get_tile(x, z)):   # felling is for woods
 				tree_tile = Vector2i(x, z)
 				break
 		if tree_tile.x >= 0:
@@ -528,6 +528,7 @@ func _test_living_woods() -> void:
 	var wood := _first_tile(w, [World.TileType.WOODLAND])
 	var wt := w.get_tile(wood.x, wood.y)
 	wt["growth"] = 0.0
+	w.mark_growing(wood.x, wood.y)
 	w.drain_flora_dirty()
 	for i in ForestSystem.STRIPE_COUNT:
 		fs._grow(TimeSystem.DAY_LENGTH * 0.5 / ForestSystem.STRIPE_COUNT, w, "spring")
@@ -535,6 +536,7 @@ func _test_living_woods() -> void:
 	check("a seedling grows (%.2f after half a spring day)" % spring_g, spring_g > 0.2 and spring_g < 0.5)
 	check("...and the flora is told it changed size", w.flora_dirty.has(wood))
 	wt["growth"] = 0.0
+	w.mark_growing(wood.x, wood.y)
 	for i in ForestSystem.STRIPE_COUNT:
 		fs._grow(TimeSystem.DAY_LENGTH * 0.5 / ForestSystem.STRIPE_COUNT, w, "winter")
 	check("...barely at all in winter (%.3f)" % wt["growth"], float(wt["growth"]) < 0.05)

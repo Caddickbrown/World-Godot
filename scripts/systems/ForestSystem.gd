@@ -32,7 +32,6 @@ const GROVE_WANT := 14            # planters keep this many wooded tiles round h
 const GROVE_MIN := 3.0            # ...planted between these distances of the hearth
 const GROVE_MAX := 7.0
 
-var _stripe := 0
 var _rest: Dictionary = {}        # agent_id -> seconds before they take on a job
 var _job: Dictionary = {}         # agent_id -> {kind, tile: Vector2i}
 var _claimed: Dictionary = {}     # Vector2i -> agent_id
@@ -79,30 +78,31 @@ static func timber_wanted(st) -> float:
 
 # ── Growth ───────────────────────────────────────────────────────────────────
 
+## Seedlings grow and snags fall: only on the tiles World.growing names.
 func _grow(delta: float, world: World, season: String) -> void:
-	var d := delta * float(STRIPE_COUNT)
 	var rate: float = float(SEASON_GROWTH.get(season, 1.0)) / (GROW_DAYS * TimeSystem.DAY_LENGTH)
-	var start := _stripe
-	_stripe = (_stripe + 1) % STRIPE_COUNT
-	for z in range(start, world.height, STRIPE_COUNT):
-		var row: Array = world.tiles[z]
-		for x in world.width:
-			var tile: Dictionary = row[x]
-			var burnt: float = float(tile.get("burnt", 0.0))
-			if burnt > 0.0:
-				burnt -= d
-				tile["burnt"] = maxf(0.0, burnt)
-				if burnt <= 0.0:   # the snags fall
-					world.mark_tile_dirty(x, z)
-					world.mark_flora_dirty(x, z)
+	for key: Vector2i in world.growing.keys():
+		var tile := world.get_tile(key.x, key.y)
+		if tile.is_empty():
+			world.growing.erase(key)
+			continue
+		var burnt: float = float(tile.get("burnt", 0.0))
+		if burnt > 0.0:
+			burnt -= delta
+			tile["burnt"] = maxf(0.0, burnt)
+			if burnt <= 0.0:   # the snags fall
+				world.mark_tile_dirty(key.x, key.y)
+				world.mark_flora_dirty(key.x, key.y)
+			else:
 				continue
-			var g: float = float(tile.get("growth", -1.0))
-			if g < 0.0 or g >= 1.0 or bool(tile.get("tree_cut", false)) or not World.has_woods(tile):
-				continue
-			var ng := minf(1.0, g + rate * d)
-			tile["growth"] = ng
-			if int(ng * VISUAL_STEPS) != int(g * VISUAL_STEPS):
-				world.mark_flora_dirty(x, z)
+		var g: float = float(tile.get("growth", -1.0))
+		if g < 0.0 or g >= 1.0 or bool(tile.get("tree_cut", false)) or not World.has_woods(tile):
+			world.growing.erase(key)   # grown, felled (its stump re-marks it) or gone
+			continue
+		var ng := minf(1.0, g + rate * delta)
+		tile["growth"] = ng
+		if int(ng * VISUAL_STEPS) != int(g * VISUAL_STEPS):
+			world.mark_flora_dirty(key.x, key.y)
 
 func _burn_firewood(settlement_system) -> void:
 	for st in settlement_system.settlements:
@@ -161,10 +161,11 @@ func _work(a: Agent, st, world: World) -> Dictionary:
 		return {}
 	world.set_type(tile, World.TileType.WOODLAND)
 	tile["growth"] = World.SAPLING_GROWTH
+	world.mark_growing(t.x, t.y)
 	tile["planted"] = true
 	tile["tree_cut"] = false
-	if float(tile.get("depletion_level", -1.0)) < 0.0:
-		tile["depletion_level"] = 0.0
+	if world.depletion_of(tile) < 0.0:
+		world.set_depletion(tile, 0.0)
 	world.mark_tile_dirty(t.x, t.y)
 	world.mark_flora_dirty(t.x, t.y)
 	planted += 1
