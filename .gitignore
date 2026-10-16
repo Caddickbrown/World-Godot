@@ -9,3 +9,7 @@
 /native/world_kernels/target/
 /native/world_kernels.gdextension
 /native/world_kernels.gdextension.uid
+
+# Exports (tools/export/build_linux.sh)
+/build/
+/dist/

@@ -24,6 +24,19 @@ Open the folder in Godot 4.7 and press Play (`scenes/Main.tscn`).
 | T | Switch look: storybook (A) or field notes (B), for the UI and the world |
 | H, R | Back to the people; new world |
 
+## Builds
+
+Every push that passes CI builds a Linux version (x86_64): open the run under
+**Actions**, then **Artifacts → World-linux-x86_64** (kept 14 days). Pushing a
+tag `v*` (`git tag v0.1.0 && git push origin v0.1.0`) also publishes it as a
+GitHub Release. Unpack and run `./World.x86_64`; keep `libworld_kernels.so`
+beside it.
+
+Locally: `tools/export/fetch_templates.py 4.7.2 linux_release.x86_64 linux_debug.x86_64`
+once (just the Linux export templates, not the 1.3 GB archive), then
+`GODOT=/path/to/godot tools/export/build_linux.sh` → `dist/`. The build is
+smoke-run headless before it's packed.
+
 ## Layout
 
 | Path | What |
