@@ -18,6 +18,16 @@ run() {  # run <label> <timeout-seconds> <godot args...>
   if [ "$rc" -ne 0 ]; then echo "!! $label exited $rc"; STATUS=1; fi
 }
 
+# The native kernels are optional (the game falls back to GDScript); build
+# them when Rust is here so the parity test checks both. NO_NATIVE=1 skips.
+if [ -z "${NO_NATIVE:-}" ] && command -v cargo >/dev/null; then
+  echo "== Building native kernels"
+  native/build.sh >> "$OUT" 2>&1 || { echo "!! native build failed"; STATUS=1; }
+elif [ -n "${NO_NATIVE:-}" ]; then
+  rm -f native/world_kernels.gdextension
+  sed -i "/world_kernels/d" .godot/extension_list.cfg 2>/dev/null || true
+fi
+
 # --editor --quit also writes .godot/global_script_class_cache.cfg, without
 # which no class_name resolves on a fresh clone.
 run "Importing project" 600 --editor --quit

@@ -329,7 +329,7 @@ func _build_static() -> void:
 				continue
 			if t == World.TileType.GRASS and roll < 0.12 and nrm.y >= 0.7:
 				var s := lerpf(0.5, 0.9, sz)
-				var berry := float(_world.tiles[z][x].get("resource", 0.0)) > 0.5 and rng.randf() < 0.5
+				var berry := _world.food_of(_world.tiles[z][x]) > 0.5 and rng.randf() < 0.5
 				_add(data, "bush", Transform3D(b.scaled(Vector3(s, s * 0.7, s)), Vector3(px, h + 0.2, pz)),
 					Color(0.42, 0.45, 0.24) if berry else Color(0.30, 0.50, 0.22))
 			elif (t == World.TileType.STONE or t == World.TileType.MOUNTAIN or nrm.y < 0.8) and roll < 0.18:

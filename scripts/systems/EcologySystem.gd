@@ -99,7 +99,7 @@ func _do_forest_spread(world: World, day: int = 0, history_log: HistoryLog = nul
 					if int(ntile.get("type", -1)) == World.TileType.GRASS and float(ntile.get("burnt", 0.0)) <= 0.0:
 						if randf() < p_seed:
 							# Seeded from the wood next door: it starts as seedlings.
-							ntile["type"] = World.TileType.WOODLAND
+							world.set_type(ntile, World.TileType.WOODLAND)
 							ntile["growth"] = 0.0
 							ntile["tree_cut"] = false
 							world.mark_tile_dirty(nx, nz)
@@ -109,7 +109,7 @@ func _do_forest_spread(world: World, day: int = 0, history_log: HistoryLog = nul
 								return_pos = Vector2(nx + 0.5, nz + 0.5)
 								history_log.add("ecology", "Seedlings are coming up where the woods burned.", day)
 							if randf() < HERB_SPAWN_CHANCE:
-								ntile["herbs"] = 1.0
+								world.set_herbs(ntile, 1.0)
 
 			# --- A lone WOODLAND tile (no woods at all beside it) fades back to
 			# GRASS; WOODLAND beside FOREST slowly turns to forest ---
@@ -132,14 +132,14 @@ func _do_forest_spread(world: World, day: int = 0, history_log: HistoryLog = nul
 				if not has_woods_neighbour:
 					# Planted groves are tended; only wild ones fade back to grass.
 					if randf() < revert_prob and not bool(tile.get("planted", false)):
-						tile["type"] = World.TileType.GRASS
+						world.set_type(tile, World.TileType.GRASS)
 						tile["growth"] = -1.0
 						world.mark_tile_dirty(x, z)
 						world.mark_flora_dirty(x, z)
 				elif has_forest_neighbour and float(tile.get("growth", 1.0)) >= 0.95 and not bool(tile.get("tree_cut", false)) \
 						and randf() < succession_prob:
 					# Grown woodland beside forest: pines come up through it.
-					tile["type"] = World.TileType.FOREST
+					world.set_type(tile, World.TileType.FOREST)
 					tile["growth"] = 0.5
 					tile["tree_age"] = 0.0
 					world.mark_tile_dirty(x, z)
@@ -178,7 +178,7 @@ func _do_overgraze_check(agents: Array, world: World, day: int, history_log: His
 				var tz: int = int(parts[1])
 				var tile: Dictionary = world.get_tile(tx, tz)
 				if not tile.is_empty() and int(tile.get("type", -1)) == World.TileType.GRASS:
-					tile["type"] = World.TileType.DESERT
+					world.set_type(tile, World.TileType.DESERT)
 					world.mark_tile_dirty(tx, tz)
 					tile["overgrazed"] = true
 					tile["overgraze_time"] = 0.0
@@ -225,7 +225,7 @@ func _tick_overgraze_decay(delta: float, world: World, day: int, history_log: Hi
 			var ot: float = float(tile.get("overgraze_time", 0.0)) + dd
 			tile["overgraze_time"] = ot
 			if ot >= OVERGRAZE_RECOVER_TIME:
-				tile["type"] = World.TileType.GRASS
+				world.set_type(tile, World.TileType.GRASS)
 				tile.erase("overgrazed")
 				tile.erase("overgraze_time")
 				world.mark_tile_dirty(x, z)

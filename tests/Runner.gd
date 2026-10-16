@@ -483,7 +483,7 @@ func _test_teaching_hunting_moving_grief() -> void:
 	for dz in range(-6, 7):
 		for dx in range(-6, 7):
 			var t := w.get_tile(int(camp.centre.x) + dx, int(camp.centre.y) + dz)
-			if not t.is_empty(): t["resource"] = 0.0
+			if not t.is_empty(): w.set_food(t, 0.0)
 	var start := camp.centre
 	var hist := HistoryLog.new()
 	for d in range(1, 4):

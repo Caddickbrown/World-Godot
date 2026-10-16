@@ -103,7 +103,7 @@ static func _ground(main: Node, tp: Vector2) -> Dictionary:
 		lines.append("Parched by drought")
 	if float(tile.get("blight", 0.0)) > 0.0:
 		lines.append("Blighted")
-	var food := float(tile.get("resource", 0.0))
+	var food: float = main.world.food_of(tile)
 	if int(tile["type"]) in [World.TileType.GRASS, World.TileType.WOODLAND, World.TileType.FOREST]:
 		lines.append("Food: " + ("plenty" if food > 0.7 else ("some" if food > 0.3 else "picked bare")))
 	if main.path_renderer and float(main.path_renderer.wear_at(int(tp.x), int(tp.y))) > 0.4:

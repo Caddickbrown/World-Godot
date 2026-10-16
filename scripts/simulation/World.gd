@@ -99,6 +99,80 @@ func _init(p_seed: int = -1) -> void:
 	_generate_rivers()
 	_generate_caves()
 	_init_glacier_melt()  # melt-state bookkeeping, after tile types are final
+	_build_layers()
+
+# ── Layers ─────────────────────────────────────────────────────────────────
+## Values that whole-grid passes sweep live in packed arrays, one per field,
+## indexed z * width + x, not in the tile Dictionaries: a Dictionary lookup
+## is most of what such a pass costs. Read and write them through the
+## accessors below. A whole-grid pass over layers can go to native code
+## (native/world_kernels: ~360x a Dictionary pass) in one call.
+## The type is kept in both: Dictionaries for everything that reads it,
+## layer_type for the passes. Change a type only through set_type.
+var layer_type := PackedByteArray()
+var layer_resource := PackedFloat32Array()   # food to gather, 0..1
+var layer_herbs := PackedFloat32Array()      # -1 none ever, else 0..1
+var layer_mushrooms := PackedFloat32Array()  # -1 none ever, else 0..1
+const LAYER_KEYS := ["resource", "herbs", "mushrooms"]
+## The native kernels, when the library is built (native/build.sh); null
+## runs the same passes in GDScript.
+static var kernels: Object = null
+static var _kernels_checked := false
+
+## Generation writes Dictionaries; this moves the layered fields out of them
+## (and erases the keys, so a forgotten tile["herbs"] fails loudly).
+func _build_layers() -> void:
+	var n := width * height
+	layer_type.resize(n)
+	layer_resource.resize(n)
+	layer_herbs.resize(n)
+	layer_mushrooms.resize(n)
+	for z in height:
+		for x in width:
+			var tile: Dictionary = tiles[z][x]
+			var i := z * width + x
+			layer_type[i] = int(tile["type"])
+			layer_resource[i] = float(tile["resource"])
+			layer_herbs[i] = float(tile["herbs"])
+			layer_mushrooms[i] = float(tile["mushrooms"])
+			for k in LAYER_KEYS:
+				tile.erase(k)
+	if not _kernels_checked:
+		_kernels_checked = true
+		if ClassDB.class_exists("Kernels"):
+			kernels = ClassDB.instantiate("Kernels")
+
+func _i(tile: Dictionary) -> int:
+	return int(tile["z"]) * width + int(tile["x"])
+
+func food_of(tile: Dictionary) -> float:
+	return layer_resource[_i(tile)] if not tile.is_empty() else 0.0
+
+func set_food(tile: Dictionary, v: float) -> void:
+	layer_resource[_i(tile)] = v
+
+func herbs_of(tile: Dictionary) -> float:
+	return layer_herbs[_i(tile)] if not tile.is_empty() else -1.0
+
+func set_herbs(tile: Dictionary, v: float) -> void:
+	layer_herbs[_i(tile)] = v
+
+func mushrooms_of(tile: Dictionary) -> float:
+	return layer_mushrooms[_i(tile)] if not tile.is_empty() else -1.0
+
+func set_type(tile: Dictionary, t: int) -> void:
+	tile["type"] = t
+	layer_type[_i(tile)] = t
+
+## A tile's value by name, layered or not (ideas name them in data).
+func tile_value(tile: Dictionary, key: String, default: float = -1.0) -> float:
+	if tile.is_empty():
+		return default
+	match key:
+		"resource": return food_of(tile)
+		"herbs": return herbs_of(tile)
+		"mushrooms": return mushrooms_of(tile)
+	return float(tile.get(key, default))
 
 # ── RNG ───────────────────────────────────────────────────────────────────
 
@@ -518,21 +592,32 @@ func get_season() -> String:
 # ── Updates ─────────────────────────────────────────────────────────────────
 
 func update_resources(delta: float, season: String) -> void:
-	var mult := _season_mult(season)
-	var d := delta * float(STRIPE_COUNT)
+	var d := delta * float(STRIPE_COUNT) * _season_mult(season)
 	var start := _resource_stripe
 	_resource_stripe = (_resource_stripe + 1) % STRIPE_COUNT
-	for z in range(start, height, STRIPE_COUNT):
-		for x in range(width):
-			var tile: Dictionary = tiles[z][x]
-			match tile["type"]:
-				TileType.GRASS:    tile["resource"] = minf(1.0, tile["resource"] + 0.0020 * d * mult)
-				TileType.WOODLAND: tile["resource"] = minf(1.0, tile["resource"] + 0.0016 * d * mult)
-				TileType.FOREST:   tile["resource"] = minf(1.0, tile["resource"] + 0.0012 * d * mult)
-			if tile["herbs"] >= 0.0:
-				tile["herbs"] = minf(1.0, tile["herbs"] + 0.0006 * d * mult)
-			if tile["mushrooms"] >= 0.0:
-				tile["mushrooms"] = minf(1.0, tile["mushrooms"] + 0.0008 * d * mult)
+	if kernels:
+		var out: Array = kernels.regrow(layer_resource, layer_herbs, layer_mushrooms, layer_type, width, start, STRIPE_COUNT, d)
+		layer_resource = out[0]
+		layer_herbs = out[1]
+		layer_mushrooms = out[2]
+	else:
+		regrow_gd(start, STRIPE_COUNT, d)
+
+## update_resources in GDScript (what native/world_kernels regrow does).
+func regrow_gd(start: int, stride: int, d: float) -> void:
+	for z in range(start, height, stride):
+		for i in range(z * width, (z + 1) * width):
+			var g := 0.0
+			match layer_type[i]:
+				TileType.GRASS:    g = 0.0020
+				TileType.WOODLAND: g = 0.0016
+				TileType.FOREST:   g = 0.0012
+			if g > 0.0:
+				layer_resource[i] = minf(1.0, layer_resource[i] + g * d)
+			if layer_herbs[i] >= 0.0:
+				layer_herbs[i] = minf(1.0, layer_herbs[i] + 0.0006 * d)
+			if layer_mushrooms[i] >= 0.0:
+				layer_mushrooms[i] = minf(1.0, layer_mushrooms[i] + 0.0008 * d)
 
 func _season_mult(season: String) -> float:
 	match season:

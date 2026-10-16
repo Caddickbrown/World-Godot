@@ -303,12 +303,15 @@ func _process(delta: float) -> void:
 	_prof_start()
 	var season := time_system.season.to_lower()
 	weather_system.update(game_delta, time_system.season, world, time_system.hour)
+	_prof("~weather")
 	world.day = time_system.day
 	world.update_resources(game_delta, season)
+	_prof("~world.update_resources")
 	world.update_depletion(game_delta)
 	world.update_cut_trees(game_delta)
 	world.update_glaciers(game_delta, weather_system.temperature)
 	world.decay_trade_traffic(time_system.day)
+	_prof("~world depletion/cut/glaciers/traffic")
 
 	# Ground-nesting fauna: nests that filled their clutch this tick become
 	# new animals.
@@ -317,17 +320,20 @@ func _process(delta: float) -> void:
 
 	# Buildings nearby speed a nest's lay rate — the domestication feedback.
 	world.update_domestication(game_delta, _building_positions())
+	_prof("~nests, domestication")
 
 	# Flora slow tick
 	world.flora_slow_timer += game_delta
 	if world.flora_slow_timer >= 10.0:
 		world.flora_slow_tick(world.flora_slow_timer, season)
 		world.flora_slow_timer = 0.0
+	_prof("~flora slow tick")
 
 	# Fire system (spreading fires + lightning)
 	fire_system.tick(game_delta, world, time_system.game_time, weather_system.is_storm, time_system.day, history_log)
 	if fire_system.lightning_fire_pos != Vector2(-1, -1):
 		_push_notification("Lightning strikes the forest!")
+	_prof("~fire")
 
 	# Disaster system
 	var prev_disaster: int = disaster_system.current
@@ -369,7 +375,9 @@ func _process(delta: float) -> void:
 	_prof("births, idea events, campfires")
 	# Ecology, conflict, trading, crafting, settlements
 	ecology_system.tick(game_delta, world, agents, time_system.day, history_log)
+	_prof("~ecology")
 	conflict_system.tick(game_delta, agents, time_system.day, history_log, spatial_grid)
+	_prof("~conflict")
 	var was_outbreak: bool = disease_system.outbreak_active
 	disease_system.tick(game_delta, agents, time_system.day, history_log, settlement_system)
 	if disease_system.outbreak_active != was_outbreak:

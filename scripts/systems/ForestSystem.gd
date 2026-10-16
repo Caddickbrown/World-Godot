@@ -159,7 +159,7 @@ func _work(a: Agent, st, world: World) -> Dictionary:
 	_rest[a.agent_id] = PLANT_REST
 	if tile.is_empty() or int(tile["type"]) != World.TileType.GRASS:
 		return {}
-	tile["type"] = World.TileType.WOODLAND
+	world.set_type(tile, World.TileType.WOODLAND)
 	tile["growth"] = World.SAPLING_GROWTH
 	tile["planted"] = true
 	tile["tree_cut"] = false

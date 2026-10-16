@@ -118,9 +118,9 @@ func _extinguish(
 	# around will seed again (ForestSystem / EcologySystem).
 	var t := int(tile.get("type", -1))
 	if t == 5 or t == 4:  # World.TileType.FOREST, WOODLAND
-		tile["type"]     = FIRE_BURNOUT_TYPE
+		world.set_type(tile, FIRE_BURNOUT_TYPE)
 		tile["tree_cut"] = false
-		tile["resource"] = 0.2
+		world.set_food(tile, 0.2)
 		tile["tree_age"]   = -1.0
 		tile["tree_stage"] = ""
 		tile["growth"]   = -1.0

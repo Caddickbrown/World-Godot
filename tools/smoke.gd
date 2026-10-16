@@ -233,6 +233,14 @@ func _init() -> void:
 		   settlements.get_settlements().size(), graph.get_discovered_concepts().size()])
 
 	print("  animals=%d  outbreak=%s" % [animal_sim.animals.size(), str(disease.outbreak_active)])
+	# Every type change went through World.set_type (the layer the native
+	# passes read matches the tiles).
+	var drift := 0
+	for z in world.height:
+		for x in world.width:
+			if world.layer_type[z * world.width + x] != int(world.tiles[z][x]["type"]):
+				drift += 1
+	_check("tile type layer matches the tiles after the soak (%d off)" % drift, drift == 0)
 	print("=== smoke: %d checks, %d failures ===" % [_checks, _failures])
 	quit(1 if _failures > 0 else 0)
 

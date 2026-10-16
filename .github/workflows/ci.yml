@@ -30,5 +30,17 @@ jobs:
           mv ~/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot/godot
           chmod +x ~/godot/godot
 
+      # The native kernels (native/build.sh) build with the runner's Rust;
+      # the test suite then checks them against the GDScript fallback.
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native/world_kernels/target
+          key: rust-${{ runner.os }}-${{ hashFiles('native/world_kernels/Cargo.lock', 'native/world_kernels/src/**') }}
+          restore-keys: rust-${{ runner.os }}-
+
       - name: Import, boot, tests and soak
         run: GODOT=$HOME/godot/godot tests/run_ci.sh

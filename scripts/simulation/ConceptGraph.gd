@@ -94,7 +94,7 @@ func _conditions_met(agent: Agent, tile: Dictionary, concept: Dictionary, world:
 			"near_tile":
 				if not _type_within(world, tile, value, NEAR_TILES): return false
 			"tile_has_resource":
-				if float(tile.get(str(value), -1.0)) <= 0.0: return false
+				if (world.tile_value(tile, str(value)) if world else float(tile.get(str(value), -1.0))) <= 0.0: return false
 			"near_bee_hive":
 				# Real nests (AmbientLife); a world without them falls back
 				# to "bees live in the woods".

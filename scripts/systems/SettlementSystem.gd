@@ -439,7 +439,7 @@ func food_around(c: Vector2, radius: int = FOOD_RADIUS) -> float:
 				continue
 			var t := world.get_tile(x, z)
 			if int(t["type"]) in [World.TileType.GRASS, World.TileType.WOODLAND, World.TileType.FOREST]:
-				total += float(t.get("resource", 0.0))
+				total += world.food_of(t)
 			n += 1
 	return total / float(n) if n > 0 else 0.0
 

@@ -212,18 +212,18 @@ func apply(world: World, agents: Array = []) -> void:
 			var key := Vector2i(x, z)
 			match current:
 				DisasterType.DROUGHT:
-					_hold(tile, 1.0 - (1.0 - DROUGHT_CAP) * w * inten, [World.TileType.GRASS, World.TileType.WOODLAND, World.TileType.FOREST])
+					_hold(world, tile, 1.0 - (1.0 - DROUGHT_CAP) * w * inten, [World.TileType.GRASS, World.TileType.WOODLAND, World.TileType.FOREST])
 					_set_field(world, tile, key, "drought", w * inten)
 				DisasterType.BLIGHT:
-					_hold(tile, 1.0 - (1.0 - BLIGHT_CAP) * w * inten, [World.TileType.GRASS, World.TileType.WOODLAND, World.TileType.FOREST])
+					_hold(world, tile, 1.0 - (1.0 - BLIGHT_CAP) * w * inten, [World.TileType.GRASS, World.TileType.WOODLAND, World.TileType.FOREST])
 					_set_field(world, tile, key, "blight", w * inten)
 				DisasterType.FLOOD:
 					_flood_tile(world, tile, key, w, occupied)
 
 ## Keep a tile's food under a ceiling (that is what the gatherer takes home).
-static func _hold(tile: Dictionary, cap: float, types: Array) -> void:
-	if int(tile["type"]) in types and float(tile.get("resource", 0.0)) > cap:
-		tile["resource"] = cap
+static func _hold(world: World, tile: Dictionary, cap: float, types: Array) -> void:
+	if int(tile["type"]) in types and world.food_of(tile) > cap:
+		world.set_food(tile, cap)
 
 func _set_field(world: World, tile: Dictionary, key: Vector2i, field: String, v: float) -> void:
 	var q := roundf(clampf(v, 0.0, 1.0) * STEPS) / STEPS
@@ -253,7 +253,7 @@ func _flood_tile(world: World, tile: Dictionary, key: Vector2i, w: float, occupi
 		under = false
 	if under:
 		flooded_count += 1
-		tile["resource"] = 0.0
+		world.set_food(tile, 0.0)
 	if under == was:
 		return
 	if under:

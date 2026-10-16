@@ -144,3 +144,8 @@ One line of cause, one line of rule.
 - **Hysteresis on anything drawn from a count.** A settlement's houses flickered 3↔4 as people
   came and went, and every flicker rebuilt the place and its trees.
 
+- **Native code speeds up loops, not lookups.** The regrowth pass: 23 ms over
+  Dictionaries, 3.8 ms over packed arrays in GDScript, 0.06 ms in Rust. But one call into
+  Rust (530 ns) costs more than one Dictionary read (375 ns). So: data in packed layers
+  first, whole-grid passes to Rust in one call, single reads left in GDScript
+  (native/README.md).

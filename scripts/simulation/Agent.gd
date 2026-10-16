@@ -643,7 +643,7 @@ func _on_arrival(world: World, all_agents: Array, concept_graph: ConceptGraph) -
 		if not tile.is_empty() and tile["type"] in [World.TileType.GRASS, World.TileType.FOREST, World.TileType.WOODLAND]:
 			var tool_mult := gather_yield_mult(tile, world)
 			var cook_mult := fxf("hunger_efficiency")
-			var yield_val: float = maxf(0.15, float(tile["resource"]))
+			var yield_val: float = maxf(0.15, world.food_of(tile))
 			var gained: float = 0.60 * tool_mult * cook_mult * yield_val
 			# Honey from the woods (honey gathering, beekeeping).
 			if fxb("honey_food") and int(tile["type"]) != World.TileType.GRASS and randf() < 0.25:
@@ -660,11 +660,11 @@ func _on_arrival(world: World, all_agents: Array, concept_graph: ConceptGraph) -
 			carrying_food = minf(carry_cap, carrying_food + tithe + maxf(0.0, needs["hunger"] + gained - 1.0))
 			needs["hunger"] = minf(1.0, needs["hunger"] + gained)
 			# Healers stop where the herbs grow (medicine, herbalism).
-			if fxb("herb_healing") and health < 0.85 and float(tile.get("herbs", -1.0)) > 0.0:
+			if fxb("herb_healing") and health < 0.85 and world.herbs_of(tile) > 0.0:
 				health = minf(1.0, health + 0.08 * fxf("herb_healing_mult"))
 				_deed("first_herb_cure", "%s chewed the bitter herbs that grow in the woods, and felt better." % agent_name)
 			_forage_items(tile, world)
-			tile["resource"] = maxf(0.0, tile["resource"] - 0.28 / tool_mult)
+			world.set_food(tile, maxf(0.0, world.food_of(tile) - 0.28 / tool_mult))
 			if tile.get("depletion_level", -1.0) >= 0.0:
 				# Ecology, conservation: take less from land that's been picked over.
 				var spare := 0.5 if fxb("spares_depleted_land") and World.is_depleted(tile) else 1.0
@@ -863,7 +863,7 @@ func _pick_wander_target(world: World, all_agents: Array = []) -> void:
 		var score := _seasonal_tile_score(tile, _season)
 		score -= _danger_penalty(float(tx), float(tz))
 		# Mild preference for somewhere with food still on it.
-		score += float(tile.get("resource", 0.0)) * 0.25
+		score += world.food_of(tile) * 0.25
 		# Small random jitter so agents do not all converge on one tile.
 		score += randf() * 0.2
 		if score > best_score:
@@ -891,7 +891,7 @@ func _pick_gather_target(world: World) -> void:
 		if tile.is_empty():
 			continue
 		# Skip somewhere we have already stripped bare.
-		if float(tile.get("resource", 0.0)) < 0.2:
+		if world.food_of(tile) < 0.2:
 			continue
 		var dist := pos.distance_to(Vector2(ex, ez))
 		# Nearer is better; staler memories are trusted a little less.
