@@ -6,7 +6,34 @@ func run(t) -> void:
 	_parity(t)
 	_terrain_parity(t)
 	_flora_parity(t)
+	_nearest(t)
 	_no_stray_keys(t)
+
+## find_nearest (rings over the type layer) finds what a full scan finds.
+func _nearest(t) -> void:
+	var w := World.new(7)
+	var cases := [[[World.TileType.FOREST, World.TileType.WOODLAND], 10.0], [[World.TileType.WATER, World.TileType.BEACH], 4.0],
+		[[World.TileType.MOUNTAIN], 14.0]]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var bad := 0
+	for i in 300:
+		var cx := rng.randf() * w.width
+		var cz := rng.randf() * w.height
+		var c: Array = cases[i % cases.size()]
+		var want := {}
+		var best := INF
+		var r := int(ceil(float(c[1])))
+		for dz in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				var d := sqrt(dx * dx + dz * dz)
+				var tile := w.get_tile(int(cx) + dx, int(cz) + dz)
+				if d <= float(c[1]) and d < best and not tile.is_empty() and int(tile["type"]) in c[0]:
+					best = d
+					want = tile
+		if w.find_nearest(cx, cz, c[0], c[1]) != want:
+			bad += 1
+	t.check("find_nearest matches a full scan (%d of 300 differ)" % bad, bad == 0)
 
 ## The native flora builder stands the same trees, same size and colour, as
 ## the GDScript one: felled, burnt, planted, blighted, growing, cleared.

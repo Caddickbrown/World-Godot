@@ -20,8 +20,8 @@ const REBUILD_SECONDS := 1.5       # real seconds between rebuilds at most
 const SPREAD := 1.35               # metres a tile's wear reaches past its centre
 const CHUNK := 16                  # tiles per side of a mesh square
 const WEAR_STEPS := 10.0           # wear is quantised this finely to decide a square changed
-const SQUARES_PER_PASS := 3        # at most this many squares rebuilt a pass; the rest next pass
-const CATCH_UP_SECONDS := 0.2      # how soon the next pass comes while squares are left over
+const SQUARES_PER_PASS := 1        # at most this many squares rebuilt a pass (~3 ms each); the rest next pass
+const CATCH_UP_SECONDS := 0.1      # how soon the next pass comes while squares are left over
 
 var world: World
 var _material: StandardMaterial3D

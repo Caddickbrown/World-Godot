@@ -929,25 +929,51 @@ func get_carrying_capacity() -> int:
 	_capacity_cache_day = day
 	return _capacity_cache
 
+## The nearest tile of one of these types within radius tiles ({} if none).
+## Rings outward over the type layer and stops once no nearer tile is
+## possible: the old full-square scan of Dictionaries cost ~450 lookups a
+## call, and at nightfall everyone looks for warmth in the same frame.
+## Ties go as they always did (lower z, then lower x), so it picks the same.
 func find_nearest(cx: float, cz: float, types: Array, radius: float = 10.0) -> Dictionary:
-	var best := {}
-	var best_dist := INF
+	var want := 0
+	for t in types:
+		want |= 1 << int(t)
+	var ix := int(cx)
+	var iz := int(cz)
 	var r := int(ceil(radius))
-	for dz in range(-r, r + 1):
-		for dx in range(-r, r + 1):
-			var dist := sqrt(dx * dx + dz * dz)
-			if dist > radius: continue
-			var tile := get_tile(int(cx) + dx, int(cz) + dz)
-			if tile.is_empty() or not (tile["type"] in types): continue
-			if dist < best_dist:
-				best_dist = dist
-				best = tile
-	return best
+	var r2 := radius * radius
+	var best := -1
+	var bd := INF
+	var bdz := 0
+	var bdx := 0
+	for k in r + 1:
+		if float(k) * float(k) > bd:
+			break   # every tile on this ring is at least k away
+		for dz in range(-k, k + 1):
+			var z := iz + dz
+			if z < 0 or z >= height:
+				continue
+			var edge := dz == -k or dz == k
+			var dx := -k
+			while dx <= k:
+				var x := ix + dx
+				if x >= 0 and x < width:
+					var d2 := float(dx * dx + dz * dz)
+					if d2 <= r2 and (want >> layer_type[z * width + x]) & 1 == 1:
+						if d2 < bd or (d2 == bd and (dz < bdz or (dz == bdz and dx < bdx))):
+							bd = d2
+							bdz = dz
+							bdx = dx
+							best = z * width + x
+				dx += 1 if edge else 2 * k if k > 0 else 1
+	return {} if best < 0 else tiles[best / width][best % width]
 
 func get_tiles_of_type(types: Array) -> Array:
+	var want := 0
+	for t in types:
+		want |= 1 << int(t)
 	var out: Array = []
-	for z in range(height):
-		for x in range(width):
-			if tiles[z][x]["type"] in types:
-				out.append(tiles[z][x])
+	for i in layer_type.size():
+		if (want >> layer_type[i]) & 1 == 1:
+			out.append(tiles[i / width][i % width])
 	return out

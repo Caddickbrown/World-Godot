@@ -485,10 +485,13 @@ func _process(delta: float) -> void:
 	_prof("story")
 	# Rendering
 	agent_renderer.update()
+	_prof("draw people")
 	animal_renderer.update()
+	_prof("draw animals")
 	_update_settlements()
+	_prof("draw settlements")
 	_update_hud()
-	_prof("renderers, settlements, HUD")
+	_prof("HUD")
 
 ## The dead lie where they fell for a while (mourners gather), then are
 ## buried: their figure goes and they stop being ticked. Their story stays in

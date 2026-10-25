@@ -16,6 +16,7 @@ const TILE_SIZE := World.TILE_SIZE
 const PEOPLE_PER_DWELLING := 3
 const MAX_DWELLINGS := 12
 const MAX_FIRE_LIGHTS := 16
+const REBUILDS_PER_SYNC := 1      # changed places rebuilt a frame, at most
 
 ## kind -> ideas (any one), minimum tier, what it's called.
 const BUILDINGS := {
@@ -74,6 +75,7 @@ var _raised: Dictionary = {}      # "id:kind" -> day it first stood
 ## time its larder fills a fifth.
 var _plans: Dictionary = {}
 var _houses: Dictionary = {}      # settlement id -> dwellings drawn
+var _granary_at: Dictionary = {}  # settlement id -> the barn's local transform (for the bales)
 
 func clear() -> void:
 	for ch in get_children():
@@ -119,6 +121,7 @@ static func larder_fill(s) -> float:
 ## settlements: SettlementSystem.get_settlements(); fires: World.natural_fires keys.
 func sync(settlements: Array, fires: Dictionary) -> void:
 	var live: Dictionary = {}
+	var budget := REBUILDS_PER_SYNC
 	var season := world.get_season() if world else "summer"
 	for s in settlements:
 		live[s.id] = true
@@ -131,17 +134,28 @@ func sync(settlements: Array, fires: Dictionary) -> void:
 			count = had
 		_houses[s.id] = count
 		var kinds := buildings_for(s)
-		var sig := "%d|%d|%.1f,%.1f|%s|%d|%s" % [int(s.tier), count, s.centre.x, s.centre.y, ",".join(kinds),
-			int(larder_fill(s) * 4.99), season]
+		var sig := "%d|%d|%.1f,%.1f|%s|%s" % [int(s.tier), count, s.centre.x, s.centre.y, ",".join(kinds), season]
 		var e: Dictionary = _built.get(s.id, {})
 		if e.is_empty() or str(e["sig"]) != sig:
+			# A new place appears at once; a changed one waits its turn (the
+			# old one stays up meanwhile). Every place changed together at
+			# a season's turn, and a dozen rebuilt in one frame froze it.
 			if not e.is_empty():
+				if budget <= 0:
+					continue
+				budget -= 1
 				(e["node"] as Node).queue_free()
 			for k in kinds:
 				var key := "%d:%s" % [s.id, k]
 				if not _raised.has(key):
 					_raised[key] = world.day if world else 1
-			_built[s.id] = {"node": _build_settlement(s, count, kinds, season), "sig": sig}
+			_built[s.id] = {"node": _build_settlement(s, count, kinds, season), "sig": sig, "larder": -1}
+			e = _built[s.id]
+		# The larder fills and empties every day: only the bales redraw.
+		var fill := int(larder_fill(s) * 4.99)
+		if int(e["larder"]) != fill:
+			e["larder"] = fill
+			_draw_larder(s)
 	for id in _built.keys():
 		if not live.has(id):
 			(_built[id]["node"] as Node).queue_free()
@@ -219,7 +233,9 @@ func _build_settlement(s, count: int, kinds: Array, season: String) -> Node3D:
 				_church(kit, xf)
 				label = "Church of %s" % s.name
 			"granary":
-				_granary(kit, xf, larder_fill(s))
+				_granary(kit, xf)
+				_granary_at[s.id] = xf
+				root.set_meta("has_granary", true)
 				label = "%s barn · larder %d%% full" % [s.name, int(round(larder_fill(s) * 100.0))]
 			"workshop":
 				_workshop(kit, xf)
@@ -457,7 +473,7 @@ func _church(k: PropKit, xf: Transform3D) -> void:
 	k.box(Vector3(0.8, 1.4, 0.08), xf * PropKit.at(Vector3(0, 0.7, 3.46)), _c(Color(0.30, 0.20, 0.14)))
 	k.ball(0.35, xf * PropKit.at(Vector3(0, 3.4, 3.46)), _c(Color(0.55, 0.75, 0.90) if _story() else Color(0.50, 0.55, 0.55)), 1.0)
 
-func _granary(k: PropKit, xf: Transform3D, fill: float) -> void:
+func _granary(k: PropKit, xf: Transform3D) -> void:
 	var red := _c(Color(0.72, 0.24, 0.18) if _story() else Color(0.55, 0.32, 0.24))
 	var trim := _c(Color(0.95, 0.92, 0.84))
 	k.box(Vector3(4.2, 0.2, 3.4), xf * PropKit.at(Vector3(0, 0.1, 0)), _c(Color(0.50, 0.44, 0.36)))
@@ -467,13 +483,37 @@ func _granary(k: PropKit, xf: Transform3D, fill: float) -> void:
 	k.box(Vector3(1.6, 1.6, 0.06), xf * PropKit.at(Vector3(0, 1.0, 1.52)), _c(Color(0.28, 0.12, 0.08)))
 	k.box(Vector3(0.1, 1.6, 0.08), xf * PropKit.at(Vector3(0, 1.0, 1.56)), trim)
 	k.box(Vector3(1.6, 0.1, 0.08), xf * PropKit.at(Vector3(0, 1.8, 1.56)), trim)
-	# What's in the larder: a bale or sack per fifth full, stacked at the side.
-	var bales := int(round(fill * 5.0))
+
+## What's in the larder: a bale or sack per fifth full, stacked beside the
+## barn. Its own little mesh, redrawn alone as the larder fills and empties.
+func _draw_larder(s) -> void:
+	var e: Dictionary = _built.get(s.id, {})
+	if e.is_empty():
+		return
+	var root: Node3D = e["node"]
+	var old := root.get_node_or_null("Larder")
+	if old:
+		old.free()
+	var label := "%s barn · larder %d%% full" % [s.name, int(round(larder_fill(s) * 100.0))]
+	for site in sites.get(s.id, []):
+		if site["kind"] == "granary":
+			site["name"] = label
+	if not _granary_at.has(s.id) or not root.get_meta("has_granary", false):
+		return
+	var xf: Transform3D = _granary_at[s.id]
+	var k := PropKit.new()
 	var hay := _c(Color(0.90, 0.76, 0.36))
-	for i in bales:
+	for i in int(round(larder_fill(s) * 5.0)):
 		var bx := 2.5 + float(i % 2) * 0.85
 		var by := 0.35 + float(i / 2) * 0.62
 		k.cyl(0.32, 0.32, 0.75, xf * Transform3D(Basis(Vector3.RIGHT, PI / 2.0), Vector3(bx, by, -0.4 + float(i % 3) * 0.35)), hay, 8)
+	if k.is_empty():
+		return
+	var mi := MeshInstance3D.new()
+	mi.name = "Larder"
+	mi.mesh = k.commit()
+	mi.material_override = _kit_material()
+	root.add_child(mi)
 
 func _workshop(k: PropKit, xf: Transform3D) -> void:
 	var post := _c(Color(0.42, 0.28, 0.18))
