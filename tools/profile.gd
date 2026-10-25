@@ -23,8 +23,20 @@ func _init() -> void:
 	var frames := 0
 	var t1 := Time.get_ticks_usec()
 	var report_day := 2
+	var worst: Array = []   # [usec, day, hour, {stage: usec}]
+	var hitch_ms := float(args.get("hitch", "50"))
+	var hitches := 0
 	while main.time_system.day <= days and not main.game_over:
+		var f0 := Time.get_ticks_usec()
 		main._process(1.0 / 60.0)
+		var ft := Time.get_ticks_usec() - f0
+		if ft > hitch_ms * 1000.0:
+			hitches += 1
+		if worst.size() < 12 or ft > int(worst[-1][0]):
+			worst.append([ft, main.time_system.day, main.time_system.hour, main.frame_profile.duplicate()])
+			worst.sort_custom(func(a, b): return a[0] > b[0])
+			if worst.size() > 12:
+				worst.pop_back()
 		frames += 1
 		if main.time_system.day >= report_day:
 			report_day += 2
@@ -42,4 +54,14 @@ func _init() -> void:
 	rows.reverse()
 	for r in rows:
 		print("  %5.1f%%  %6.3f ms  %s" % [100.0 * r[0] / total, float(r[0]) / frames / 1000.0, r[1]])
+	print("frames over %.0f ms: %d of %d" % [hitch_ms, hitches, frames])
+	print("worst frames:")
+	for w in worst:
+		var parts: Array = []
+		var st: Dictionary = w[3]
+		var keys := st.keys()
+		keys.sort_custom(func(a, b): return st[a] > st[b])
+		for k in keys.slice(0, 3):
+			parts.append("%s %.1f" % [k, st[k] / 1000.0])
+		print("  %6.1f ms  day %d %02d:00  %s" % [w[0] / 1000.0, w[1], int(w[2]), ", ".join(parts)])
 	quit()

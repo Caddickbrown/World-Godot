@@ -277,15 +277,20 @@ var profiling := false
 var profile: Dictionary = {}       # stage -> microseconds, summed
 var _prof_t := 0
 
+## This frame's stages alone (tools/profile.gd keeps the worst frames).
+var frame_profile: Dictionary = {}
+
 func _prof_start() -> void:
 	if profiling:
 		_prof_t = Time.get_ticks_usec()
+		frame_profile = {}
 
 func _prof(stage: String) -> void:
 	if not profiling:
 		return
 	var now := Time.get_ticks_usec()
 	profile[stage] = int(profile.get(stage, 0)) + now - _prof_t
+	frame_profile[stage] = int(frame_profile.get(stage, 0)) + now - _prof_t
 	_prof_t = now
 
 func _process(delta: float) -> void:
