@@ -4,6 +4,9 @@ extends SceneTree
 #
 #   godot --headless --path . --script res://tools/balance.gd -- [--days=12] [--seeds=1,2,3]
 #        [--speed=20] [--dt=0.0167] [--chronicle=40]  (print the story's last 40 lines)  (sim speed and frame time; 20x at 60 fps by default)
+#        [--ideas]  (each idea's living holders, peak, low point, times found and taught)
+#        [--apprenticeship=3] [--apprentices=2] [--reinvent=0] [--ghost=4]  (master crafts, lost ideas: IdeaMemory)
+# Always prints the ideas lost, found again and still lost, with who was the last.
 
 func _initialize() -> void:
 	var args := {}
