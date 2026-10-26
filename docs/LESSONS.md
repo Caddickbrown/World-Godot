@@ -17,6 +17,15 @@ One line of cause, one line of rule.
 - **Population ran to 1,000.** Capacity was a land formula (1,614 on a 128² map). Rule: cap
   people at what an observer can follow (`World.max_population`, 150).
 
+- **Slowing spread never lost an idea.** Crafts at an eighth of the pace, or taught only within
+  a camp, still reached 140 of 150 people: everyone meets everyone, and only 20-80 die in a
+  fortnight. Rule: an idea can only die in few hands; to make loss possible, bound the hands
+  (master crafts: two apprentices, three days), and measure the low point, not the rate
+  (`tools/balance.gd --ideas`).
+- **A pool that outlives its people resurrects their ideas.** A camp's knowledge pool taught
+  leavers ideas whose holders were all dead, silently. Rule: knowledge passes only from the
+  living.
+
 ## Code
 
 - **Clicking a person crashed.** `Main` set `agent.selected`, which `Agent` never declared;

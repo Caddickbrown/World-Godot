@@ -295,7 +295,9 @@ func _story_and_album(t) -> void:
 	var text := " ".join(keeper.chronicle.map(func(e): return e["text"]))
 	t.check("the chronicle tells of the legend", text.contains("legends of"))
 	t.check("...of the telling at the fire", text.contains("At the fire, %s told" % mum.agent_name))
-	t.check("...and of the child named for them", text.contains("A new baby is called %s, after a grandparent" % f["gp_a"].agent_name))
+	# The grandparent is a legend too (first to fire), so the name may come
+	# by either road; which one depends on the child's id (its dice).
+	t.check("...and of the child named for them", text.contains("A new baby is called %s, after" % kid.agent_name))
 	t.check("the namesake's life remembers it", keeper.life_of(f["gp_a"]).events.any(func(e): return str(e["text"]).contains("named for them")))
 	for id in ["named_for", "legend_told"]:
 		t.check("moment %s unlocks" % id, keeper.moments.is_unlocked(id))

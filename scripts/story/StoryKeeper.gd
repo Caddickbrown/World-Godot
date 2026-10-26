@@ -100,10 +100,19 @@ func on_discovery(a: Agent, concept_id: String) -> void:
 		if special.has(concept_id):
 			_try_moment(special[concept_id], a.pos, [a.agent_id], "%s, day %d" % [a.agent_name, day])
 	elif how["refound"]:
-		_event(a, "Found %s again, long after it was lost." % cname, "ideas")
-		add("ideas", "%s is known again: %s worked it out anew." % [cname.left(1).to_upper() + cname.substr(1), a.agent_name], a.pos, [a.agent_id])
+		var rec: Dictionary = ledger.ideas[concept_id]
+		var lost_pos: Vector2 = rec.get("lost_pos", Vector2(-1, -1))
+		var near := lost_pos.x >= 0.0 and lost_pos.distance_to(a.pos) <= IdeaMemory.GHOST_RADIUS
+		var line := IdeaWords.refound_line(concept_id, ledger.name_of(concept_id), a.agent_name,
+			day - int(rec["lost_day"]), life.born_day > int(rec["lost_day"]), near, str(rec["lost_with"]))
+		_event(a, "Found %s again, after it was lost." % cname, "ideas")
+		add("ideas", line, a.pos, [a.agent_id])
 		ledger.ideas[concept_id]["stage"] = IdeaLedger.Stage.SPROUT
 		_try_moment("idea_refound", a.pos, [a.agent_id], "%s, by %s" % [cname, a.agent_name])
+		if near:
+			_try_moment("ghost_found", a.pos, [a.agent_id], "%s, by %s" % [cname, a.agent_name])
+		if life.born_day > int(rec["lost_day"]):
+			_try_moment("born_after", a.pos, [a.agent_id], "%s, by %s" % [cname, a.agent_name])
 	else:
 		_event(a, "Worked out %s." % cname, "ideas")
 	for h in hunches.on_discovery(concept_id, a.agent_name, how["refound"], how["first"], day):
@@ -264,9 +273,13 @@ func tick(game_delta: float, agents: Array, p_day: int, p_hour: float, alive: in
 			if int(c["to"]) == IdeaLedger.Stage.WILTED:
 				var cname := ledger.name_of(c["id"])
 				var who: String = c["last_holder"]
-				add("ideas", ("%s is forgotten: %s was the last who knew it." % [cname, who]) if who != ""
-					else "%s is forgotten. No one alive remembers it." % cname, Vector2(-1, -1), [])
-				_try_moment("idea_lost", Vector2(-1, -1), [], cname)
+				var last_id := int(c.get("last_id", -1))
+				if lives.has(last_id):
+					(lives[last_id] as LifeRecord).events.append({"day": day, "kind": "ideas",
+						"text": "Was the last who knew %s." % IdeaWords.what(c["id"], cname)})
+				add("ideas", IdeaWords.lost_line(c["id"], cname, who), c.get("pos", Vector2(-1, -1)),
+					[last_id] if last_id >= 0 else [])
+				_try_moment("idea_lost", Vector2(-1, -1), [], "%s, with %s" % [cname, who] if who != "" else cname)
 		_recently_dead.clear()
 		if ledger.count_in(IdeaLedger.Stage.BLOOM) + ledger.count_in(IdeaLedger.Stage.SPROUT) >= 10:
 			_try_moment("ten_ideas", Vector2(-1, -1), [], "day %d" % day)

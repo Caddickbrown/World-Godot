@@ -81,6 +81,12 @@ Longer rhythms:
 - **Teaching.** Simple ideas (fire, swimming) anyone can copy; crafts (era 2+) must be taught
   by an adult, more slowly, and children learn best from their parents. A craft held by a few
   can die with them; that's how the Idea Garden wilts.
+- **Master crafts.** Eleven specialist trades (pottery, sailing, boat building, navigation,
+  maps, printing, beekeeping, dyeing, herbalism, advanced medicine, horses) pass master to
+  apprentice: a master takes on two apprentices, an apprenticeship takes three days, and it
+  ends if the master dies first. While a master lives nobody works the trade out alone. So a
+  new trade lives for days in one pair of hands, and when the last of them dies it is lost
+  (`docs/features/ideas.md`, "Lost, and found again").
 - **Moving on.** When the land round a hearth stays stripped for two days, the camp packs up and
   walks to better ground, 10–28 tiles away.
 - **Grief.** When someone dies, their partner, children and parents mourn for half a day.
@@ -107,8 +113,18 @@ Longer rhythms:
 | 3 | 15 | 83 / 13 / 0 | 2190 → 2171, 0, 0 | 8 / 2 / 0 |
 | 5 | 39 | 46 / 5 / 1 | 2942 → 2919, 163, 13 | 2 / 8 / 4 |
 
-Open: seed 3 never finds stone tools in 14 days (so no woodcutting, no towns); ideas are still
-never lost (open decision 0).
+Open: seed 3 never finds stone tools in 14 days (so no woodcutting, no towns).
+
+Ideas lost and found again (feat/ideas, same probe, 14 days; before it, 0 in every seed):
+
+| Seed | Ideas | Lost | Found again | Still lost at the end |
+|---|---|---|---|---|
+| 1 | 55 | 2 (dyeing d11, pottery d14) | 1 (dyeing, a day later) | pottery |
+| 3 | 41 | 2 (printing d6, maps d9) | 2 (three and two days later, both near the ghost) | none |
+| 5 | 13 | 1 (maps d12) | 0 | maps |
+
+No idea anyone can copy (fire, language...) was lost; the master crafts that were found stayed
+in 1-4 hands each.
 
 ## Built out from the prototype
 
@@ -134,22 +150,26 @@ out; each area has its notes (rules, numbers, what is still open):
 | M1 | Three views ✅ | Sky, follow and wisp views; follow card, almanac bar, chronicle in the new UI (both looks, T to switch) |
 | M2 | New look ✅ (first pass) | Island, smooth terrain, sea, sky, flora, people and settlements per `docs/ART_DIRECTION.md`. Weather: overcast and rain done. Next: animals in the same style, grass and flowers, a rainbow |
 | M3 | Stories ✅ | Chronicle voice, life records and last lines, the Lives screen; generations (`docs/features/generations.md`): the family twig, children named for the dead, legends told at the fire (myths with oral tradition), lives pressed into the album |
-| M4 | Collecting ✅ (first pass) | Album of 29 moments (witness rule: on screen within 200 m, or following), the Idea Garden, hunches and glimmers. Next: more moments, ideas actually being lost (see open decisions) |
-| M5 | Postcards and polish | Seed postcards ✅ (P: a picture named for the seed, seed copied), save/continue ✅ (SaveGame: autosave on close and every 10 minutes, Continue on the start screen), sound, settings, controller, a minimap ✅ |
+| M4 | Collecting ✅ | Album of moments (witness rule: on screen within 200 m, or following), the Idea Garden, hunches and glimmers; ideas lost and found again (open decisions 0 and 2); festivals (`docs/features/festivals.md`) and calm hints of where to look |
+| M5 | Postcards and polish | Seed postcards ✅ (P: a picture named for the seed, seed copied), save/continue ✅ (SaveGame: autosave on close and every 10 minutes, Continue on the start screen), sound ✅ (`docs/features/sound.md`, synthesized), a minimap ✅. Next: settings, controller |
 
 Each milestone ends with the standard shots (`tools/capture/shots.sh`), an independent review
 against this file and `ART_DIRECTION.md`, and a green `tests/run_ci.sh`.
 
 ## Open decisions
 
-0. **Ideas are never lost in practice.** With the current spread rate an idea
-   reaches most people within a day or two, so nobody is ever its last holder
-   (0 losses in 3 seeds x 15 days, `tools/balance.gd`). Options: slower spread
-   for crafts that need teaching (pottery, metalwork) than for ideas anyone can
-   copy, or ideas held only by a camp that is wiped out. Proposal: per-idea
-   "needs a teacher" flag; measure before and after.
+0. **Ideas are never lost in practice.** Resolved (feat/ideas): master crafts. Slower spread
+   alone didn't do it: crafts at an eighth of the pace, or taught only within a camp, still
+   reached 140 of 150 people, and deaths are few (20-80 in 14 days), so a widely held idea
+   can't die. What can is a trade held by one or two: the eleven master crafts pass master to
+   apprentice (two apprentices, three days, the master must live to finish), and nobody
+   reinvents one while a master lives. Measured over seeds 1, 3, 5 x 14 days: 2, 2 and 1
+   ideas lost (was 0), 3 of the 5 found again, no simple idea lost; ideas found per world
+   55 / 41 / 13 (was 59 / 15 / 14; seed 3 alone gave 10-50 across the probe's runs).
 1. **Witnessing rule for the album.** "On screen" (simple) or "on screen and close enough to read
    names" (rewards zooming in)? Proposal: the latter.
-2. **Do lost ideas come back easier?** Rediscovery could be faster near where the idea was last
-   known (a "ghost" of it). Proposal: yes, a small bonus, so wilting is sad but not hopeless.
+2. **Do lost ideas come back easier?** Resolved: yes. A lost idea leaves a ghost where its last
+   holder died and at their camp's hearth; within 14 tiles of one, thinking of it again is 4x
+   likelier (`IdeaMemory.ghost_bonus`). Measured: 3 of 5 lost ideas were found again within
+   1-3 days, two of them near the ghost; two were still lost when the run ended.
 3. **What does the game call itself?** "World" is a working title.

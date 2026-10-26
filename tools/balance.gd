@@ -4,6 +4,9 @@ extends SceneTree
 #
 #   godot --headless --path . --script res://tools/balance.gd -- [--days=12] [--seeds=1,2,3]
 #        [--speed=20] [--dt=0.0167] [--chronicle=40]  (print the story's last 40 lines)  (sim speed and frame time; 20x at 60 fps by default)
+#        [--ideas]  (each idea's living holders, peak, low point, times found and taught)
+#        [--apprenticeship=3] [--apprentices=2] [--reinvent=0] [--ghost=4]  (master crafts, lost ideas: IdeaMemory)
+# Always prints the ideas lost, found again and still lost, with who was the last.
 
 func _initialize() -> void:
 	var args := {}
@@ -14,6 +17,10 @@ func _initialize() -> void:
 	if args.has("discovery"): ConceptGraph.discovery_pace = float(args["discovery"])
 	if args.has("spread"): ConceptGraph.spread_pace = float(args["spread"])
 	if args.has("craft"): ConceptGraph.craft_pace = float(args["craft"])
+	if args.has("apprenticeship"): IdeaMemory.apprenticeship = float(args["apprenticeship"]) * TimeSystem.DAY_LENGTH
+	if args.has("reinvent"): IdeaMemory.reinvent = float(args["reinvent"])
+	if args.has("apprentices"): IdeaMemory.apprentices = int(args["apprentices"])
+	if args.has("ghost"): IdeaMemory.ghost_bonus = float(args["ghost"])
 	var speed := float(args.get("speed", "20"))   # game seconds per real second
 	var dt := float(args.get("dt", str(1.0 / 60.0)))  # real seconds per frame
 	var seeds: Array = str(args.get("seeds", "1,2,3")).split(",")
@@ -65,6 +72,22 @@ func _initialize() -> void:
 			lost += int(main.story.ledger.ideas[id]["times_lost"])
 		print("  ideas lost (ever): ", lost)
 		print("  generations: ", main.lineage_tracker.stats, " legends ", main.lineage_tracker.legends.size())
+		var mem: IdeaMemory = main.concept_graph.memory
+		var lost_list: Array = []
+		for id in main.story.ledger.ideas:
+			var r: Dictionary = main.story.ledger.ideas[id]
+			if int(r["times_lost"]) > 0:
+				lost_list.append("%s (e%d, lost d%d with %s%s)" % [id, int(main.concept_graph.concepts[id].get("era", 1)), int(r["lost_day"]),
+					r["lost_with"], (", found again d%d by %s" % [int(r["refound_day"]), r["refound_by"]]) if int(r["refound_day"]) >= int(r["lost_day"]) else ""])
+		print("  ideas lost %d, found again %d, still lost %d: %s" % [mem.lost_total, mem.refound_total, mem.ghosts.size(), "; ".join(lost_list)])
+		if args.has("ideas"):
+			var rows: Array = []
+			for id in main.story.ledger.ideas:
+				var r: Dictionary = main.story.ledger.ideas[id]
+				if int(r["peak"]) > 0:
+					rows.append("%s(e%d) now %d peak %d low %d found %d taught %d lost %d" % [id, int(main.concept_graph.concepts[id].get("era", 1)),
+						int(r["holders"]), int(r["peak"]), int(r.get("low", -1)), int(r.get("found", 0)), int(r["taught"]), int(r["times_lost"])])
+			for row in rows: print("    ", row)
 		var woods := 0
 		var young := 0
 		var planted := 0

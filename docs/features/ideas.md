@@ -97,5 +97,58 @@ and the person's life story.
 | Seafaring | 4 | unlocks_ocean_crossing; unlocks_water_travel; discovery_bonus 1.1 |
 | Trade Routes | 4 | spread_rate_multiplier 1.5; hunger_efficiency 1.15; trade_reach; builds: roads |
 
+## Lost, and found again (feat/ideas)
+
+The pitch promises an idea lost when the last person who knew it dies, and found again
+later. Before this, none ever was (0 in 3 seeds x 15 days): spreading is fast, everyone meets
+everyone, and few die in a fortnight (20-80 of about 200), so a widely held idea can't die.
+Measured dead ends: crafts at an eighth of the pace, or taught only within a camp or family,
+still reached 140 of 150; a two-to-six-day window before an inventor could teach gave 0-2
+losses and slowed the whole tree.
+
+**Master crafts** (`IdeaMemory.MASTER_CRAFTS`): pottery, sailing, boat building, navigation,
+cartography, printing, beekeeping, dyeing, herbalism, advanced medicine, horse taming. The
+specialist trades; none is a prerequisite that whole branches wait on (metallurgy, metal
+tools and woodworking stay ordinary crafts because towns and stone buildings need them).
+
+- A master takes on at most two apprentices in each (`apprentices`).
+- An apprentice knows the craft only when the apprenticeship is done, three days later
+  (`apprenticeship`), on meeting their master again. If the master dies first, it ends.
+- While anyone alive holds a master craft, nobody works it out alone (`reinvent` = 0).
+- A camp's pool of ideas never hands one out (the pool now only teaches what a living member
+  holds; it used to bring back ideas whose holders had all died, unseen).
+
+So a new trade lives for days in one pair of hands. Simple ideas and ordinary crafts are
+untouched; no idea anyone can copy is a master craft (tested).
+
+**The loss.** `ConceptGraph.note_death` (Main calls it for each death) asks `IdeaMemory`
+whether anyone alive still holds each idea the dead knew; if not, the idea is lost and leaves a
+**ghost** where they died and at their camp's hearth. `IdeaLedger` records it (day, last holder,
+place), the chronicle tells it ("No one remembers how to fire clay now. Mara was the last."),
+the last holder's life story says so, the Idea Garden draws it wilted and says it may be found
+again near where it was last known, and the album has "An idea lost".
+
+**Found again.** Within 14 tiles of a ghost a lost idea is 4x likelier to be thought of
+(`ghost_bonus`). The chronicle says how long it was gone, and whether it was near the ghost
+and the finder born after the loss ("Ivo has worked out how to fire clay again, ninety days
+after it was lost, not far from where Mara last knew it."; `IdeaWords`). Moments: "Found
+again", "Where it was left" (near the ghost), "New hands" (by someone born after it was lost).
+
+Measured (`tools/balance.gd --days=14 --ideas`, which prints each idea's holders, low point,
+times found and taught, and every loss):
+
+| Seed | Ideas | Lost | Found again | Still lost |
+|---|---|---|---|---|
+| 1 | 55 | dyeing d11, pottery d14 | dyeing d12 | pottery |
+| 3 | 41 | printing d6, cartography d9 | printing d9, cartography d11 (both near the ghost) | - |
+| 5 | 13 | cartography d12 | - | cartography |
+
+Tests: `tests/suites/70_ideas_lost.gd`.
+
+Open: a master craft stays in 1-4 hands, so its effect (printing's faster teaching, maps,
+boats) reaches few; that is the point, but watch it if a trade ever gates something big.
+Seed 1 loses ideas only late (few die before day 14 there). An apprenticeship cut short by
+the master's death isn't told in the chronicle yet.
+
 Open: UtilityAI.gd is still never instantiated and LineageTracker is written but not read
 (IdeaLedger and LifeRecord cover what it would show); both are candidates for deletion.

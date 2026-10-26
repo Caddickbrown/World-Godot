@@ -21,6 +21,8 @@ static var spread_pace := 0.9
 ## die with them. Children learn fastest from their own parents.
 static var craft_pace := 0.4
 const PARENT_TEACHING := 2.0
+## Lost ideas and their ghosts (IdeaMemory): who was the last, and where.
+var memory := IdeaMemory.new()
 
 func _init(concepts_data: Array) -> void:
 	for c in concepts_data:
@@ -41,7 +43,7 @@ func check_discovery(agent: Agent, tile: Dictionary, delta: float, world: World,
 	for id in concepts:
 		if agent.knowledge.has(id): continue
 		var concept: Dictionary = concepts[id]
-		var prob: float = float(concept.get("discovery_probability", 0.0001)) * base
+		var prob: float = float(concept.get("discovery_probability", 0.0001)) * base * memory.bonus(id, agent.pos)
 
 		if id == "fire" and not world.natural_fires.is_empty():
 			var adj := [[0,0],[1,0],[-1,0],[0,1],[0,-1]]
@@ -54,8 +56,11 @@ func check_discovery(agent: Agent, tile: Dictionary, delta: float, world: World,
 		if randf() >= prob: continue
 		if not _prerequisites_met(agent, concept): continue
 		if not _conditions_met(agent, tile, concept, world, all_agents): continue
+		if IdeaMemory.reinvent < 1.0 and IdeaMemory.is_master_craft(id) and randf() >= IdeaMemory.reinvent \
+				and memory.held_by_living(id, all_agents): continue
 		if known_by[id].is_empty():
 			concept["first_discoverer"] = {"name": agent.agent_name, "id": agent.agent_id, "day": current_day}
+		memory.note_refound(id, agent, current_day)
 		_grant(agent, id, current_day)
 		events.append({"type": "discovery", "agent_id": agent.agent_id, "agent_name": agent.agent_name, "concept_id": id})
 		return id
@@ -150,6 +155,16 @@ func try_spread(agent_a: Agent, agent_b: Agent, delta_time: float = 5.0) -> void
 		var craft := int(concept.get("era", 1)) >= 2
 		if craft and (not teacher.is_adult or learner.life_stage == "infant"):
 			continue
+		# A master craft: an apprentice learns it from one master, over days.
+		var master := IdeaMemory.is_master_craft(id)
+		if master and memory.is_learning(learner, id):
+			if memory.finished(learner, teacher, id):
+				_grant(learner, id)
+				events.append({"type": "spread", "agent_id": learner.agent_id, "agent_name": learner.agent_name,
+					"concept_id": id, "teacher_id": teacher.agent_id})
+			continue
+		if master and not memory.may_take(teacher, id):
+			continue
 		var spread_rate: float = float(concept.get("spread_rate", 0.01)) * delta_time * spread_pace
 		if craft:
 			spread_rate *= craft_pace
@@ -162,9 +177,20 @@ func try_spread(agent_a: Agent, agent_b: Agent, delta_time: float = 5.0) -> void
 		if teacher.task == "teacher":         spread_rate *= 1.1
 
 		if randf() < spread_rate:
+			if master:
+				memory.begin(teacher, learner, id)
+				continue
 			_grant(learner, id)
 			events.append({"type": "spread", "agent_id": learner.agent_id, "agent_name": learner.agent_name,
 				"concept_id": id, "teacher_id": teacher.agent_id})
+
+## Main tells the graph of each death: an idea nobody alive holds any more is
+## lost (IdeaMemory leaves its ghost). Returns the ids lost.
+func note_death(dead: Agent, agents: Array, day: int, home: Vector2 = Vector2(-1, -1)) -> Array:
+	var lost := memory.note_death(dead, agents, day, home)
+	for id in lost:
+		events.append({"type": "lost", "agent_id": dead.agent_id, "agent_name": dead.agent_name, "concept_id": id})
+	return lost
 
 # ── Queries ──────────────────────────────────────────────────────────────────
 

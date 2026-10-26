@@ -557,6 +557,8 @@ func _process(delta: float) -> void:
 			a.set_meta("died_at", time_system.game_time)
 			history_log.add("death", history_log.format_death(a.agent_name, a.death_cause), time_system.day)
 			lineage_tracker.note_death(a, time_system.day, settlement_system, agents)
+			var camp = settlement_system.get_settlement_for_agent(a.agent_id)
+			concept_graph.note_death(a, agents, time_system.day, camp.centre if camp else Vector2(-1, -1))
 			story.on_death(a)
 			festival_system.note_death(a, settlement_system)
 			if a == selected_agent:
