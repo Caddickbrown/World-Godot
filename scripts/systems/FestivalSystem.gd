@@ -29,9 +29,9 @@ const MIN_MEMBERS := 4             # smaller camps keep no festivals
 const GATHER_RADIUS := 40.0        # tiles from the hearth people will come in from
 const GATHERED_SHARE := 0.5        # of the camp there before it counts as held
 const GATHERED_MIN := 3
-const LEAVE_HUNGER := 0.15         # people go off to eat below this
+const LEAVE_HUNGER := 0.3          # people go off to eat below this
 const LEAVE_ENERGY := 0.08
-const JOIN_HUNGER := 0.25          # ...and don't come above it (except to the feast)
+const JOIN_HUNGER := 0.4           # ...and come only above it (anyone comes to the feast)
 const DANCE_RADIUS := 2.2          # tiles round the midsummer fire
 const DANCE_SPEED := 0.45          # radians per game second round the ring
 const RING_RADIUS := 2.0           # midwinter, seated round the fire
@@ -301,7 +301,8 @@ func _drive(f: Dictionary) -> void:
 				a.festival = ""
 				a.festival_pose = POSE_STAND
 			people.remove_at(i)
-		elif a.needs["hunger"] < LEAVE_HUNGER or a.needs["energy"] < LEAVE_ENERGY:
+		elif (a.needs["hunger"] < LEAVE_HUNGER and (f["told"] or f["kind"] != "harvest")) \
+				or a.needs["energy"] < LEAVE_ENERGY:   # the hungry wait for the feast
 			_release(a, f, MORALE_ON_LEAVING)
 			people.remove_at(i)
 		else:
