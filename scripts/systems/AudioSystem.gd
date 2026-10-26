@@ -1,150 +1,62 @@
 class_name AudioSystem
 extends Node
+## Main's handle on sound. It owns the Soundscape (the island's living sound,
+## scripts/audio/) and keeps Main's old calls (play_birth, play_death...) as
+## gentle stingers instead of the beeps they were. Sound only reads the world.
+##
+## Hooks for other systems (connect a signal straight to these):
+##   on_festival_started(kind, pos)   pos: tile Vector2 or metres Vector3
+##   on_festival_ended(kind, pos)
+##   on_moment(id, title)             an album sticker was earned (a chime)
 
-const SAMPLE_RATE: float = 44100.0
-const POOL_SIZE: int = 4
-
-var _players: Array = []
-var _pool_index: int = 0
-
+var soundscape: Soundscape
 
 func _ready() -> void:
-	for i: int in range(POOL_SIZE):
-		var player: AudioStreamPlayer = AudioStreamPlayer.new()
-		add_child(player)
-		_players.append(player)
-
+	soundscape = Soundscape.new()
+	soundscape.main = get_parent()
+	add_child(soundscape)
 
 # ---------------------------------------------------------------------------
-# Public sound triggers
+# Stingers (Main's calls; names kept)
 # ---------------------------------------------------------------------------
 
 func play_discovery() -> void:
-	# Ascending arpeggio: C5 → E5 → G5, each 80ms, sine, amp 0.3, fade out last
-	var freqs: Array = [523.25, 659.25, 783.99]
-	var all_samples: PackedFloat32Array = PackedFloat32Array()
-	for i: int in range(freqs.size()):
-		var freq: float = float(freqs[i])
-		var amp: float = 0.3
-		var fade_out: bool = (i == freqs.size() - 1)
-		var note: PackedFloat32Array = _make_sine_opt(freq, 0.08, amp, fade_out)
-		all_samples.append_array(note)
-	_play_samples(all_samples)
-
+	_sting("discovery", 0.8)
 
 func play_birth() -> void:
-	# C5 + E5 + G5 chord simultaneously, 200ms, sine, amp 0.2
-	var num_samples: int = int(SAMPLE_RATE * 0.2)
-	var samples: PackedFloat32Array = PackedFloat32Array()
-	samples.resize(num_samples)
-	var freqs: Array = [523.25, 659.25, 783.99]
-	for i: int in range(num_samples):
-		var t: float = float(i) / SAMPLE_RATE
-		var s: float = 0.0
-		for freq in freqs:
-			s += sin(TAU * float(freq) * t)
-		samples[i] = s * (0.2 / float(freqs.size()))
-	_play_samples(samples)
-
+	_sting("birth", 0.45)
 
 func play_death() -> void:
-	# Frequency sweep 440Hz → 180Hz over 400ms, sawtooth (approx), amp 0.25
-	var sweep: PackedFloat32Array = _make_sweep_sawtooth(440.0, 180.0, 0.4, 0.25)
-	_play_samples(sweep)
-
+	_sting("death", 0.45)
 
 func play_weather_change() -> void:
-	# Sine sweep 80Hz → 1200Hz over 300ms, amp 0.2
-	var sweep: PackedFloat32Array = _make_sweep(80.0, 1200.0, 0.3, 0.2)
-	_play_samples(sweep)
-
+	_sting("weather", 0.5)
 
 func play_disaster() -> void:
-	# Low rumble: 60Hz sine, 500ms, amp 0.3, fade out
-	var samples: PackedFloat32Array = _make_sine_opt(60.0, 0.5, 0.3, true)
-	_play_samples(samples)
-
+	_sting("disaster", 0.8)
 
 func play_achievement() -> void:
-	# Fanfare: C5 → G5 → C6, 100ms each, amp 0.35
-	var freqs: Array = [523.25, 783.99, 1046.50]
-	var all_samples: PackedFloat32Array = PackedFloat32Array()
-	for freq in freqs:
-		var note: PackedFloat32Array = _make_sine(float(freq), 0.1, 0.35)
-		all_samples.append_array(note)
-	_play_samples(all_samples)
+	_sting("achievement", 0.8)
 
+## An album moment you witnessed: the gentle chime.
+func play_moment() -> void:
+	_sting("moment", 1.0)
 
-# ---------------------------------------------------------------------------
-# Sample generators
-# ---------------------------------------------------------------------------
+func on_moment(_id: String = "", _title: String = "") -> void:
+	play_moment()
 
-func _make_sine(freq: float, duration_sec: float, amplitude: float) -> PackedFloat32Array:
-	return _make_sine_opt(freq, duration_sec, amplitude, false)
-
-
-func _make_sine_opt(freq: float, duration_sec: float, amplitude: float, fade_out: bool) -> PackedFloat32Array:
-	var num_samples: int = int(SAMPLE_RATE * duration_sec)
-	var samples: PackedFloat32Array = PackedFloat32Array()
-	samples.resize(num_samples)
-	for i: int in range(num_samples):
-		var t: float = float(i) / SAMPLE_RATE
-		var env: float = 1.0
-		if fade_out:
-			env = 1.0 - (float(i) / float(num_samples))
-		samples[i] = sin(TAU * freq * t) * amplitude * env
-	return samples
-
-
-func _make_sweep(freq_start: float, freq_end: float, duration_sec: float, amplitude: float) -> PackedFloat32Array:
-	var num_samples: int = int(SAMPLE_RATE * duration_sec)
-	var samples: PackedFloat32Array = PackedFloat32Array()
-	samples.resize(num_samples)
-	var phase: float = 0.0
-	for i: int in range(num_samples):
-		var progress: float = float(i) / float(num_samples)
-		var freq: float = freq_start + (freq_end - freq_start) * progress
-		samples[i] = sin(phase) * amplitude
-		phase += TAU * freq / SAMPLE_RATE
-	return samples
-
-
-func _make_sweep_sawtooth(freq_start: float, freq_end: float, duration_sec: float, amplitude: float) -> PackedFloat32Array:
-	var num_samples: int = int(SAMPLE_RATE * duration_sec)
-	var samples: PackedFloat32Array = PackedFloat32Array()
-	samples.resize(num_samples)
-	var phase: float = 0.0
-	for i: int in range(num_samples):
-		var progress: float = float(i) / float(num_samples)
-		var freq: float = freq_start + (freq_end - freq_start) * progress
-		# Sawtooth: phase / PI - 1.0 maps [0, 2π] → [-1, 1]
-		var saw: float = (phase / PI) - 1.0
-		samples[i] = saw * amplitude
-		phase += TAU * freq / SAMPLE_RATE
-		if phase >= TAU:
-			phase -= TAU
-	return samples
-
+func _sting(kind: String, gain: float) -> void:
+	if soundscape:
+		soundscape.stinger(kind, gain)
 
 # ---------------------------------------------------------------------------
-# Playback
+# Festivals (the festivals feature emits festival_started(kind, pos))
 # ---------------------------------------------------------------------------
 
-func _play_samples(samples: PackedFloat32Array) -> void:
-	var player: AudioStreamPlayer = _players[_pool_index] as AudioStreamPlayer
-	_pool_index = (_pool_index + 1) % POOL_SIZE
+func on_festival_started(kind = "", pos = null, _a = null, _b = null) -> void:
+	if soundscape:
+		soundscape.add_festival(str(kind), pos)
 
-	var generator: AudioStreamGenerator = AudioStreamGenerator.new()
-	generator.mix_rate = SAMPLE_RATE
-	generator.buffer_length = 0.1
-
-	player.stream = generator
-	player.play()
-
-	var playback: AudioStreamGeneratorPlayback = player.get_stream_playback() as AudioStreamGeneratorPlayback
-	if playback == null:
-		return
-
-	for i: int in range(samples.size()):
-		var s: float = samples[i]
-		playback.push_frame(Vector2(s, s))
+func on_festival_ended(_kind = "", pos = null, _a = null, _b = null) -> void:
+	if soundscape:
+		soundscape.end_festival(pos)

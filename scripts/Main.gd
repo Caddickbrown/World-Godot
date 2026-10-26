@@ -739,6 +739,7 @@ func _on_chronicle(entry: Dictionary) -> void:
 
 func _on_moment(_id: String, title: String) -> void:
 	_push_notification("Witnessed: " + title)
+	audio_system.play_moment()
 
 func _handle_campfires(delta: float) -> void:
 	for evt in world.campfire_events:

@@ -41,6 +41,7 @@ func build_screen() -> void:
 	UiTheme.set_style(chosen)   # the cards borrowed the style to draw themselves
 	if starting and main():
 		col.add_child(_seed_row())
+	col.add_child(SoundSettings.panel())   # volumes and hush (scripts/audio)
 	var row := UiTheme.hbox(12)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	if starting and SaveGame.exists():
