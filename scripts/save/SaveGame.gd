@@ -24,7 +24,7 @@ const SYSTEMS := ["world", "concept_graph", "time_system", "weather_system", "an
 	"animal_skill_system", "fire_system", "disaster_system", "ecology_system", "conflict_system",
 	"trading_system", "crafting_system", "settlement_system", "tile_items", "history_log",
 	"achievements", "lineage_tracker", "hunting_system", "forest_system", "story", "disease_system",
-	"population_manager", "path_system", "island_history", "animal_minds"]
+	"population_manager", "path_system", "island_history", "animal_minds", "festival_system"]
 ## Main's own state.
 const MAIN_VARS := ["agents", "birth_times", "_history_seen", "_was_storm", "game_over"]
 ## Per-instance state that isn't worth a file: caches rebuilt on use.

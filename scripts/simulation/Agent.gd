@@ -10,6 +10,7 @@ enum State {
 	PERFORMING,
 	TRADING,
 	RITUAL,
+	FESTIVAL,   # at a festival (FestivalSystem moves them and lets them go)
 }
 
 const AGENT_SPEED    := 1.8   # tiles/sec
@@ -75,6 +76,10 @@ var at_fire: bool = false   # sitting at the evening hearth
 var chore: String = ""             # set by ForestSystem: "felling a tree", "planting a tree"
 var carrying_food: float = 0.0   # surplus gathered once full, carried home to the camp store
 var fed_children: int = 0   # times they fed a hungry child (the story reads it)
+# Festivals (FestivalSystem sets these; the renderer and thoughts read them).
+var festival: String = ""              # kind of festival they're at, or ""
+var festival_pose: int = 0             # FestivalSystem.POSE_*: stand, sit, dance
+var festival_focus: Vector2 = Vector2(-1, -1)   # the fire, table or shrine they face
 ## Grief: after a partner, child or parent dies, for MOURNING_DAYS they move
 ## slowly, don't pair or have children, and think of who they lost.
 var mourning: float = 0.0
@@ -511,6 +516,17 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 			if rest_timer <= 0.0:
 				state = State.WANDERING
 				_pick_wander_target(world, all_agents)
+			_try_socialise(delta, all_agents, concept_graph)
+			return
+
+		State.FESTIVAL:
+			# FestivalSystem keeps the spot (it turns for a dance) and lets them go.
+			_step(delta, world, all_agents, false)
+			var settled := pos.distance_to(target) < 0.3
+			at_fire = settled and FestivalSystem.BY_THE_FIRE.has(festival)
+			if settled and festival_pose != FestivalSystem.POSE_DANCE and festival_focus.x >= 0.0 \
+					and (festival_focus - pos).length() > 0.01:
+				facing = (festival_focus - pos).normalized()
 			_try_socialise(delta, all_agents, concept_graph)
 			return
 

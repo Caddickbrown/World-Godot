@@ -13,6 +13,8 @@ const SETTINGS_PATH := "user://world_settings.json"
 const INSPECT_SECONDS := 8.0
 var minimap: Minimap
 var show_minimap := true
+var hints: Hints                     # "something's happening" (N)
+var show_hints := true
 var inspect_card: PanelContainer
 var _inspect_left := 0.0
 var _look_starting := false
@@ -44,7 +46,7 @@ var _toasts: Array = []             # {node, t}
 var _last_speed := -1.0
 var _game_over := false
 
-const HINT_OBSERVE := "Click someone to follow, anything else to see what it is · Tab walk among them · L lives · I ideas · J album · G island · M map · T look · P postcard · N sound · Space pause"
+const HINT_OBSERVE := "Click someone to follow, anything else to see what it is · Tab walk among them · L lives · I ideas · J album · G island · M map · K hints · T look · P postcard · N sound · Space pause"
 const HINT_FOLLOW  := "Following · F or Esc to let go · Tab walk beside them · L their story"
 const HINT_WALK    := "Walking unseen · WASD drift · Shift hurry · mouse look · E listen in · Tab back to the sky"
 
@@ -59,6 +61,8 @@ func _exit_tree() -> void:
 func set_main(m: Node) -> void:
 	main = m
 	_chronicle_dirty = true
+	if minimap: minimap.main = m
+	if hints: hints.main = m
 
 # ── Build ────────────────────────────────────────────────────────────────────
 
@@ -111,6 +115,11 @@ func build() -> void:
 	minimap.offset_bottom = -44
 	minimap.visible = show_minimap
 	root.add_child(minimap)
+	# Where something's happening (Hints.gd), bottom right; N hides it.
+	hints = Hints.new()
+	hints.main = main
+	hints.visible = show_hints
+	root.add_child(hints)
 	# What you clicked on (Inspect.describe), bottom centre.
 	inspect_card = UiTheme.panel()
 	inspect_card.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
@@ -514,6 +523,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			show_minimap = not show_minimap
 			if minimap: minimap.visible = show_minimap
 			_save_settings()
+		KEY_K:
+			show_hints = not show_hints
+			if hints: hints.visible = show_hints
+			_save_settings()
 		KEY_ESCAPE:
 			if screen:
 				close_screen()
@@ -530,8 +543,9 @@ func _load_settings() -> void:
 	if d is Dictionary:
 		UiTheme.set_style(str(d.get("style", UiTheme.style)))
 		show_minimap = bool(d.get("minimap", true))
+		show_hints = bool(d.get("hints", true))
 
 func _save_settings() -> void:
 	var f := FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify({"style": UiTheme.style, "minimap": show_minimap}))
+		f.store_string(JSON.stringify({"style": UiTheme.style, "minimap": show_minimap, "hints": show_hints}))

@@ -73,6 +73,9 @@ func _initialize() -> void:
 					woods += 1
 					if float(t.get("growth", 1.0)) < 0.8: young += 1
 					if bool(t.get("planted", false)): planted += 1
+		var fest = main.get("festival_system")
+		if fest:
+			print("  festivals held: %s" % str(fest.held_by_kind))
 		var tiers := [0, 0, 0]
 		for st in main.settlement_system.get_settlements():
 			tiers[clampi(int(st.tier), 0, 2)] += 1

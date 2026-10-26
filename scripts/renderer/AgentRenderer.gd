@@ -274,7 +274,7 @@ func update() -> void:
 		var moved: float = (agent.pos - (e["last_pos"] as Vector2)).length()
 		e["last_pos"] = agent.pos
 		var walking: bool = moved > 0.0005 and not agent.is_dead and agent.state != Agent.State.SLEEPING
-		if walking or agent.at_fire:
+		if walking or agent.at_fire or agent.state == Agent.State.FESTIVAL:
 			root.rotation.y = atan2(agent.facing.x, agent.facing.y)
 		var stage_scale := 0.55 if agent.life_stage == "infant" else (0.72 if agent.life_stage == "child" else 1.0)
 		root.scale = Vector3.ONE * stage_scale
@@ -289,7 +289,8 @@ func update() -> void:
 			for i in legs.size():
 				(legs[i] as Node3D).rotation.x = -0.35
 				(legs[i] as Node3D).rotation.z = 0.55 if i == 0 else -0.55
-		elif agent.state == Agent.State.SLEEPING or agent.at_fire:
+		elif agent.state == Agent.State.SLEEPING or agent.at_fire \
+				or (agent.state == Agent.State.FESTIVAL and agent.festival_pose == FestivalSystem.POSE_SIT and not walking):
 			root.rotation.x = 0.0
 			body_root.position.y = -0.45   # sitting, curled by the fire
 			for leg in legs:
@@ -300,6 +301,9 @@ func update() -> void:
 			e["phase"] = float(e["phase"]) + dt * (9.0 if walking else 0.0)
 			var ph: float = e["phase"]
 			body_root.position.y = absf(sin(ph)) * 0.06 if walking else 0.0
+			if agent.state == Agent.State.FESTIVAL and agent.festival_pose == FestivalSystem.POSE_DANCE:
+				# Dancing: a hop on every step, and a little on the spot between.
+				body_root.position.y = absf(sin(ph if walking else _time * 7.0 + float(e["phase"]))) * 0.22
 			(legs[0] as Node3D).rotation.x = sin(ph) * 0.6 if walking else 0.0
 			(legs[1] as Node3D).rotation.x = -sin(ph) * 0.6 if walking else 0.0
 			for leg in legs: leg.rotation.z = 0.0

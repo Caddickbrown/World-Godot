@@ -41,6 +41,12 @@ const DEFS := {
 	"whale_breach":  ["A whale breaches", "see a whale leap clear of the sea", "world", true],
 	"frog_chorus":   ["The frog chorus", "be by the water when the frogs start up at dusk", "world", true],
 	"wild_honey":    ["Wild honey", "someone eats honey from a bees' nest in the woods", "firsts", true],
+	# festivals (feat/festivals)
+	"fest_planting": ["The first sowing", "watch a camp sow its meadow together in spring", "people", true],
+	"fest_midsummer":["Midsummer fire", "be there when a camp dances round its midsummer fire", "people", true],
+	"fest_harvest":  ["The harvest feast", "be at the long table when a camp eats its harvest", "people", true],
+	"fest_mourning": ["Remembering", "be there when a camp remembers its dead at the shrine", "people", true],
+	"fest_midwinter":["The longest night", "see a camp's lights on midwinter night", "people", true],
 }
 
 var save_path := "user://world_album.json"
