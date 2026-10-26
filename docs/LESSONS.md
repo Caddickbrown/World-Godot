@@ -157,3 +157,15 @@ One line of cause, one line of rule.
   Godot's RNG, so the GDScript twin produces the identical world and parity tests
   compare exactly (terrain colours within 1e-7, trees within 2e-6).
 
+
+## Festivals (feat/festivals)
+
+- **A moment that lasts must be witnessable while it lasts.** Album moments were tried once, at
+  the instant of an event; a festival is three hours long, so it retries the witness check every
+  game second while it's under way. Rule: match the witness window to the event's length.
+- **The sim can't see the drawing.** The first harvest table stood through a house, the first
+  sowing under a temple: the renderer lays the place out, the simulation only knows the hearth.
+  Rule: put sim gatherings where the sim knows it's open (grass all round, past the camp's reach),
+  or at spots both agree on (`SettlementRenderer.SHRINE_AT`).
+- **Count who has arrived, not who was asked.** "The camp has gathered" first fired the frame
+  people were called, before anyone walked there (and before the feast's larder was set).
