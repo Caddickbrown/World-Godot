@@ -157,3 +157,15 @@ One line of cause, one line of rule.
   Godot's RNG, so the GDScript twin produces the identical world and parity tests
   compare exactly (terrain colours within 1e-7, trees within 2e-6).
 
+
+## Generations (feat/generations)
+
+- **A scene in the design is not a scene in the sim.** Legends were first told only "at the
+  evening fire", and worlds got one telling in 14 days: measured, someone sat at a fire in 12
+  of ~10,000 samples. Rule: before hanging a feature on a moment, probe how often the moment
+  happens in a real world.
+- **Counts that look small aren't.** "Taught 15 people" made 53 of 75 deaths legends, because
+  teaching counts each person for each idea (the busiest reach 134). Rule: print the
+  distribution before picking a threshold.
+- **`user://` is shared by every worktree of the project.** Balance runs in parallel branches
+  wrote into one `balance_album.json`, so the moments list showed other branches' moments.

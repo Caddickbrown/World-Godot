@@ -89,7 +89,18 @@ album (chronicle lines, moments, pressing across a reload), and the twig in both
 
 ## Measured
 
-See the commit message and `tools/balance.gd` (it now prints a `generations:` line).
+`tools/balance.gd --days=14` (it now prints a `generations:` line), with evening telling but
+the teaching legend still at 30 taught (since raised to 100, which removes most of the
+"taught" legends: they were 22 of 39 in seeds 1 and 3):
+
+| Seed | Deaths | Legends | Tellings | Named for someone | Four generations |
+|---|---|---|---|---|---|
+| 1 | 17 | 15 | 31 | 2 | 4 |
+| 3 | 47 | 30 | 82 | 17 | 33 |
+| 5 | 71 | 47 | 42 | 24 | 56 |
+
+Four generations is common (lives of 6-10 days, adults at day 2), so only the first is told
+loudly in the chronicle; the rest are minor (shown for people you follow).
 
 ## Open
 
