@@ -156,6 +156,10 @@ var _season: String = ""
 var _current_day: int = 0
 var _tile_items = null          # TileItems, optional
 var _settlement_system = null   # SettlementSystem, optional
+## The clock, for decisions made on arriving somewhere. (Arrival decided
+## without it, so whoever reached their seat by the fire at dusk got up and
+## went foraging: someone sat at a fire in 12 of ~10,000 samples.)
+var _clock = null               # TimeSystem, optional
 var _spatial_grid_ref: WeakRef = null   # SpatialGrid — weak, see _grid()
 
 # ── TASKS ─────────────────────────────────────────────────────────────────────
@@ -357,6 +361,7 @@ func tick(delta: float, world: World, all_agents: Array, concept_graph: ConceptG
 	_current_day = current_day
 	_tile_items = tile_items
 	_settlement_system = settlement_system
+	_clock = time_system
 	_spatial_grid_ref = weakref(spatial_grid) if spatial_grid != null else null
 	_concept_graph = concept_graph
 	age += delta
@@ -700,7 +705,7 @@ func _on_arrival(world: World, all_agents: Array, concept_graph: ConceptGraph) -
 		_advance_trader_journey(world)
 		return
 
-	_decide_action(world, all_agents, concept_graph, null)
+	_decide_action(world, all_agents, concept_graph, _clock)
 
 func _decide_action(world: World, all_agents: Array, concept_graph: ConceptGraph, time_system: TimeSystem) -> void:
 	var task_def: Dictionary = get_tasks().get(task, {})
@@ -735,7 +740,7 @@ func _decide_action(world: World, all_agents: Array, concept_graph: ConceptGraph
 		if time_system.is_dusk():
 			var home := _home_position(world)
 			var settled := _settlement_system != null and _settlement_system.get_settlement_for_agent(agent_id) != null
-			if settled and needs["hunger"] > 0.2:
+			if settled and needs["hunger"] > 0.45:   # the hungry keep foraging (sitting at 0.2 starved a poor island)
 				var seat := home + Vector2.from_angle(float(agent_id) * 2.39996) * lerpf(FIRE_RING_MIN, FIRE_RING_MAX, fmod(agent_id * 0.618, 1.0))
 				if pos.distance_to(seat) > 0.6:
 					state = State.WANDERING

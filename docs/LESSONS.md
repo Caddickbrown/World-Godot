@@ -199,3 +199,8 @@ One line of cause, one line of rule.
   someone sleeps, night after night; a story about belonging waits for that.
 - **Pin a walker.** Anyone sent to another camp (a wedding, a daughter camp, a visit) drops out of
   it on the way unless something holds them there; SettlementSystem pins do, until they arrive.
+- **A decision made without the clock.** People walked to their seat by the fire at dusk, arrived,
+  and the arrival's decision (passed no TimeSystem) sent them foraging: 4% of settled people at the
+  fire at dusk, measured; 58% now. The evening ring in GAME_DESIGN had never really happened.
+  Rule: every path into a decision gets the same inputs; probe the scenes the design promises.
+
