@@ -126,5 +126,29 @@ func _camp_pool(t) -> void:
 	t.check("a camp can show what a member still knows", SettlementSystem._member_holds(s, "fire", [here]))
 	t.check("...not what only the dead knew", not SettlementSystem._member_holds(s, "pottery", [here]))
 
+## A new craft needs practice: its inventor can't show anyone how until
+## they've made it a while, so dying first loses it. Simple ideas (fire)
+## can be copied at once, and someone who was shown a craft can show others.
 func _crafts_fragile(t) -> void:
-	pass
+	var g: ConceptGraph = t._graph()
+	var saved_m := IdeaMemory.mastery_time
+	var saved_p := ConceptGraph.spread_pace
+	IdeaMemory.mastery_time = 100.0
+	ConceptGraph.spread_pace = 1000.0
+	var inventor: Agent = t._adult(10, 10)
+	var friend: Agent = t._adult(10.5, 10)
+	var third: Agent = t._adult(11, 10)
+	for id in ["cooking", "fermentation", "fire"]:
+		g._grant(inventor, id)
+		g.memory.note_invented(inventor, id)
+	g.try_spread(inventor, friend)
+	t.check("fire can be copied at once", friend.knowledge.has("fire") and friend.knowledge.has("cooking"))
+	t.check("a craft just thought of can't be shown yet", not friend.knowledge.has("fermentation"))
+	inventor.age += 101.0
+	g.try_spread(inventor, friend)
+	t.check("...once practised, it can", friend.knowledge.has("fermentation"))
+	g.try_spread(friend, third)
+	t.check("someone who was shown can show others at once", third.knowledge.has("fermentation"))
+	IdeaMemory.mastery_time = saved_m
+	ConceptGraph.spread_pace = saved_p
+	g.drain_events()

@@ -18,6 +18,12 @@ const GHOST_RADIUS := 14.0
 ## How much easier an idea is to think of again near its ghost.
 static var ghost_bonus := 4.0
 
+## A new craft is fragile: whoever first thinks of one (era 2 and later) has
+## to make it a few times before they can show anyone how, this many game
+## seconds of their life. If they die first, it dies with them. Once someone
+## has been shown, they can show others at once.
+static var mastery_time := 0.0
+
 ## id -> {places: Array[Vector2], day, last_name, last_id}
 var ghosts: Dictionary = {}
 ## id -> {day, lost_day, last_name, near} for the latest time each was found again.
@@ -28,6 +34,7 @@ var refound_total := 0
 ## Someone died. Returns the ideas lost with them. home: their camp's
 ## centre (Vector2(-1, -1) for none).
 func note_death(dead: Agent, agents: Array, day: int, home: Vector2 = Vector2(-1, -1)) -> Array:
+	_since.erase(dead.agent_id)
 	var lost: Array = []
 	for id in dead.knowledge:
 		if ghosts.has(id) or _held(str(id), dead, agents):
@@ -61,6 +68,29 @@ func near_ghost(id: String, at: Vector2) -> bool:
 		if (p as Vector2).distance_to(at) <= GHOST_RADIUS:
 			return true
 	return false
+
+# ── A new craft needs practice ───────────────────────────────────────────────
+
+var _since: Dictionary = {}    # agent_id -> {craft id: age when they thought of it}
+
+## They thought of a craft themselves: it is theirs to practise first.
+func note_invented(who: Agent, id: String) -> void:
+	if mastery_time > 0.0:
+		if not _since.has(who.agent_id):
+			_since[who.agent_id] = {}
+		_since[who.agent_id][id] = who.age
+
+## Can they show someone this craft yet?
+func may_teach(teacher: Agent, id: String) -> bool:
+	if mastery_time <= 0.0 or not _since.has(teacher.agent_id):
+		return true
+	var since: Dictionary = _since[teacher.agent_id]
+	if not since.has(id):
+		return true
+	if teacher.age - float(since[id]) < mastery_time:
+		return false
+	since.erase(id)
+	return true
 
 ## Someone has thought of a lost idea again: the ghost is laid to rest.
 func note_refound(id: String, who: Agent, day: int) -> void:

@@ -60,6 +60,8 @@ func check_discovery(agent: Agent, tile: Dictionary, delta: float, world: World,
 			concept["first_discoverer"] = {"name": agent.agent_name, "id": agent.agent_id, "day": current_day}
 		memory.note_refound(id, agent, current_day)
 		_grant(agent, id, current_day)
+		if int(concept.get("era", 1)) >= 2:
+			memory.note_invented(agent, id)
 		events.append({"type": "discovery", "agent_id": agent.agent_id, "agent_name": agent.agent_name, "concept_id": id})
 		return id
 	return ""
@@ -151,7 +153,7 @@ func try_spread(agent_a: Agent, agent_b: Agent, delta_time: float = 5.0) -> void
 		var teacher: Agent = agent_a if a_knows else agent_b
 
 		var craft := int(concept.get("era", 1)) >= 2
-		if craft and (not teacher.is_adult or learner.life_stage == "infant"):
+		if craft and (not teacher.is_adult or learner.life_stage == "infant" or not memory.may_teach(teacher, id)):
 			continue
 		var spread_rate: float = float(concept.get("spread_rate", 0.01)) * delta_time * spread_pace
 		if craft:

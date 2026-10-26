@@ -95,6 +95,10 @@ func _describe(v: VBoxContainer, id: String, ledger: IdeaLedger) -> void:
 		story = "First thought of by %s on day %d." % [rec["first_name"], rec["first_day"]] if int(rec["first_day"]) > 0 else "Known since the first days."
 		if stage == IdeaLedger.Stage.WILTED:
 			story += " Lost on day %d%s." % [rec["lost_day"], (" with " + str(rec["lost_with"])) if str(rec["lost_with"]) != "" else ""]
+			story += " Someone near where it was last known may think of it again."
+		elif int(rec["times_lost"]) > 0:
+			story += " Lost %s on day %d%s." % ["once" if int(rec["times_lost"]) == 1 else "%d times" % int(rec["times_lost"]),
+				rec["lost_day"], (" with " + str(rec["lost_with"])) if str(rec["lost_with"]) != "" else ""]
 		if str(rec["refound_by"]) != "":
 			story += " Found again by %s on day %d." % [rec["refound_by"], rec["refound_day"]]
 	v.add_child(UiTheme.wrap(UiTheme.label(story, "hand", 19), 290))

@@ -14,6 +14,8 @@ func _initialize() -> void:
 	if args.has("discovery"): ConceptGraph.discovery_pace = float(args["discovery"])
 	if args.has("spread"): ConceptGraph.spread_pace = float(args["spread"])
 	if args.has("craft"): ConceptGraph.craft_pace = float(args["craft"])
+	if args.has("mastery"): IdeaMemory.mastery_time = float(args["mastery"]) * TimeSystem.DAY_LENGTH
+	if args.has("ghost"): IdeaMemory.ghost_bonus = float(args["ghost"])
 	var speed := float(args.get("speed", "20"))   # game seconds per real second
 	var dt := float(args.get("dt", str(1.0 / 60.0)))  # real seconds per frame
 	var seeds: Array = str(args.get("seeds", "1,2,3")).split(",")
@@ -64,6 +66,14 @@ func _initialize() -> void:
 		for id in main.story.ledger.ideas:
 			lost += int(main.story.ledger.ideas[id]["times_lost"])
 		print("  ideas lost (ever): ", lost)
+		var mem: IdeaMemory = main.concept_graph.memory
+		var lost_list: Array = []
+		for id in main.story.ledger.ideas:
+			var r: Dictionary = main.story.ledger.ideas[id]
+			if int(r["times_lost"]) > 0:
+				lost_list.append("%s (e%d, lost d%d with %s%s)" % [id, int(main.concept_graph.concepts[id].get("era", 1)), int(r["lost_day"]),
+					r["lost_with"], (", found again d%d by %s" % [int(r["refound_day"]), r["refound_by"]]) if int(r["refound_day"]) >= int(r["lost_day"]) else ""])
+		print("  ideas lost %d, found again %d, still lost %d: %s" % [mem.lost_total, mem.refound_total, mem.ghosts.size(), "; ".join(lost_list)])
 		if args.has("ideas"):
 			var rows: Array = []
 			for id in main.story.ledger.ideas:
