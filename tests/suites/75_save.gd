@@ -39,6 +39,7 @@ func run(t) -> void:
 	t.remove_child(main)
 	main.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(PATH))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(PATH + ".json"))
 
 func _fingerprint(main: Node) -> Dictionary:
 	var names: Array = []

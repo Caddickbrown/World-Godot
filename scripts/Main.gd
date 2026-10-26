@@ -598,8 +598,10 @@ func _process(delta: float) -> void:
 	_prof("island history")
 
 	lineage_tracker.tick(game_delta, agents, settlement_system, time_system.hour)
+	_prof("~family register")
 	for evt in lineage_tracker.drain_events():
 		story.on_lineage(evt)
+	_prof("~family stories")
 	_feed_story(game_delta, alive_count)
 
 	_prof("story")
