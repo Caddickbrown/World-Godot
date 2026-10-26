@@ -98,12 +98,12 @@ func _path_squares(t) -> void:
 	t.add_child(pr)
 	var m: Vector2i = t._first_tile(w, [World.TileType.GRASS])
 	for i in 6:
-		w.trade_traffic["%d,%d" % [m.x + i, m.y]] = 30.0
+		w.trade_traffic[Vector2i(m.x + i, m.y)] = 30.0
 	pr.rebuild()
 	t.check("a worn way is drawn", pr.wear_at(m.x, m.y) > 0.9 and pr.rebuilt >= 1)
 	pr.rebuild()
 	t.check("...and not redrawn when nothing changed", pr.rebuilt == 0)
-	w.trade_traffic["%d,%d" % [m.x, m.y]] = 8.0
+	w.trade_traffic[Vector2i(m.x, m.y)] = 8.0
 	pr.rebuild()
 	t.check("...one changed tile redraws a square or two, not the map", pr.rebuilt >= 1 and pr.rebuilt <= 4)
 	pr.queue_free()

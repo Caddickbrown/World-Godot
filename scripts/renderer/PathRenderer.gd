@@ -76,11 +76,10 @@ func rebuild() -> void:
 	if world == null:
 		return
 	var field: Heightfield = world.heightfield
-	for key in world.trade_traffic:
-		var p: PackedStringArray = str(key).split(",")
+	for key: Vector2i in world.trade_traffic:
 		var w := clampf((float(world.trade_traffic[key]) - WEAR_START) / (WEAR_FULL - WEAR_START), 0.0, 1.0)
 		if w > 0.0:
-			shown[Vector2i(int(p[0]), int(p[1]))] = w
+			shown[key] = w
 	if field == null:
 		return
 	# Which tiles reach each square: its own, and those whose wear spreads in

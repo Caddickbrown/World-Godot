@@ -58,7 +58,7 @@ var nesting_sites: Dictionary = {}
 
 # CAD-177: how many times traders have traversed each tile — "x,z" → float count.
 # Written directly by movement/trade code, decayed daily via decay_trade_traffic().
-var trade_traffic: Dictionary = {}
+var trade_traffic: Dictionary = {}   # Vector2i tile -> footfall (was "x,z" strings: parsing them was most of a path redraw)
 var _traffic_last_decay_day: int = 0
 
 var _home_occupants: Dictionary = {}
@@ -803,7 +803,7 @@ func update_domestication(delta: float, building_positions: Array, radius: float
 # CAD-177: Convenience accumulator — callers may also write trade_traffic
 # directly, matching the JS pattern of incrementing world._tradeTraffic in place.
 func add_trade_traffic(x: int, z: int, amount: float = 1.0) -> void:
-	var key := "%d,%d" % [x, z]
+	var key := Vector2i(x, z)
 	trade_traffic[key] = float(trade_traffic.get(key, 0.0)) + amount
 
 # CAD-177: Decay trade traffic counts once per in-game day. Paths fade if unused.

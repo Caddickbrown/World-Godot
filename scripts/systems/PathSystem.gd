@@ -2,7 +2,7 @@ class_name PathSystem
 extends RefCounted
 ## Worn earth: where people walk, the ground remembers. Every SAMPLE_SECONDS
 ## of game time each person on the move adds a footfall to the tile under
-## them (World.trade_traffic, "x,z" -> count); a trader on a journey between
+## them (World.trade_traffic, Vector2i tile -> count); a trader on a journey between
 ## settlements counts TRADER_WEIGHT times. Once a day every count fades by
 ## DAILY_KEEP, so a way nobody walks any more greens over in a few days.
 ## PathRenderer draws the counts as worn paths.
@@ -72,7 +72,7 @@ func step_on(world: World, p: Vector2, w: float = 1.0) -> void:
 	var z := int(floor(p.y))
 	if x < 0 or z < 0 or x >= world.width or z >= world.height:
 		return
-	var key := "%d,%d" % [x, z]
+	var key := Vector2i(x, z)
 	var before := float(world.trade_traffic.get(key, 0.0))
 	world.trade_traffic[key] = minf(MAX_WEAR, before + w)
 	_fresh += w
@@ -94,4 +94,4 @@ func _fade(world: World) -> void:
 
 ## How worn a tile is, 0 (untouched) .. 1 (a beaten path).
 static func wear_of(world: World, x: int, z: int) -> float:
-	return clampf((float(world.trade_traffic.get("%d,%d" % [x, z], 0.0)) - PathRenderer.WEAR_START) / (PathRenderer.WEAR_FULL - PathRenderer.WEAR_START), 0.0, 1.0)
+	return clampf((float(world.trade_traffic.get(Vector2i(x, z), 0.0)) - PathRenderer.WEAR_START) / (PathRenderer.WEAR_FULL - PathRenderer.WEAR_START), 0.0, 1.0)
