@@ -27,6 +27,11 @@
 # --no-hud        hide the HUD
 # --style=S       UI look: storybook | fieldnotes
 # --screen=S      open a full screen: lives | ideas | album
+# --twig          (with --screen=lives) open the life with the biggest family tree
+# --album-tab=T   (with --screen=album) open a tab: all | firsts | people | ideas | world | pressed
+# --press=N       press the N lives with the biggest families into the album first
+# --tell          an elder at the fire tells a legend, and the camera looks at them
+#                 (use with --hour=20; makes a legend if the world has none yet)
 # Needs a display: tools/capture/shots.sh wraps itself in xvfb-run.
 extends Node
 
@@ -132,6 +137,15 @@ func _ready() -> void:
 		if big:
 			obs.look_at_point(Vector3(big.centre.x, 0, big.centre.y) * World.TILE_SIZE)
 			print("[Capture] camp %s: %d people, tier %d, timber %.0f" % [big.name, big.member_ids.size(), big.tier, big.wood_store])
+	if args.has("tell"):
+		var teller := _tell_legend(main)
+		if teller:
+			who = teller
+			main.follow(teller)
+			obs.look_at_point(Vector3(teller.pos.x, 0, teller.pos.y) * World.TILE_SIZE)
+	if args.has("press"):
+		for id in _big_families(main).slice(0, int(args["press"])):
+			main.story.press_life(id, main.lineage_tracker, main.world.seed_val)
 	var look_tile := Vector2(obs.target.x, obs.target.z) / World.TILE_SIZE
 	if args.has("disaster"):
 		var kinds := {"drought": DisasterSystem.DisasterType.DROUGHT, "flood": DisasterSystem.DisasterType.FLOOD,
@@ -219,6 +233,14 @@ func _ready() -> void:
 				hud.open_look(true)
 			else:
 				hud.open_screen(str(args["screen"]))
+				if args.has("twig") and hud.screen is LifeStoryScreen:
+					var fams := _big_families(main)
+					if not fams.is_empty():
+						hud.screen._chosen = fams[0]
+						hud.screen._rebuild()
+				if args.has("album-tab") and hud.screen is AlbumScreen:
+					hud.screen._tab = str(args["album-tab"])
+					hud.screen._rebuild()
 		if args.has("inspect"):
 			hud.show_inspect(Inspect.describe(main, main.observer.target))
 	if args.has("no-hud") and hud:
@@ -242,3 +264,48 @@ static func parse_args(raw: PackedStringArray) -> Dictionary:
 		var kv := a.substr(2).split("=", true, 1)
 		out[kv[0]] = kv[1] if kv.size() > 1 else "true"
 	return out
+
+## Ids in the story with the most relatives in the register, most first.
+static func _big_families(main: Node) -> Array:
+	var lt: LineageTracker = main.lineage_tracker
+	var scored: Array = []
+	for id in main.story.lives:
+		var p := lt.person(int(id))
+		if p.is_empty():
+			continue
+		var n: int = lt.ancestors(int(id), 1).size() + lt.ancestors(int(id), 2).size() + lt.descendants(int(id), 1).size() \
+			+ lt.descendants(int(id), 2).size() + (1 if int(p["partner"]) >= 0 else 0) + (3 if lt.is_legend(int(id)) else 0)
+		scored.append([n, int(id)])
+	scored.sort_custom(func(a, b): return a[0] > b[0] or (a[0] == b[0] and a[1] < b[1]))
+	return scored.map(func(x): return x[1])
+
+## Have an elder at a fire tell a legend (a capture's set-up, like --teach).
+static func _tell_legend(main: Node) -> Agent:
+	var lt: LineageTracker = main.lineage_tracker
+	var elders: Array = main.agents.filter(func(a): return not a.is_dead and a.at_fire)
+	if elders.is_empty():
+		elders = main.agents.filter(func(a): return not a.is_dead and a.is_adult)
+	if elders.is_empty():
+		return null
+	var teller: Agent = elders[0]
+	for a in elders:
+		if a.is_elderly:
+			teller = a
+			break
+	var lid := lt._legend_for(teller)
+	if lid < 0:
+		# No legend this elder knows yet: let them remember a dead relative or
+		# the oldest of the dead as one.
+		for id in lt.people:
+			var p: Dictionary = lt.people[id]
+			if int(p["died_day"]) >= 0 and not lt.is_legend(int(id)):
+				lt.legends[int(id)] = {"id": int(id), "name": p["name"], "deed": "lived to a great age",
+					"camp": -1, "camp_name": "", "day": int(p["died_day"]), "knew": {teller.agent_id: true},
+					"heard": {}, "myth": false, "faded": false, "told": 0}
+				lid = int(id)
+				break
+	if lid < 0:
+		return null
+	lt._tell(teller, lid, main.agents)
+	print("[Capture] %s tells: %s" % [teller.agent_name, teller.speech_bubble])
+	return teller

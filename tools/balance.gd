@@ -64,6 +64,7 @@ func _initialize() -> void:
 		for id in main.story.ledger.ideas:
 			lost += int(main.story.ledger.ideas[id]["times_lost"])
 		print("  ideas lost (ever): ", lost)
+		print("  generations: ", main.lineage_tracker.stats, " legends ", main.lineage_tracker.legends.size())
 		var woods := 0
 		var young := 0
 		var planted := 0

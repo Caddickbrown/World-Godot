@@ -122,6 +122,7 @@ out; each area has its notes (rules, numbers, what is still open):
 | Sky and seasons | `docs/features/sky.md` | Weather where you look, clouds, rain curtains, lightning, rainbows, stars, seasons on land and trees, droughts, floods, blight |
 | Ideas that matter | `docs/features/ideas.md` | Every idea effect and items.json key read by code (tested); firsts in the chronicle |
 | Places and maps | `docs/features/places.md` | Buildings from ideas, worn paths, discovery glow, minimap, inspect, Island screen, seed |
+| Generations | `docs/features/generations.md` | Family register, names that carry on, legends and myths at the fire, family twig, pressed lives |
 
 ## Milestones
 
@@ -130,7 +131,7 @@ out; each area has its notes (rules, numbers, what is still open):
 | M0 | Foundation ✅ | AGENTS.md, this file, tests + CI, capture tool, balance probe; season, conflict, height and lifespan fixes |
 | M1 | Three views ✅ | Sky, follow and wisp views; follow card, almanac bar, chronicle in the new UI (both looks, T to switch) |
 | M2 | New look ✅ (first pass) | Island, smooth terrain, sea, sky, flora, people and settlements per `docs/ART_DIRECTION.md`. Weather: overcast and rain done. Next: animals in the same style, grass and flowers, a rainbow |
-| M3 | Stories ✅ (first pass) | Chronicle voice, life records and last lines, the Lives screen. Next: family twig drawing, "press a life" into the album |
+| M3 | Stories ✅ | Chronicle voice, life records and last lines, the Lives screen; generations (`docs/features/generations.md`): the family twig, children named for the dead, legends told at the fire (myths with oral tradition), lives pressed into the album |
 | M4 | Collecting ✅ (first pass) | Album of 29 moments (witness rule: on screen within 200 m, or following), the Idea Garden, hunches and glimmers. Next: more moments, ideas actually being lost (see open decisions) |
 | M5 | Postcards and polish | Seed postcards, save/continue, sound, settings, controller, a minimap |
 

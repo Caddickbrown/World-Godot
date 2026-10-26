@@ -1500,3 +1500,9 @@ func _far_shore(world: World) -> Vector2:
 			best_d = d
 			best = p
 	return best
+
+# ── Generations (feat/generations; see LineageTracker) ───────────────────────
+
+## The last legend they heard told at the evening fire (LineageTracker sets
+## it). Words only: nothing in the simulation reads it.
+var heard_legend: String = ""

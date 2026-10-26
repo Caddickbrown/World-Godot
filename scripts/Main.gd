@@ -241,6 +241,7 @@ func _init_world() -> void:
 	spatial_grid = SpatialGrid.new()
 	animal_skill_system = AnimalSkillSystem.new()
 	lineage_tracker = LineageTracker.new()
+	lineage_tracker.setup(agents, world.seed_val, concept_graph.concepts)
 	disease_system = DiseaseSystem.new()
 	population_manager = PopulationManager.new()
 
@@ -445,7 +446,10 @@ func _process(delta: float) -> void:
 			a.set_meta("death_logged", true)
 			a.set_meta("died_at", time_system.game_time)
 			history_log.add("death", history_log.format_death(a.agent_name, a.death_cause), time_system.day)
+			lineage_tracker.note_death(a, time_system.day, settlement_system, agents)
 			story.on_death(a)
+			if a == selected_agent:
+				story.press_life(a.agent_id, lineage_tracker, world.seed_val)
 			_grieve_for(a)
 			audio_system.play_death()
 
@@ -480,6 +484,9 @@ func _process(delta: float) -> void:
 	island_history.observe(self)
 	_prof("island history")
 
+	lineage_tracker.tick(game_delta, agents, settlement_system)
+	for evt in lineage_tracker.drain_events():
+		story.on_lineage(evt)
 	_feed_story(game_delta, alive_count)
 
 	_prof("story")
@@ -537,6 +544,7 @@ func _handle_births() -> void:
 			child.personality = Agent.inherit_personality(
 				evt["parent_a_personality"] as Dictionary, evt["parent_b_personality"] as Dictionary)
 
+		lineage_tracker.note_birth(child, _find_agent(int(evt.get("parent_a_id", -1))), _find_agent(int(evt.get("parent_b_id", -1))), time_system.day, alive)
 		agents.append(child)
 		agent_renderer.add_agent(child)
 		birth_times.append(time_system.game_time)
@@ -550,6 +558,7 @@ func _handle_births() -> void:
 func _handle_events() -> void:
 	for evt in concept_graph.drain_events():
 		if evt["type"] == "spread":
+			lineage_tracker.note_taught(int(evt.get("teacher_id", -1)))
 			story.on_spread(_find_agent(int(evt["agent_id"])), _find_agent(int(evt.get("teacher_id", -1))), str(evt["concept_id"]))
 		elif evt["type"] == "discovery":
 			var concept: Dictionary = concept_graph.concepts.get(str(evt["concept_id"]), {})

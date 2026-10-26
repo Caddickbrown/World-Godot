@@ -387,3 +387,57 @@ static func _find(agents: Array, id: int) -> Agent:
 		if a.agent_id == id:
 			return a
 	return null
+
+# ── Generations (feat/generations; see LineageTracker) ───────────────────────
+
+## LineageTracker events: named, four_generations, legend, told, myth, faded.
+func on_lineage(evt: Dictionary) -> void:
+	var pos: Vector2 = evt.get("pos", Vector2(-1, -1))
+	match str(evt.get("kind", "")):
+		"named":
+			var ns := int(evt["namesake_id"])
+			var ns_name: String = lives[ns].name if lives.has(ns) else str(evt["child"])
+			var line := ("%s is named for %s, a grandparent gone before they were born." % [evt["child"], ns_name]) \
+				if evt["why"] == "grandparent" else ("%s is named for %s, a legend of %s." % [evt["child"], ns_name, evt["camp_name"] if str(evt["camp_name"]) != "" else "the island"])
+			add("people", line, pos, [int(evt["child_id"])], false)
+			if lives.has(int(evt["child_id"])):
+				lives[int(evt["child_id"])].events.append({"day": day, "text": "Named for %s." % ns_name, "kind": "people"})
+			if lives.has(ns):
+				lives[ns].events.append({"day": day, "text": "%s was named for them." % evt["child"], "kind": "people"})
+			_try_moment("named_for", pos, [int(evt["child_id"])], "%s, for %s" % [evt["child"], ns_name])
+		"four_generations":
+			add("people", "%s was born, and their great-grandparent %s is alive to see it: four generations." % [evt["child"], evt["elder"]],
+				pos, [int(evt["child_id"]), int(evt["elder_id"])])
+			if lives.has(int(evt["elder_id"])):
+				lives[int(evt["elder_id"])].events.append({"day": day, "text": "Lived to see a great-grandchild, %s." % evt["child"], "kind": "people"})
+			_try_moment("four_generations", pos, [int(evt["child_id"]), int(evt["elder_id"])], "%s and %s" % [evt["elder"], evt["child"]])
+		"legend":
+			var camp: String = evt["camp_name"] if str(evt["camp_name"]) != "" else "the island"
+			add("people", "%s, who %s, is one of the legends of %s now." % [evt["name"], evt["deed"], camp], pos, [int(evt["id"])])
+			if lives.has(int(evt["id"])):
+				lives[int(evt["id"])].events.append({"day": day, "text": "Became a legend of %s." % camp, "kind": "people"})
+		"told":
+			if lives.has(int(evt["teller_id"])) and bool(evt["first"]):
+				lives[int(evt["teller_id"])].events.append({"day": day, "text": "Told the story of %s at the fire." % evt["legend"], "kind": "people"})
+			if bool(evt["first"]):
+				add("people", "At the fire, %s told the little ones about %s, who %s." % [evt["teller"], evt["legend"], evt["deed"]],
+					pos, [int(evt["teller_id"])], false)
+			_try_moment("legend_told", pos, [int(evt["teller_id"])] + (evt.get("heard", []) as Array), "%s: \"%s\"" % [evt["teller"], evt["line"]])
+		"myth":
+			var camp2: String = evt["camp_name"] if str(evt["camp_name"]) != "" else "the island"
+			add("ideas", "No one who knew %s is left, but %s still tells how they %s. %s is a myth now." % [evt["name"], camp2, evt["deed"], evt["name"]], Vector2(-1, -1), [int(evt["id"])])
+			_try_moment("myth", Vector2(-1, -1), [int(evt["id"])], "%s, who %s" % [evt["name"], evt["deed"]])
+		"faded":
+			add("ideas", "No one is left who remembers %s, or how they %s." % [evt["name"], evt["deed"]], Vector2(-1, -1), [int(evt["id"])], false)
+
+## Keep a life's page in the album, after this world is gone.
+func press_life(agent_id: int, lineage: LineageTracker = null, world_seed: int = 0) -> bool:
+	if not lives.has(agent_id):
+		return false
+	moments.press(PressedLife.page(lives[agent_id], ledger, lineage, world_seed, day))
+	_try_moment("pressed_life", Vector2(-1, -1), [agent_id], lives[agent_id].name)
+	_save()
+	return true
+
+func is_pressed(agent_id: int, world_seed: int = 0) -> bool:
+	return moments.pressed_index(PressedLife.key(agent_id, world_seed)) >= 0

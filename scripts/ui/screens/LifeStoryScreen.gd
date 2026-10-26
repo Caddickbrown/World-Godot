@@ -59,6 +59,8 @@ func _person_button(life: LifeRecord) -> Button:
 		tag = " · found " + main().story.ledger.name_of(life.firsts[0]).to_lower()
 	elif not life.alive():
 		tag = " · day %d" % life.died_day
+	if main().lineage_tracker and main().lineage_tracker.is_legend(life.agent_id):
+		tag = " · a legend" + tag
 	var b := UiTheme.button(life.name + tag, life.agent_id == _chosen, 15)
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	b.clip_text = true
@@ -83,6 +85,7 @@ func _tell(v: VBoxContainer, life: LifeRecord) -> void:
 	v.add_child(UiTheme.label(born + status, "body", 17, "muted"))
 	if not life.alive() and life.last_line != "":
 		v.add_child(UiTheme.wrap(UiTheme.label("“%s”" % life.last_line, "hand", 22, "accent" if UiTheme.style == "fieldnotes" else "warn"), 620))
+	_generations(v, life)
 
 	var two := UiTheme.hbox(36)
 	v.add_child(two)
@@ -116,6 +119,12 @@ func _tell(v: VBoxContainer, life: LifeRecord) -> void:
 	side.add_child(UiTheme.caps("Family", "faint"))
 	side.add_child(UiTheme.wrap(UiTheme.label("Partner: " + (life.partner if life.partner != "" else "none"), "body", 16), 250))
 	side.add_child(UiTheme.wrap(UiTheme.label("Children: " + (", ".join(life.children) if not life.children.is_empty() else "none"), "body", 16), 250))
+	var seed_val: int = m.world.seed_val if m.world else 0
+	var pressed: bool = m.story.is_pressed(life.agent_id, seed_val)
+	var press := UiTheme.button("Pressed in the album" if pressed else "Press into the album", pressed, 15)
+	press.tooltip_text = "Keep this page in the album after the world ends"
+	press.pressed.connect(func(): m.story.press_life(life.agent_id, m.lineage_tracker, seed_val); _rebuild())
+	side.add_child(press)
 	if life.alive():
 		var a: Agent = m._find_agent(life.agent_id)
 		if a:
@@ -123,3 +132,37 @@ func _tell(v: VBoxContainer, life: LifeRecord) -> void:
 			follow.pressed.connect(func(): m.follow(a); hud.close_screen())
 			side.add_child(follow)
 	two.add_child(side)
+
+## Generations (feat/generations): who they were named for, whether they are a
+## legend, and the family twig (click a relative to open their life).
+func _generations(v: VBoxContainer, life: LifeRecord) -> void:
+	var lt: LineageTracker = main().lineage_tracker
+	if lt == null or lt.person(life.agent_id).is_empty():
+		return
+	var p := lt.person(life.agent_id)
+	var bits := UiTheme.hbox(10)
+	if int(p["named_for"]) >= 0:
+		var ns := int(p["named_for"])
+		var b := UiTheme.button("Named for " + str(lt.person(ns).get("name", "")), false, 14)
+		b.pressed.connect(func(): _chosen = ns; _rebuild())
+		bits.add_child(b)
+	if lt.is_legend(life.agent_id):
+		var l: Dictionary = lt.legends[life.agent_id]
+		var camp := str(l["camp_name"]) if str(l["camp_name"]) != "" else "the island"
+		var say := "A myth of %s now: they %s" if l["myth"] else ("Forgotten now; once a legend of %s, who %s" if l["faded"] else "A legend of %s: they %s")
+		bits.add_child(UiTheme.wrap(UiTheme.label(say % [camp, l["deed"]], "hand", 19, "accent"), 460))
+	if bits.get_child_count() > 0:
+		v.add_child(bits)
+	var twig := FamilyTwig.new().build(lt, life.agent_id)
+	if twig.nodes.size() > 1:
+		v.add_child(UiTheme.caps("Family", "faint"))
+		twig.chosen.connect(func(id: int):
+			if main().story.lives.has(id):
+				_chosen = id
+				_rebuild.call_deferred())
+		v.add_child(twig)
+		var greats := lt.descendants(life.agent_id, 3).size()
+		if greats > 0:
+			v.add_child(UiTheme.label("and %d great-grandchild%s" % [greats, "" if greats == 1 else "ren"], "hand", 17, "muted"))
+	else:
+		twig.free()
