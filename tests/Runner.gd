@@ -434,20 +434,20 @@ func _test_teaching_hunting_moving_grief() -> void:
 	var adult := _adult()
 	var infant := Agent.new(10, 10)
 	infant._update_life_stage()
-	adult.knowledge["pottery"] = true      # era 2: a craft
+	adult.knowledge["fermentation"] = true # era 2: a craft (not a master craft, see 70_ideas_lost)
 	adult.knowledge["fire"] = true         # era 1: anyone can copy it
 	g.try_spread(adult, infant, 1.0)
 	check("an infant picks up a simple idea", infant.knowledge.has("fire"))
-	check("...but not a craft", not infant.knowledge.has("pottery"))
+	check("...but not a craft", not infant.knowledge.has("fermentation"))
 	var child := Agent.new(10, 10)
 	child.age = child.max_age * 0.15
 	child._update_life_stage()
-	child.knowledge["pottery"] = true
+	child.knowledge["fermentation"] = true
 	var learner := _adult()
 	g.try_spread(child, learner, 1.0)
-	check("a child can't teach a craft", not learner.knowledge.has("pottery"))
+	check("a child can't teach a craft", not learner.knowledge.has("fermentation"))
 	g.try_spread(adult, learner, 1.0)
-	check("an adult can", learner.knowledge.has("pottery"))
+	check("an adult can", learner.knowledge.has("fermentation"))
 	ConceptGraph.spread_pace = old_pace
 
 	# Hunting: a hungry hunter next to a deer brings it down and shares it.

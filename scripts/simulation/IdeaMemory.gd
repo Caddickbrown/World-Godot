@@ -18,11 +18,23 @@ const GHOST_RADIUS := 14.0
 ## How much easier an idea is to think of again near its ghost.
 static var ghost_bonus := 4.0
 
-## A new craft is fragile: whoever first thinks of one (era 2 and later) has
-## to make it a few times before they can show anyone how, this many game
-## seconds of their life. If they die first, it dies with them. Once someone
-## has been shown, they can show others at once.
-static var mastery_time := 0.0
+## Master crafts: trades handed on master to apprentice, not picked up by
+## watching. A master takes on at most `apprentices` in each craft; an
+## apprentice knows the craft only when their apprenticeship is done,
+## `apprenticeship` game seconds later, and only if their master is alive
+## to finish it. So for days a new craft lives in one pair of hands and can
+## die with them. Chosen as the specialist trades (and pottery, the brief's
+## own example); none is a prerequisite whole branches of the tree wait on.
+const MASTER_CRAFTS := ["pottery", "sailing", "boat_building", "navigation", "cartography", "printing",
+	"beekeeping", "dyeing", "herbalism", "medicine_advanced", "horse_taming"]
+static var apprenticeship := 3.0 * 120.0
+static var apprentices := 2
+## The chance someone works a master craft out alone while a master of it
+## lives (1: as for any idea; 0: never, they'd go and learn it instead).
+static var reinvent := 0.0
+
+static func is_master_craft(id: String) -> bool:
+	return MASTER_CRAFTS.has(id)
 
 ## id -> {places: Array[Vector2], day, last_name, last_id}
 var ghosts: Dictionary = {}
@@ -34,7 +46,7 @@ var refound_total := 0
 ## Someone died. Returns the ideas lost with them. home: their camp's
 ## centre (Vector2(-1, -1) for none).
 func note_death(dead: Agent, agents: Array, day: int, home: Vector2 = Vector2(-1, -1)) -> Array:
-	_since.erase(dead.agent_id)
+	_forget_person(dead)
 	var lost: Array = []
 	for id in dead.knowledge:
 		if ghosts.has(id) or _held(str(id), dead, agents):
@@ -53,6 +65,9 @@ static func _held(id: String, dead: Agent, agents: Array) -> bool:
 			return true
 	return false
 
+func held_by_living(id: String, agents: Array) -> bool:
+	return _held(id, null, agents)
+
 func is_lost(id: String) -> bool:
 	return ghosts.has(id)
 
@@ -69,28 +84,43 @@ func near_ghost(id: String, at: Vector2) -> bool:
 			return true
 	return false
 
-# ── A new craft needs practice ───────────────────────────────────────────────
+# ── Masters and apprentices ──────────────────────────────────────────────────
 
-var _since: Dictionary = {}    # agent_id -> {craft id: age when they thought of it}
+var _taken: Dictionary = {}       # master id -> {craft id: apprentices taken on}
+var _learning: Dictionary = {}    # apprentice id -> {craft id: [master id, age begun]}
 
-## They thought of a craft themselves: it is theirs to practise first.
-func note_invented(who: Agent, id: String) -> void:
-	if mastery_time > 0.0:
-		if not _since.has(who.agent_id):
-			_since[who.agent_id] = {}
-		_since[who.agent_id][id] = who.age
+## Can this master take on another apprentice in this craft?
+func may_take(master: Agent, id: String) -> bool:
+	return int((_taken.get(master.agent_id, {}) as Dictionary).get(id, 0)) < apprentices
 
-## Can they show someone this craft yet?
-func may_teach(teacher: Agent, id: String) -> bool:
-	if mastery_time <= 0.0 or not _since.has(teacher.agent_id):
-		return true
-	var since: Dictionary = _since[teacher.agent_id]
-	if not since.has(id):
-		return true
-	if teacher.age - float(since[id]) < mastery_time:
+func is_learning(who: Agent, id: String) -> bool:
+	return (_learning.get(who.agent_id, {}) as Dictionary).has(id)
+
+func begin(master: Agent, learner: Agent, id: String) -> void:
+	if not _taken.has(master.agent_id):
+		_taken[master.agent_id] = {}
+	_taken[master.agent_id][id] = int(_taken[master.agent_id].get(id, 0)) + 1
+	if not _learning.has(learner.agent_id):
+		_learning[learner.agent_id] = {}
+	_learning[learner.agent_id][id] = [master.agent_id, learner.age]
+
+## They meet their master again: is the apprenticeship done? (Clears it.)
+func finished(learner: Agent, master: Agent, id: String) -> bool:
+	var rec: Array = (_learning.get(learner.agent_id, {}) as Dictionary).get(id, [])
+	if rec.is_empty() or int(rec[0]) != master.agent_id or learner.age - float(rec[1]) < apprenticeship:
 		return false
-	since.erase(id)
+	_learning[learner.agent_id].erase(id)
 	return true
+
+## A master's death ends their apprentices' learning; the dead keep no records.
+func _forget_person(dead: Agent) -> void:
+	_taken.erase(dead.agent_id)
+	_learning.erase(dead.agent_id)
+	for learner_id in _learning:
+		var crafts: Dictionary = _learning[learner_id]
+		for id in crafts.keys():
+			if int(crafts[id][0]) == dead.agent_id:
+				crafts.erase(id)
 
 ## Someone has thought of a lost idea again: the ghost is laid to rest.
 func note_refound(id: String, who: Agent, day: int) -> void:

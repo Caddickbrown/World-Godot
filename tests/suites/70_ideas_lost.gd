@@ -126,29 +126,41 @@ func _camp_pool(t) -> void:
 	t.check("a camp can show what a member still knows", SettlementSystem._member_holds(s, "fire", [here]))
 	t.check("...not what only the dead knew", not SettlementSystem._member_holds(s, "pottery", [here]))
 
-## A new craft needs practice: its inventor can't show anyone how until
-## they've made it a while, so dying first loses it. Simple ideas (fire)
-## can be copied at once, and someone who was shown a craft can show others.
+## Master crafts (pottery, printing...) pass master to apprentice: a master
+## takes on two apprentices at most, and an apprentice knows the craft only
+## when the apprenticeship is done, days later, if the master is still
+## alive. Simple ideas and other crafts are untouched.
 func _crafts_fragile(t) -> void:
 	var g: ConceptGraph = t._graph()
-	var saved_m := IdeaMemory.mastery_time
-	var saved_p := ConceptGraph.spread_pace
-	IdeaMemory.mastery_time = 100.0
+	var saved := ConceptGraph.spread_pace
 	ConceptGraph.spread_pace = 1000.0
-	var inventor: Agent = t._adult(10, 10)
-	var friend: Agent = t._adult(10.5, 10)
-	var third: Agent = t._adult(11, 10)
-	for id in ["cooking", "fermentation", "fire"]:
-		g._grant(inventor, id)
-		g.memory.note_invented(inventor, id)
-	g.try_spread(inventor, friend)
-	t.check("fire can be copied at once", friend.knowledge.has("fire") and friend.knowledge.has("cooking"))
-	t.check("a craft just thought of can't be shown yet", not friend.knowledge.has("fermentation"))
-	inventor.age += 101.0
-	g.try_spread(inventor, friend)
-	t.check("...once practised, it can", friend.knowledge.has("fermentation"))
-	g.try_spread(friend, third)
-	t.check("someone who was shown can show others at once", third.knowledge.has("fermentation"))
-	IdeaMemory.mastery_time = saved_m
-	ConceptGraph.spread_pace = saved_p
+	var potter: Agent = t._adult(10, 10)
+	for id in ["fire", "cooking", "pottery", "fermentation"]:
+		potter.knowledge[id] = true
+	var pupils: Array = []
+	for i in 4:
+		var p: Agent = t._adult(10.5, 10)
+		g.try_spread(potter, p)
+		pupils.append(p)
+	var learning := pupils.filter(func(p): return g.memory.is_learning(p, "pottery")).size()
+	t.check("a master takes on %d apprentices in pottery, no more (%d)" % [IdeaMemory.apprentices, learning], learning == IdeaMemory.apprentices)
+	t.check("...who don't know it yet", not pupils.any(func(p): return p.knowledge.has("pottery")))
+	t.check("...while fire and fermentation go to everyone at once", pupils.all(func(p): return p.knowledge.has("fire") and p.knowledge.has("fermentation")))
+	var done: Agent = pupils[0]
+	done.age += IdeaMemory.apprenticeship + 1.0
+	g.try_spread(potter, done)
+	t.check("an apprenticeship served, they know pottery", done.knowledge.has("pottery"))
+	var orphan: Agent = pupils[1]
+	potter.is_dead = true
+	potter.health = 0.0
+	var lost: Array = g.note_death(potter, [potter, done, orphan], 4)
+	t.check("the master's death doesn't lose a craft an apprentice finished", not lost.has("pottery"))
+	t.check("...but ends the unfinished apprenticeship", not g.memory.is_learning(orphan, "pottery"))
+	orphan.age += IdeaMemory.apprenticeship + 1.0
+	g.try_spread(potter, orphan)
+	t.check("...so it is never finished", not orphan.knowledge.has("pottery"))
+	ConceptGraph.spread_pace = saved
 	g.drain_events()
+	t.check("pottery is a master craft, fermentation and fire are not",
+		IdeaMemory.is_master_craft("pottery") and not IdeaMemory.is_master_craft("fermentation") and not IdeaMemory.is_master_craft("fire"))
+	t.check("no idea anyone can copy is a master craft", not IdeaMemory.MASTER_CRAFTS.any(func(id): return int(g.concepts[id].get("era", 1)) < 2))

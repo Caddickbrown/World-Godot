@@ -14,7 +14,9 @@ func _initialize() -> void:
 	if args.has("discovery"): ConceptGraph.discovery_pace = float(args["discovery"])
 	if args.has("spread"): ConceptGraph.spread_pace = float(args["spread"])
 	if args.has("craft"): ConceptGraph.craft_pace = float(args["craft"])
-	if args.has("mastery"): IdeaMemory.mastery_time = float(args["mastery"]) * TimeSystem.DAY_LENGTH
+	if args.has("apprenticeship"): IdeaMemory.apprenticeship = float(args["apprenticeship"]) * TimeSystem.DAY_LENGTH
+	if args.has("reinvent"): IdeaMemory.reinvent = float(args["reinvent"])
+	if args.has("apprentices"): IdeaMemory.apprentices = int(args["apprentices"])
 	if args.has("ghost"): IdeaMemory.ghost_bonus = float(args["ghost"])
 	var speed := float(args.get("speed", "20"))   # game seconds per real second
 	var dt := float(args.get("dt", str(1.0 / 60.0)))  # real seconds per frame

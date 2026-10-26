@@ -322,8 +322,9 @@ func _sync_knowledge_pool(agents: Array, concept_graph: ConceptGraph) -> void:
 					var chosen: String = str(pool_keys[randi() % pool_keys.size()])
 					# Only from someone still there to show them: the pool outlives
 					# its holders, and learning from it brought lost ideas back
-					# unseen (feat/ideas).
-					if not a.is_dead and not a.knowledge.has(chosen) and _member_holds(s, chosen, agents):
+					# unseen. Master crafts need an apprenticeship (feat/ideas).
+					if not a.is_dead and not a.knowledge.has(chosen) and not IdeaMemory.is_master_craft(chosen) \
+							and _member_holds(s, chosen, agents):
 						if concept_graph: concept_graph._grant(a, chosen)
 						else: a.knowledge[chosen] = true
 

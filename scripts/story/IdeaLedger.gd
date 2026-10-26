@@ -89,6 +89,8 @@ func recount(agents: Array, day: int, recently_dead: Array = []) -> Array:
 			if stage == Stage.WILTED:
 				rec["lost_day"] = day
 				rec["times_lost"] = int(rec["times_lost"]) + 1
+				rec["refound_by"] = ""
+				rec["refound_day"] = -1
 				var last = last_holder.get(id, null)
 				rec["lost_with"] = last.agent_name if last else str(rec.get("lost_with", ""))
 				# Where it was last known: the last holder's place when they died.
