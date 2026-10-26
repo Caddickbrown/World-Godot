@@ -74,6 +74,7 @@ const ORDER := ["planting", "midsummer", "harvest", "mourning", "midwinter"]
 ## remembered (names), year}
 var active: Array = []
 var held_count := 0                 # festivals ever held (tests, balance)
+var held_by_kind: Dictionary = {}   # kind -> times held (tools/balance.gd)
 var _held: Dictionary = {}          # "sid:kind:year" -> true
 var _dead: Dictionary = {}          # settlement id -> names who died since it last remembered
 var _years: Dictionary = {}         # "sid:kind" -> times held
@@ -238,6 +239,7 @@ func _start(kind: String, s, day: int, time_system: TimeSystem) -> void:
 	var year := year_of(day - day_shift(s, kind))
 	_held["%d:%s:%d" % [s.id, kind, year]] = true
 	held_count += 1
+	held_by_kind[kind] = int(held_by_kind.get(kind, 0)) + 1
 	var key := "%d:%s" % [s.id, kind]
 	_years[key] = int(_years.get(key, 0)) + 1
 	var end_time := time_system.game_time + (float(r["end"]) - time_system.hour) / 24.0 * TimeSystem.DAY_LENGTH
@@ -354,7 +356,11 @@ func _gathered(f: Dictionary, s) -> void:
 	var r: Dictionary = KINDS[kind]
 	if kind == "harvest":
 		_feast(f, s)
-	var first: bool = int(f["year"]) == 1
+	# The first of its kind each year is news everywhere; the rest go in the
+	# chronicle for those who follow someone there.
+	var told_key := "told:%s:%d" % [kind, year_of(_world.day if _world else 1)]
+	var first := not _held.has(told_key)
+	_held[told_key] = true
 	_events.append({"kind": "gathered", "festival": kind, "pos": f["focus"], "ids": _ids(f),
 		"text": _tell(f), "major": first, "moment": r["moment"],
 		"note": "%s, %s, day %d" % [r["name"], f["place"], (_world.day if _world else 0)],
@@ -406,26 +412,33 @@ func _focus_for(kind: String, s) -> Vector2:
 	match kind:
 		"mourning":
 			return s.temple_pos if s.has_temple else s.centre + SettlementRenderer.SHRINE_AT
-		"harvest":
-			return s.centre + Vector2.from_angle(_yaw(s) + PI * 0.5) * 3.2
-		"planting":
-			return _meadow(s)
+		"harvest", "planting":
+			return _meadow(s, 0.0 if kind == "planting" else 0.8)
 	return s.centre
 
 static func _yaw(s) -> float:
 	return fmod(float(s.id) * 2.39996 + 0.7, TAU)
 
-## Open meadow a short walk from the hearth (the camp sows there).
-func _meadow(s) -> Vector2:
+## Open meadow just past the camp's houses (it sows there, and the harvest
+## table stands there): further out the bigger the place.
+func _meadow(s, turn: float = 0.0) -> Vector2:
+	var out := clampf(4.0 + 0.4 * s.member_ids.size(), 6.0, 16.0)
 	if _world == null:
-		return s.centre + Vector2(5, 0)
-	for ring in [5.0, 6.5, 4.0, 8.0]:
+		return s.centre + Vector2.from_angle(_yaw(s) + turn) * out
+	for ring in [out, out + 1.5, out + 3.0]:
 		for k in 12:
-			var p: Vector2 = s.centre + Vector2.from_angle(_yaw(s) + TAU * k / 12.0) * ring
-			var t := _world.get_tile_f(p.x, p.y)
-			if not t.is_empty() and int(t["type"]) == World.TileType.GRASS and not bool(t.get("flooded", false)):
+			var p: Vector2 = s.centre + Vector2.from_angle(_yaw(s) + turn + TAU * k / 12.0) * ring
+			if _open(p):
 				return p
-	return s.centre + Vector2.from_angle(_yaw(s)) * 5.0
+	return s.centre + Vector2.from_angle(_yaw(s) + turn) * out
+
+## Grass all round (a table or a line of sowers fits).
+func _open(p: Vector2) -> bool:
+	for o in [Vector2.ZERO, Vector2(1.5, 0), Vector2(-1.5, 0), Vector2(0, 1.5), Vector2(0, -1.5)]:
+		var t := _world.get_tile_f(p.x + o.x, p.y + o.y)
+		if t.is_empty() or int(t["type"]) != World.TileType.GRASS or bool(t.get("flooded", false)):
+			return false
+	return true
 
 func world_pos(tile: Vector2) -> Vector3:
 	var y := _world.surface_y(tile.x, tile.y) if _world else 0.0

@@ -11,7 +11,7 @@ extends Control
 ## after it has been thought. N toggles it (kept in the HUD's settings).
 
 const REFRESH_SECONDS := 1.5       # real seconds between looks at the world
-const MAX_ITEMS := 4
+const MAX_ITEMS := 3
 const MAX_MARKERS := 3
 const NEWBORN_SECONDS := 20.0      # game seconds a birth stays worth a look (about 4 hours)
 const FADING_SECONDS := 15.0       # an old life within this of its end (about 3 hours)
@@ -33,12 +33,13 @@ func _init() -> void:
 
 func _ready() -> void:
 	_panel = UiTheme.panel()
-	_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	# Bottom left, beside the minimap (the chronicle has the right).
+	_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_panel.grow_horizontal = Control.GROW_DIRECTION_END
 	_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_panel.offset_right = -16
+	_panel.offset_left = 22 + Minimap.SIZE + 22
+	_panel.offset_right = _panel.offset_left
 	_panel.offset_bottom = -44
-	_panel.offset_left = -16
 	_panel.offset_top = -44
 	_panel.modulate.a = 0.92
 	_panel.visible = false
@@ -111,8 +112,20 @@ static func gather(m) -> Array:
 			if p.x >= 0.0 and now - (float(e["day"]) * 24.0 + float(e["hour"])) <= IDEA_HOURS:
 				out.append({"kind": "idea", "text": "A new idea %s" % where(m, p), "pos": p, "rank": 2})
 				break
-	out.sort_custom(func(x, y): return int(x["rank"]) > int(y["rank"]))
-	return out.slice(0, MAX_ITEMS)
+	# One of each kind (the nearest to where you're looking), most notable first.
+	var eye: Vector2 = m._focus_tile() if m.has_method("_focus_tile") else Vector2(m.world.width, m.world.height) * 0.5
+	out.sort_custom(func(x, y):
+		if int(x["rank"]) != int(y["rank"]):
+			return int(x["rank"]) > int(y["rank"])
+		return (x["pos"] as Vector2).distance_to(eye) < (y["pos"] as Vector2).distance_to(eye))
+	var seen := {}
+	var one_each: Array = []
+	for h in out:
+		var k := str(h["kind"]).trim_suffix("_soon")
+		if not seen.has(k):
+			seen[k] = true
+			one_each.append(h)
+	return one_each.slice(0, MAX_ITEMS)
 
 ## "at Elm Cross", "near a camp", "in the north-west".
 static func where(m, p: Vector2) -> String:

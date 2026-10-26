@@ -23,6 +23,10 @@
 # --rainbow       stand a rainbow where the camera looks (after the sim)
 # --disaster=D    drought | flood | blight round where the camera looks
 # --rider         follow someone on horseback (after the sim; use --teach=horse_taming)
+# --festival=K    hold festival K (midsummer | harvest | midwinter | mourning | planting) at the
+#                 biggest camp (after --sim): teach it what it needs, wind to its day, let the
+#                 camp gather until --hour (default 1.5 h in), and look there
+# --no-hints      hide the HUD's "something's happening" hints
 # --inspect       show the inspect card for whatever is where the camera looks
 # --no-hud        hide the HUD
 # --style=S       UI look: storybook | fieldnotes
@@ -76,6 +80,10 @@ func _ready() -> void:
 		var steps := int(float(args["sim"]) / 20.0 * 30.0)
 		for i in steps:
 			main._process(1.0 / 30.0)
+	var fest_focus := Vector2(-1, -1)
+	if args.has("festival"):
+		fest_focus = _hold_festival(main, str(args["festival"]), float(args.get("hour", "-1")))
+		args.erase("hour")
 	if args.has("hour"):
 		var ts: TimeSystem = main.time_system
 		var want := float(args["hour"]) / 24.0
@@ -132,6 +140,9 @@ func _ready() -> void:
 		if big:
 			obs.look_at_point(Vector3(big.centre.x, 0, big.centre.y) * World.TILE_SIZE)
 			print("[Capture] camp %s: %d people, tier %d, timber %.0f" % [big.name, big.member_ids.size(), big.tier, big.wood_store])
+	if fest_focus.x >= 0.0:
+		obs.look_at_point(Vector3(fest_focus.x, 0, fest_focus.y) * World.TILE_SIZE)
+		if not args.has("distance"): obs.distance = 30.0
 	var look_tile := Vector2(obs.target.x, obs.target.z) / World.TILE_SIZE
 	if args.has("disaster"):
 		var kinds := {"drought": DisasterSystem.DisasterType.DROUGHT, "flood": DisasterSystem.DisasterType.FLOOD,
@@ -223,6 +234,8 @@ func _ready() -> void:
 			hud.show_inspect(Inspect.describe(main, main.observer.target))
 	if args.has("no-hud") and hud:
 		hud.visible = false
+	if args.has("no-hints") and hud and hud.get("hints"):
+		hud.hints.visible = false
 	main._update_hud()
 	_mark("set up")
 	for i in int(args.get("frames", "8")):
@@ -234,6 +247,40 @@ func _ready() -> void:
 	var err := img.save_png(out)
 	print("[Capture] %s %s" % [out, "ok" if err == OK else "FAILED %d" % err])
 	get_tree().quit(0 if err == OK else 1)
+
+## Sets the biggest camp up to keep `kind`, winds the clock to its day and
+## runs the world (at 20x) until `hour` (default 1.5 hours in) with it under way.
+func _hold_festival(main: Node, kind: String, hour: float) -> Vector2:
+	if not FestivalSystem.KINDS.has(kind):
+		return Vector2(-1, -1)
+	var big = null
+	for st in main.settlement_system.get_settlements():
+		if big == null or st.member_ids.size() > big.member_ids.size():
+			big = st
+	if big == null:
+		print("[Capture] no camp for a festival (use --sim)")
+		return Vector2(-1, -1)
+	var r: Dictionary = FestivalSystem.KINDS[kind]
+	for id in r["all"] + (r["any"] as Array).slice(0, 1) + ["calendar", "music"]:
+		big.knowledge_pool[id] = true
+	if kind == "mourning":
+		main.festival_system._dead[big.id] = ["Aru", "Belen", "Cosi"]
+	var ts: TimeSystem = main.time_system
+	var year := FestivalSystem.year_of(ts.day)
+	var day := FestivalSystem.day_of(big, kind, year)
+	if day < ts.day:
+		day = FestivalSystem.day_of(big, kind, year + 1)
+	ts.game_time = (float(day - 1) + (float(r["start"]) + 0.1) / 24.0) * TimeSystem.DAY_LENGTH
+	var want := hour if hour >= 0.0 else float(r["start"]) + 1.5
+	ts.set_speed(20.0)
+	for i in 600:
+		main._process(1.0 / 30.0)
+		if ts.hour >= want or ts.day > day:
+			break
+	var f: Dictionary = main.festival_system.festival_of(big.id)
+	print("[Capture] festival %s at %s, day %d %.1fh: %d there" % [kind, big.name, ts.day, ts.hour,
+		(f.get("people", []) as Array).size()])
+	return f.get("focus", big.centre)
 
 static func parse_args(raw: PackedStringArray) -> Dictionary:
 	var out := {}
