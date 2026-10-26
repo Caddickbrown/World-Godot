@@ -8,11 +8,11 @@ extends Control
 
 signal chosen(agent_id: int)
 
-const NODE_W := 96.0
+const NODE_W := 86.0
 const NODE_H := 40.0
-const GAP := 10.0
+const GAP := 8.0
 const ROW_GAP := 26.0
-const MAX_ROW := 7
+const MAX_ROW := 6
 
 ## [{id, row, pos (top-left), dead, legend, focus, more}]
 var nodes: Array = []
@@ -174,8 +174,8 @@ static func _twig(a: Vector2, b: Vector2, salt: int) -> PackedVector2Array:
 
 func _leaf(at: Vector2, left: bool) -> void:
 	var dir := Vector2(-1.0 if left else 1.0, -0.6).normalized()
-	var tip := at + dir * 10.0
-	var side := Vector2(-dir.y, dir.x) * 3.2
+	var tip := at + dir * 13.0
+	var side := Vector2(-dir.y, dir.x) * 4.2
 	var mid := (at + tip) / 2.0
 	draw_colored_polygon(PackedVector2Array([at, mid + side, tip, mid - side]), UiTheme.c("good"))
 

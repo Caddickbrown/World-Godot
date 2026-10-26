@@ -20,10 +20,15 @@ const NAMED_FOR_GRANDPARENT := 0.4   # chance, when a grandparent has died
 const NAMED_FOR_LEGEND := 0.15       # chance, else, when the camp has a legend
 ## A legend: a first discovery, or a long life, many children, many taught.
 const LEGEND_AGE_DAYS := 9.0
-const LEGEND_CHILDREN := 6
-const LEGEND_TAUGHT := 15
-## Per second, per elder at the fire with a legend to tell.
+const LEGEND_CHILDREN := 7
+const LEGEND_TAUGHT := 100
+## Per second, per elder with a legend to tell, in the evening (at the fire,
+## or wherever people sit together: in practice the fire is often empty).
 const TELL_RATE := 1.0 / 25.0
+const EVENING_FROM := 18.0
+const EVENING_TO := 23.0
+## How long a listener keeps turning a story over (game seconds; half a day).
+const ECHO_SECONDS := 60.0
 const TELL_SECONDS := 6.0
 const HEAR_RADIUS := 5.0
 const CHECK_INTERVAL := 3.0
@@ -52,6 +57,7 @@ var concept_names: Dictionary = {}   # id -> display name (for deeds)
 var _seed := 0
 var _rng := RandomNumberGenerator.new()
 var _check := 0.0
+var _echo: Dictionary = {}   # listener id -> seconds left with the story on their mind
 
 
 func setup(founders: Array, world_seed: int, concepts: Dictionary = {}) -> void:
@@ -208,15 +214,21 @@ func note_death(a: Agent, day: int, settlement_system = null, living: Array = []
 ## Keeps partners and camps current, lets legends fade or become myths, and
 ## has elders at the fire tell them. Reads agents; writes only a teller's
 ## speech bubble and what listeners have heard.
-func tick(delta: float, agents: Array, settlement_system = null) -> void:
+## hour < 0: only those at the fire tell (tests).
+func tick(delta: float, agents: Array, settlement_system = null, hour: float = -1.0) -> void:
 	_check += delta
+	if not _echo.is_empty() and delta > 0.0:
+		_fade_echoes(delta, agents)
 	if _check >= CHECK_INTERVAL:
 		_check = 0.0
 		_refresh(agents, settlement_system)
 	if legends.is_empty() or delta <= 0.0:
 		return
+	var evening := hour >= EVENING_FROM and hour < EVENING_TO
 	for a in agents:
-		if a.is_dead or not a.at_fire or not a.is_elderly or a.speech_bubble_timer > 0.0:
+		if a.is_dead or not a.is_elderly or a.speech_bubble_timer > 0.0:
+			continue
+		if not (a.at_fire or (evening and a.state != Agent.State.SLEEPING)):
 			continue
 		if _rng.randf() >= TELL_RATE * delta:
 			continue
@@ -382,12 +394,31 @@ func _tell(a: Agent, lid: int, agents: Array) -> void:
 	a.say(line, TELL_SECONDS)
 	var heard: Array = []
 	for o in agents:
-		if o == a or o.is_dead or not o.at_fire or o.pos.distance_to(a.pos) > HEAR_RADIUS:
+		if o == a or o.is_dead or o.state == Agent.State.SLEEPING or o.pos.distance_to(a.pos) > HEAR_RADIUS:
 			continue
 		(l["heard"] as Dictionary)[o.agent_id] = true
 		o.heard_legend = line
+		_echo[o.agent_id] = ECHO_SECONDS
 		heard.append(o.agent_id)
+	if heard.is_empty():
+		# Nobody to tell: they keep it for another evening.
+		a.speech_bubble = ""
+		a.speech_bubble_timer = 0.0
+		return
 	_emit({"kind": "told", "teller_id": a.agent_id, "teller": a.agent_name, "legend_id": lid,
 		"legend": l["name"], "deed": l["deed"], "line": line, "pos": a.pos, "first": int(l["told"]) == 0,
-		"heard": heard})
+		"heard": heard, "at_fire": a.at_fire})
 	l["told"] = int(l["told"]) + 1
+
+func _fade_echoes(delta: float, agents: Array) -> void:
+	var done: Array = []
+	for id in _echo:
+		_echo[id] = float(_echo[id]) - delta
+		if float(_echo[id]) <= 0.0:
+			done.append(id)
+	for id in done:
+		_echo.erase(id)
+		for a in agents:
+			if a.agent_id == id:
+				a.heard_legend = ""
+				break

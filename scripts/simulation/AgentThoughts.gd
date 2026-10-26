@@ -42,7 +42,7 @@ static func thought(a: Agent) -> String:
 		return "Zzz…"
 	if a.mourning > 0.0 and a.mourning_for != "":
 		return "I keep looking for %s by the fire." % a.mourning_for
-	if a.at_fire and a.heard_legend != "":
+	if a.heard_legend != "":
 		return a.heard_legend
 	if a.chore == "planting a tree" and a.state == Agent.State.GATHERING:
 		return "Someone will sit in the shade of this one."

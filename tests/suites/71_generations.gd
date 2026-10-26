@@ -142,7 +142,37 @@ func _legends(t) -> void:
 	t.check("...and the child beside them heard it", kid.heard_legend == told and (lt.legends[f["gp_a"].agent_id]["heard"] as Dictionary).has(kid.agent_id))
 	t.check("listening in shows what they heard at the fire", AgentThoughts.thought(kid) == told)
 	var evs := lt.drain_events().filter(func(e): return e["kind"] == "told")
-	t.check("the telling is an event for the story", evs.size() == 1 and bool(evs[0]["first"]))
+	t.check("the telling is an event for the story", evs.size() == 1 and bool(evs[0]["first"]) and evs[0]["heard"] == [kid.agent_id])
+	# Told in the evening wherever people sit together, not only at the fire;
+	# never to nobody, and never by day away from the fire.
+	mum.at_fire = false
+	kid.at_fire = false
+	mum.speech_bubble_timer = 0.0
+	mum.speech_bubble = ""
+	var by_day := false
+	for i in 300:
+		lt.tick(1.0, [mum, kid], null, 12.0)
+		by_day = by_day or mum.speech_bubble != ""
+	t.check("no legends by day away from the fire", not by_day)
+	var evening := false
+	for i in 600:
+		lt.tick(1.0, [mum, kid], null, 20.0)
+		if mum.speech_bubble != "":
+			evening = true
+			break
+	t.check("...but in the evening, among others, yes", evening)
+	t.check("...and the story stays on the listener's mind", kid.heard_legend != "")
+	lt.drain_events()
+	for i in int(LineageTracker.ECHO_SECONDS) + 5:
+		lt.tick(1.0, [mum, kid], null, 12.0)
+	t.check("a story heard stays on the mind for a while, then goes", kid.heard_legend == "")
+	mum.speech_bubble_timer = 0.0
+	mum.speech_bubble = ""
+	var alone := false
+	for i in 300:
+		lt.tick(1.0, [mum], null, 20.0)
+		alone = alone or mum.speech_bubble != ""
+	t.check("nobody tells a legend to no one", not alone)
 	var away: Agent = t._adult(40, 40)
 	away.age = away.life_expectancy * 0.8
 	away.at_fire = true
@@ -174,9 +204,10 @@ func _fading_and_myth(t) -> void:
 			t.check("with oral tradition, a legend outlives all who knew them: a myth", l["myth"] and not l["faded"] and "myth" in kinds)
 			newcomer.age = newcomer.life_expectancy * 0.8
 			newcomer.at_fire = true
+			var ear: Agent = t._adult(30.5, 30)
 			var said := ""
 			for i in 600:
-				lt.tick(1.0, [newcomer])
+				lt.tick(1.0, [newcomer, ear])
 				if newcomer.speech_bubble != "":
 					said = newcomer.speech_bubble
 					break
@@ -196,11 +227,12 @@ func _telling_is_per_second(t) -> void:
 		var mum: Agent = f["mum"]
 		mum.age = mum.life_expectancy * 0.8
 		mum.at_fire = true
+		var ear: Agent = t._adult(11.5, 10)
 		var n := 0
 		for i in int(4000.0 / step):
 			mum.speech_bubble_timer = 0.0
 			mum.speech_bubble = ""
-			lt.tick(step, [mum])
+			lt.tick(step, [mum, ear])
 			if mum.speech_bubble != "":
 				n += 1
 		counts.append(n)
@@ -263,7 +295,7 @@ func _story_and_album(t) -> void:
 	var text := " ".join(keeper.chronicle.map(func(e): return e["text"]))
 	t.check("the chronicle tells of the legend", text.contains("legends of"))
 	t.check("...of the telling at the fire", text.contains("At the fire, %s told" % mum.agent_name))
-	t.check("...and of the child named for them", text.contains("%s is named for %s" % [kid.agent_name, f["gp_a"].agent_name]))
+	t.check("...and of the child named for them", text.contains("A new baby is called %s, after a grandparent" % f["gp_a"].agent_name))
 	t.check("the namesake's life remembers it", keeper.life_of(f["gp_a"]).events.any(func(e): return str(e["text"]).contains("named for them")))
 	for id in ["named_for", "legend_told"]:
 		t.check("moment %s unlocks" % id, keeper.moments.is_unlocked(id))

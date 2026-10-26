@@ -484,7 +484,7 @@ func _process(delta: float) -> void:
 	island_history.observe(self)
 	_prof("island history")
 
-	lineage_tracker.tick(game_delta, agents, settlement_system)
+	lineage_tracker.tick(game_delta, agents, settlement_system, time_system.hour)
 	for evt in lineage_tracker.drain_events():
 		story.on_lineage(evt)
 	_feed_story(game_delta, alive_count)

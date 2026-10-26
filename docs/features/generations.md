@@ -34,16 +34,20 @@ follow card say so. People have no gender in the simulation, so words stay neutr
 ## Legends
 
 When someone dies they become a **legend of their camp** if they were the first to think of an
-idea, raised 6+ children, taught 15+ people, or lived 9+ days (of a 6–10 day life). The deed is
+idea, raised 7+ children, taught 100+ people (teaching counts every person taught each idea; measured, the busiest teachers reach 36 to 134), or lived 9+ days (of a 6–10 day life). The deed is
 told in their words: "first made fire", "spoke the first words", "raised 7 children",
 "lived to a great age".
 
 - **Who knew them:** at death, everyone living in the same camp, plus family.
-- **Telling:** an elder at the evening fire, with no line already in the air, tells a legend
-  they knew (or heard, or a myth of their camp) with a chance of 1/25 per second (multiplied by
-  delta). The least-told legend goes first. The line is a speech bubble: "My parent Aya first
-  made fire.", "Old Aya first made fire, they say.", "Long ago, Aya first made fire, they say."
-  Everyone at the fire within 5 tiles hears it; listening in on them shows it as their thought.
+- **Telling:** an elder at the fire, or awake anywhere in the evening (18:00 to 23:00), with
+  no line already in the air, tells a legend they knew (or heard, or a myth of their camp) with
+  a chance of 1/25 per second (multiplied by delta). The least-told legend goes first. The line
+  is a speech bubble: "My parent Aya first made fire.", "Old Aya first made fire, they say.",
+  "Long ago, Aya first made fire, they say." Everyone awake within 5 tiles hears it, and it
+  stays on their mind for half a day (listening in shows it as their thought). Nobody tells a
+  story to no one. The evening rule is there because, measured, the fire ring is almost always
+  empty (12 samples of someone at a fire in 9 days of seed 3), so "at the fire" alone meant one
+  telling a world.
 - **Fading:** when the last person who knew them has died, the legend fades ("No one is left
   who remembers Aya...") unless a living member of their camp knows **oral tradition**
   (`oral_tradition` in `data/concepts.json`): then it becomes a **myth** and any elder of the
@@ -54,7 +58,7 @@ told in their words: "first made fire", "spoke the first words", "raised 7 child
 ## Family twig (`scripts/ui/FamilyTwig.gd`)
 
 On a life's page (Lives, L): grandparents, parents, the person and their partner, children and
-grandchildren (7 a row, then "+N"), joined by bent twigs. Storybook: ink twigs with a leaf, a
+grandchildren (6 a row, then "+N"), joined by bent twigs. Storybook: ink twigs with a leaf, a
 berry dot on the partner line. Field notes: ochre hairlines. The dead are paler; a legend wears
 a small star. Click a relative to open their life. Great-grandchildren are counted under it.
 The follow card adds "Named for Aya." and "3 grandchildren.".
