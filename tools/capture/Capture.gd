@@ -16,6 +16,7 @@
 # --teach=A,B     give every founder these ideas before the sim (to show what they do)
 # --burn          set the wood nearest the founders alight before the sim, and look there
 # --camp          look at the biggest settlement (after --sim)
+# --pair          look between the two nearest settlements (to compare their cultures)
 # --animal=T      look at the nearest living animal of type T (deer, wolf, rabbit, ...)
 # --wild=K        look at the first of the small wild things: whales | shoals | flocks |
 #                 robins | butterflies | swarms | hives | frogs (AmbientLife)
@@ -132,6 +133,22 @@ func _ready() -> void:
 		if big:
 			obs.look_at_point(Vector3(big.centre.x, 0, big.centre.y) * World.TILE_SIZE)
 			print("[Capture] camp %s: %d people, tier %d, timber %.0f" % [big.name, big.member_ids.size(), big.tier, big.wood_store])
+	if args.has("pair"):
+		# Two neighbouring camps side by side, to compare their ways (feat/cultures).
+		var all: Array = main.settlement_system.get_settlements()
+		var best_d := INF
+		var pick: Array = []
+		for i in all.size():
+			for j in range(i + 1, all.size()):
+				var dd: float = all[i].centre.distance_to(all[j].centre)
+				if dd < best_d:
+					best_d = dd
+					pick = [all[i], all[j]]
+		if not pick.is_empty():
+			var mid: Vector2 = (pick[0].centre + pick[1].centre) * 0.5
+			obs.look_at_point(Vector3(mid.x, 0, mid.y) * World.TILE_SIZE)
+			for st in pick:
+				print("[Capture] %s (%d people): %s" % [st.name, st.member_ids.size(), st.culture.describe() if st.culture else "-"])
 	var look_tile := Vector2(obs.target.x, obs.target.z) / World.TILE_SIZE
 	if args.has("disaster"):
 		var kinds := {"drought": DisasterSystem.DisasterType.DROUGHT, "flood": DisasterSystem.DisasterType.FLOOD,

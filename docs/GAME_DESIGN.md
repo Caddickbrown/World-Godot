@@ -122,6 +122,7 @@ out; each area has its notes (rules, numbers, what is still open):
 | Sky and seasons | `docs/features/sky.md` | Weather where you look, clouds, rain curtains, lightning, rainbows, stars, seasons on land and trees, droughts, floods, blight |
 | Ideas that matter | `docs/features/ideas.md` | Every idea effect and items.json key read by code (tested); firsts in the chronicle |
 | Places and maps | `docs/features/places.md` | Buildings from ideas, worn paths, discovery glow, minimap, inspect, Island screen, seed |
+| Cultures | `docs/features/cultures.md` | Each camp's own dye, roofs, decoration, layout, food, craft and naming; visits and weddings between camps (ideas travel with who moves); rare feuds that always mend; crowded camps found daughter camps |
 
 ## Milestones
 

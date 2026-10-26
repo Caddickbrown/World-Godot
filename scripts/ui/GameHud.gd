@@ -307,6 +307,9 @@ func _fill_follow_card(a: Agent) -> void:
 		if st:
 			bits.append(st.name)
 	v.add_child(UiTheme.label(" · ".join(bits), "body", 15, "muted"))
+	if main and main.get("culture_system"):   # home and birth camp, and the home camp's ways (feat/cultures)
+		var ways: String = main.culture_system.card_culture(a)
+		v.add_child(UiTheme.wrap(UiTheme.label(main.culture_system.card_line(a) + ("\n" + ways if ways != "" else ""), "body", 13, "muted"), 260))
 	var doing := AgentThoughts.doing(a)
 	v.add_child(UiTheme.wrap(UiTheme.label(doing.left(1).to_upper() + doing.substr(1), "strong", 16, "warn" if float(a.needs["hunger"]) < 0.3 else "text"), 260))
 	v.add_child(UiTheme.wrap(UiTheme.label("(%s)" % AgentThoughts.thought(a), "hand", 19, "cool"), 260))

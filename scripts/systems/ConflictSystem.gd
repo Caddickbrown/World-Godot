@@ -12,6 +12,9 @@ var _conflict_pairs: Dictionary = {}  # "id1:id2" → cooldown float
 ## Settlement membership decides who is "us". Agents with no settlement belong
 ## to nobody's faction and never clash; nor do two members of one settlement.
 var settlement_system = null  # SettlementSystem, optional
+## Feuding camps (CultureSystem) shove each other even when nobody is hungry.
+## A clash only ever costs energy, so a feud is grumpy, never deadly.
+var culture_system = null
 
 var _delta: float = 0.0
 
@@ -132,7 +135,8 @@ func _check_agent_conflict(agent_a: Agent, agent_b: Agent, day: int, history_log
 		return
 
 	# People fight over food, not for sport: one of them must be going hungry.
-	if minf(float(agent_a.needs.get("hunger", 1.0)), float(agent_b.needs.get("hunger", 1.0))) > HUNGRY_BELOW:
+	if minf(float(agent_a.needs.get("hunger", 1.0)), float(agent_b.needs.get("hunger", 1.0))) > HUNGRY_BELOW \
+			and not (culture_system != null and culture_system.is_feuding(fa, fb)):
 		return
 
 	# Must be within CONFLICT_RADIUS tiles

@@ -78,6 +78,14 @@ func _initialize() -> void:
 			tiers[clampi(int(st.tier), 0, 2)] += 1
 		print("  woods: %d tiles (start %d), %d young, %d planted; felled %d, planted %d; camps/hamlets/towns %s" % [
 			woods, int(main.get_meta("woods_start", -1)), young, planted, main.forest_system.felled, main.forest_system.planted, str(tiers)])
+		# Cultures (feat/cultures): camps meeting, splitting, falling out.
+		var cs = main.get("culture_system")
+		if cs:
+			var moves := 0
+			for st in main.settlement_system.get_settlements():
+				moves += int(st.moves)
+			print("  cultures: weddings between camps %d (ideas carried %d), visits %d (%d paired), daughter camps %d, camp moves %d, feuds %d (mended %d), killed in quarrels %d" % [
+				cs.cross_marriages, cs.ideas_carried, cs.visits_made, cs.sparks, cs.daughters, moves, cs.feuds_started, cs.feuds_mended, int(causes.get("conflict", 0))])
 		main.queue_free()
 		await process_frame
 	quit()

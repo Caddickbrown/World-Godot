@@ -200,6 +200,21 @@ func on_world(text: String, pos: Vector2 = Vector2(-1, -1), moment: String = "")
 	if moment != "":
 		_try_moment(moment, pos, [], "day %d: %s" % [day, text])
 
+## CultureSystem events (feat/cultures): weddings between camps, feuds and
+## their mending, daughter camps. {kind, text, pos, ids, major, moment, note,
+## life: {agent_id: text}, then: a follow-on event}.
+func on_culture(evt: Dictionary, agents: Array = []) -> void:
+	add(str(evt["kind"]), str(evt["text"]), evt["pos"], evt["ids"], bool(evt["major"]))
+	var life: Dictionary = evt.get("life", {})
+	for id in life:
+		var who: Agent = _find(agents, int(id))
+		if who:
+			_event(who, str(life[id]), "people")
+	if str(evt.get("moment", "")) != "":
+		_try_moment(str(evt["moment"]), evt["pos"], evt["ids"], str(evt.get("note", "")))
+	if evt.has("then"):
+		on_culture(evt["then"], agents)
+
 ## Player-side moments (zoomed out, walked, listened).
 func on_player(moment: String, note: String = "") -> void:
 	_try_moment(moment, Vector2(-1, -1), [], note if note != "" else "day %d" % day)

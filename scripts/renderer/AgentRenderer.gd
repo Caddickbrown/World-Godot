@@ -320,13 +320,18 @@ func update() -> void:
 ## Tunic colour follows the settlement they live in (re-dressed when it changes).
 func _dress(e: Dictionary, agent: Agent) -> void:
 	var tribe := -1
+	var cul = null
 	if settlement_system:
 		var s = settlement_system.get_settlement_for_agent(agent.agent_id)
-		if s: tribe = int(s.id)
-	if tribe == int(e["tribe"]):
+		if s:
+			tribe = int(s.id)
+			cul = s.culture
+	# Their camp's dye (Culture, feat/cultures); re-dressed when it drifts.
+	var key := tribe * 1000 + (int(cul.version) if cul else 0)
+	if key == int(e["tribe"]):
 		return
-	e["tribe"] = tribe
-	var col := Color(0.82, 0.62, 0.40) if tribe < 0 else LookStyle.tribe(tribe)
+	e["tribe"] = key
+	var col: Color = Color(0.82, 0.62, 0.40) if tribe < 0 else (cul.dye() if cul else LookStyle.tribe(tribe))
 	(e["body"] as MeshInstance3D).material_override = _mat(LookStyle.g(col))
 
 func _update_overlays(entry: Dictionary, agent: Agent, feet: Vector3) -> void:
