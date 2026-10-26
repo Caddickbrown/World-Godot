@@ -45,10 +45,12 @@ stays calm.
 
 ## Cost
 
-- **Render once, off the main thread.** About 158 s of mono 22 kHz audio, 1-2 s of CPU (5-11 s
-  wall on a loaded 4-core box) on a low-priority thread started by the first `Soundscape`; loops
-  are wired in as soon as it finishes. Boot doesn't wait for it. The bank is static, so a new island
-  or a second Main reuses it.
+- **Render once, off the main thread, after boot.** About 158 s of mono 22 kHz audio, 1-2 s of
+  CPU (5-14 s wall on a loaded 4-core box) on a low-priority thread, started one real second after
+  the island exists (while the look picker is up, in a real game); loops fade in as soon as it
+  finishes. Started during boot it slowed boot from about 9 s to 15 s on the loaded box (it
+  competes for the cores); deferred, boot is unchanged (8.6-10.1 s with, 8.5-9.5 s without, three
+  runs each). The bank is static, so a new island or a second Main reuses it.
 - **Per frame**: easing about a dozen volumes, rolling call chances, the thunder queue: about
   0.2 ms. **Five times a second** a survey (about 40 tile reads, the fires, the living, the frogs):
   about 0.8 ms on a loaded machine.

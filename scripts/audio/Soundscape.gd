@@ -24,6 +24,7 @@ const STINGER_GAP := {"birth": 6.0, "death": 8.0, "discovery": 2.5, "moment": 1.
 ## Each bed's level at full (calibrated by ear against the others).
 const BED_GAIN := {"surf": 0.85, "wind": 0.5, "rain_soft": 0.7, "rain_leaves": 0.75, "crickets": 0.5, "chorus": 0.6}
 const SPOT_GAIN := {"fire": 0.9, "voices": 0.75, "festival": 0.8}
+const START_AFTER := 1.0           # real seconds after the world exists before the bank renders
 const FESTIVAL_SECONDS := 60.0      # game-seconds a festival plays if no end is heard (half a day)
 
 var main: Node = null
@@ -60,7 +61,6 @@ var _clock := 0.0
 func _ready() -> void:
 	rng.seed = 0x50DD
 	SoundSettings.load_settings()
-	SoundBank.start()
 	listener = AudioListener3D.new()
 	add_child(listener)
 	for name in SoundMixer.BEDS:
@@ -124,9 +124,13 @@ func _process(delta: float) -> void:
 ## One frame (real seconds). Public so tests and tools can drive it.
 func tick(delta: float) -> void:
 	_clock += delta
-	_wire()
 	if main == null or main.get("world") == null or main.get("time_system") == null:
 		return
+	# Render the bank once the island is built and the first frames are out,
+	# so it never competes with the boot.
+	if _clock > START_AFTER:
+		SoundBank.start()
+	_wire()
 	_watch_lightning()
 	_sample_t -= delta
 	if _sample_t <= 0.0:
