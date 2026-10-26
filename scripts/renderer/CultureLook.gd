@@ -36,12 +36,13 @@ static func dwelling_deco(k: PropKit, xf: Transform3D, cul: Culture, tier: int, 
 			k.cyl(0.05, 0.06, 4.2, xf * PropKit.at(Vector3(px, 0, door_z * 0.6)), wood, 5)
 			k.box(Vector3(1.2, 0.65, 0.05), xf * PropKit.at(Vector3(px + signf(px) * 0.62, 3.75, door_z * 0.6)), dye)
 		"antlers":
-			# Antlers over the door, and a band of the dye under them.
+			# Big antlers over the door, and a band of the dye under them.
+			var ay: float = [1.7, 1.9, 2.3][clampi(tier, 0, 2)]
 			for side in [-1.0, 1.0]:
 				var b := Basis(Vector3.FORWARD, side * 0.6)
-				k.box(Vector3(0.09, 0.9, 0.09), xf * Transform3D(b, Vector3(side * 0.28, 1.65, door_z + 0.05)), bone)
-				k.box(Vector3(0.07, 0.45, 0.07), xf * Transform3D(Basis(Vector3.FORWARD, side * 1.2), Vector3(side * 0.52, 1.95, door_z + 0.05)), bone)
-			k.box(Vector3(0.9, 0.16, 0.06), xf * PropKit.at(Vector3(0, 1.1, door_z + 0.04)), dye)
+				k.box(Vector3(0.12, 1.3, 0.12), xf * Transform3D(b, Vector3(side * 0.4, ay, door_z + 0.08)), bone)
+				k.box(Vector3(0.1, 0.6, 0.1), xf * Transform3D(Basis(Vector3.FORWARD, side * 1.2), Vector3(side * 0.75, ay + 0.4, door_z + 0.08)), bone)
+			k.box(Vector3(1.2, 0.22, 0.08), xf * PropKit.at(Vector3(0, ay - 0.55, door_z + 0.06)), dye)
 		"lanterns":
 			# A post by the door with a lantern; a dyed cloth hangs below it.
 			k.cyl(0.05, 0.06, 1.9, xf * PropKit.at(Vector3(0.95, 0, door_z)), wood, 5)
@@ -81,7 +82,9 @@ static func hearth_banner(k: PropKit, at: Vector3, cul: Culture) -> void:
 		return
 	var dye := LookStyle.g(cul.dye())
 	var wood := LookStyle.g(Color(0.40, 0.28, 0.18))
-	k.cyl(0.1, 0.12, 7.0, PropKit.at(at), wood, 6)
-	k.box(Vector3(0.1, 2.4, 1.9), PropKit.at(at + Vector3(0, 5.6, 1.0)), dye)
-	k.box(Vector3(0.11, 0.3, 1.9), PropKit.at(at + Vector3(0, 4.55, 1.0)), LookStyle.g(Color(0.95, 0.92, 0.84)))
-	k.ball(0.22, PropKit.at(at + Vector3(0, 7.1, 0)), LookStyle.g(Color(0.95, 0.84, 0.40)))
+	# A drum of dyed cloth round the pole reads from any side (a flat flag
+	# vanishes edge-on), with a pale hem and a gilded knob.
+	k.cyl(0.1, 0.12, 7.2, PropKit.at(at), wood, 6)
+	k.cyl(0.8, 0.8, 2.0, PropKit.at(at + Vector3(0, 4.6, 0)), dye, 10)
+	k.cyl(0.84, 0.84, 0.3, PropKit.at(at + Vector3(0, 4.45, 0)), LookStyle.g(Color(0.95, 0.92, 0.84)), 10)
+	k.ball(0.26, PropKit.at(at + Vector3(0, 7.3, 0)), LookStyle.g(Color(0.95, 0.84, 0.40)))

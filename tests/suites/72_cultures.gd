@@ -35,12 +35,16 @@ func _traits(t) -> void:
 	t.check("a new camp avoids the dye, roof and decoration a living camp already has",
 		c.dye_i != a.dye_i and c.roof_i != a.roof_i and c.deco_i != a.deco_i)
 	a.refresh({})
-	t.check("a camp that knows nothing eats berries and makes shell necklaces",
-		a.food == "berries and nuts" and a.craft == "shell necklaces")
+	t.check("a camp that knows nothing eats berries and makes a folk craft",
+		a.food == "berries and nuts" and Culture.FOLK_CRAFTS.has(a.craft))
 	var v := a.version
+	a.refresh({"weaving": true})
+	t.check("one craft idea isn't yet a craft of its own", Culture.FOLK_CRAFTS.has(a.craft))
 	var changed := a.refresh({"weaving": true, "fishing": true, "dyeing": true})
 	t.check("knowledge gives a camp its craft and its favourite food",
 		a.craft in ["baskets", "dyed cloth"] and a.food == "smoked fish" and changed.has("craft"))
+	a.refresh({"weaving": true, "fishing": true, "dyeing": true, "pottery": true, "music": true})
+	t.check("...and what it's known for sticks", a.craft in ["baskets", "dyed cloth"])
 	t.check("...and dyeing brightens its cloth (redrawn)", a.dyed and a.version > v)
 	a.refresh({"fishing": true}, false)
 	t.check("...no fish for a camp far from the water", a.food != "smoked fish")
@@ -116,10 +120,18 @@ func _wedding(t) -> void:
 	ss._reindex_members()
 	var everyone: Array = [a, b, kid] + others
 	cs.tick(0.1, everyone, 1, 12.0)   # first look: who lives where
-	cs.tick(0.1, everyone, 2, 12.0)
+	for p in everyone:
+		p.night_sleeping = true
+	cs.tick(CultureSystem.INTERVAL, everyone, 1, 22.0)
 	a.bonded_partner_id = b.agent_id
 	b.bonded_partner_id = a.agent_id
-	var out: Array = cs.tick(CultureSystem.INTERVAL, everyone, 2, 12.0)
+	var early: Array = cs.tick(CultureSystem.INTERVAL, everyone, 1, 22.5)
+	t.check("people not yet settled anywhere don't count as a wedding between camps",
+		early.filter(func(e): return e["moment"] == "wedding_camps").is_empty())
+	var out: Array = cs.tick(CultureSystem.INTERVAL, everyone, 2, 22.0)   # a second night at home
+	for p in everyone:
+		p.night_sleeping = false
+	out += cs.tick(CultureSystem.INTERVAL, everyone, 3, 12.0)
 	var wed: Array = out.filter(func(e): return e["moment"] == "wedding_camps")
 	t.check("a couple from two camps is a wedding between camps", wed.size() == 1 and cs.cross_marriages == 1)
 	t.check("...the one from the bigger camp moves, with their child",
@@ -129,7 +141,7 @@ func _wedding(t) -> void:
 		not wed.is_empty() and str(wed[0]["text"]).contains("Old Wood") and str(wed[0]["text"]).contains("weaving"))
 	t.check("the follow card shows home and birth camp (%s)" % cs.card_line(a),
 		cs.card_line(a).begins_with("Of Ash Vale") and cs.card_line(a).contains("first forty"))
-	out = cs.tick(CultureSystem.INTERVAL, everyone, 2, 12.0)
+	out = cs.tick(CultureSystem.INTERVAL, everyone, 4, 12.0)
 	t.check("...told once", out.filter(func(e): return e["moment"] == "wedding_camps").is_empty())
 
 func _feud(t) -> void:

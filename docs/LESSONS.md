@@ -157,3 +157,12 @@ One line of cause, one line of rule.
   Godot's RNG, so the GDScript twin produces the identical world and parity tests
   compare exactly (terrain colours within 1e-7, trees within 2e-6).
 
+
+## Cultures (feat/cultures)
+
+- **"Which camp" is not "home".** Membership is by distance from a hearth at a 2 s sweep, so a
+  forager is briefly a member of whichever camp they pass. The first weddings-between-camps
+  count read 40 in 14 days, most of them people who had simply wandered. Rule: home is where
+  someone sleeps, night after night; a story about belonging waits for that.
+- **Pin a walker.** Anyone sent to another camp (a wedding, a daughter camp, a visit) drops out of
+  it on the way unless something holds them there; SettlementSystem pins do, until they arrive.

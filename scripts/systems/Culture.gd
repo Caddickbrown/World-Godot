@@ -25,7 +25,7 @@ const DYES := [
 const UNDYED := Color(0.74, 0.62, 0.46)
 ## Roofs: [name, hut thatch colour, town roof colour, tent hide tint]
 const ROOFS := [
-	["straw thatch", Color(0.86, 0.72, 0.36), Color(0.62, 0.30, 0.22)],
+	["straw thatch", Color(0.86, 0.72, 0.36), Color(0.82, 0.62, 0.28)],
 	["grey reed", Color(0.62, 0.60, 0.54), Color(0.36, 0.40, 0.48)],
 	["green turf", Color(0.42, 0.58, 0.30), Color(0.34, 0.50, 0.28)],
 	["red ochre", Color(0.76, 0.38, 0.24), Color(0.74, 0.34, 0.20)],
@@ -46,8 +46,11 @@ const CRAFTS := [
 	["baskets", "weaving"], ["painted pots", "pottery"], ["carved bowls", "woodworking"],
 	["dyed cloth", "dyeing"], ["bone flutes", "music"], ["painted stones", "art"],
 	["soft leather", "tanning"], ["knotted cord", "rope_making"], ["bronze pins", "metallurgy"],
-	["stitched hides", "clothing"], ["shell necklaces", ""],
+	["stitched hides", "clothing"],
 ]
+## Before a camp has crafts of its own (two craft ideas), it is known for a folk craft.
+const FOLK_CRAFTS := ["shell necklaces", "grass dolls", "feather charms", "pebble games", "string figures", "acorn cups"]
+const CRAFT_IDEAS_NEEDED := 2
 ## How a camp names its daughters ("%s": the mother's name, or a part of it).
 const NAME_STYLES := ["New %s", "Little %s", "Far %s", "Upper %s", "%s End", "%s Green"]
 
@@ -63,6 +66,7 @@ var craft: String = ""
 var dyed: bool = false          # the camp knows dyeing: full colour
 var food_order: Array = []      # this camp's own preference order (indices into FOODS)
 var craft_order: Array = []
+var folk_i: int = 0
 var mother_id: int = -1
 var mother_name: String = ""
 var generation: int = 0
@@ -83,7 +87,8 @@ static func make(world_seed: int, settlement_id: int, used: Dictionary = {}) -> 
 	c.density = rng.randf_range(0.8, 1.25)
 	c.name_style = rng.randi() % NAME_STYLES.size()
 	c.food_order = _shuffled(rng, FOODS.size() - 1)   # the last ("berries") is everyone's fallback
-	c.craft_order = _shuffled(rng, CRAFTS.size() - 1)
+	c.craft_order = _shuffled(rng, CRAFTS.size())
+	c.folk_i = rng.randi() % FOLK_CRAFTS.size()
 	return c
 
 ## A daughter keeps her mother's ways and drifts a little: the dye's hue moves,
@@ -101,6 +106,7 @@ static func daughter_of(mother: Culture, settlement_id: int, mother_id: int, mot
 	c.name_style = mother.name_style
 	c.food_order = mother.food_order.duplicate()
 	c.craft_order = mother.craft_order.duplicate()
+	c.folk_i = mother.folk_i
 	if rng.randf() < 0.5 and c.craft_order.size() > 1:
 		c.craft_order.push_front(c.craft_order.pop_back())   # a new fashion
 	c.food = mother.food
@@ -135,7 +141,7 @@ func refresh(knowledge: Dictionary, near_water: bool = true) -> Dictionary:
 		changed["food"] = food
 		food = f
 	# What a camp is known for sticks once it is known for something.
-	var cr := craft if craft != "" and craft != str(CRAFTS[-1][0]) else _pick_craft(knowledge)
+	var cr := craft if has_own_craft() else _pick_craft(knowledge)
 	if cr != craft:
 		changed["craft"] = craft
 		craft = cr
@@ -156,12 +162,22 @@ func _pick_food(knowledge: Dictionary, near_water: bool) -> String:
 				return str(row[0])
 	return str(FOODS[-1][0])
 
+## Its own craft once it knows CRAFT_IDEAS_NEEDED craft ideas (the first in
+## its own order), so camps learning the same first idea still differ.
 func _pick_craft(knowledge: Dictionary) -> String:
+	var known := 0
+	var pick := ""
 	for i in craft_order:
 		var row: Array = CRAFTS[int(i)]
 		if knowledge.has(str(row[1])):
-			return str(row[0])
-	return str(CRAFTS[-1][0])
+			known += 1
+			if pick == "":
+				pick = str(row[0])
+	return pick if known >= CRAFT_IDEAS_NEEDED else str(FOLK_CRAFTS[folk_i])
+
+## Known for a craft from its ideas (not a folk craft): it sticks.
+func has_own_craft() -> bool:
+	return craft != "" and not FOLK_CRAFTS.has(craft)
 
 ## Drift one small step (daughters, now and then): the dye wanders.
 func drift(step: float) -> void:
@@ -211,9 +227,10 @@ func describe() -> String:
 		out += " Loves %s; known for %s." % [food, craft]
 	return out
 
-## Short, for the follow card: "Woad blue cloth · grey reed roofs · loves flatbread · baskets".
+## Short, for the follow card: "Woad blue cloth · loves flatbread · baskets".
 func short() -> String:
-	var bits: Array = ["%s %s" % [dye_name().capitalize(), "cloth" if dyed else "hides"], "%s roofs" % roof_name()]
+	var dn := dye_name()
+	var bits: Array = ["%s%s %s" % [dn.left(1).to_upper(), dn.substr(1), "cloth" if dyed else "hides"]]
 	if food != "":
 		bits.append("loves %s" % food)
 	if craft != "":
@@ -223,12 +240,14 @@ func short() -> String:
 ## A daughter's name in this culture's style, from the mother's name.
 func daughter_name(mother: String, taken: Dictionary) -> String:
 	var words := mother.split(" ")
-	var base := mother if words.size() <= 2 else words[-1]
+	# "New Ash Vale" has a daughter "Little Vale", not "Little New Ash Vale".
+	var base := mother if words.size() <= 2 and not (words[0] in ["New", "Little", "Far", "Upper"]) else words[-1]
 	for k in NAME_STYLES.size():
 		var style: String = NAME_STYLES[(name_style + k) % NAME_STYLES.size()]
+		var word := style.replace("%s", "").strip_edges()
+		if word in words:
+			continue   # not "Green Ford Green"
 		var n := style % base
-		if (style.begins_with("New") or style.begins_with("Little") or style.begins_with("Far") or style.begins_with("Upper")) and words.size() == 2 and words[0] in ["New", "Little", "Far", "Upper"]:
-			n = style % words[1]
 		if not taken.has(n):
 			return n
-	return "%s %d" % [base, generation + 1]
+	return "%s %d" % [base, generation + 2]

@@ -36,6 +36,7 @@ const SPLIT_COOLDOWN_DAYS := 3
 const DAUGHTER_MIN := 13.0
 const DAUGHTER_MAX := 24.0
 const DRIFT_PER_DAY := 0.3
+const STABLE_NIGHTS := 2           # nights at one camp before it counts as home for a wedding
 const GRUMBLE_PER_SEC := 0.15     # a grumble a side, about one every 7 game seconds
 
 var world: World = null
@@ -64,6 +65,9 @@ var _wed: Dictionary = {}          # "lo:hi" couples already handled
 var _feud_cool: Dictionary = {}    # "lo:hi" -> day a new feud may start
 var _split_cool: Dictionary = {}   # settlement id -> day it may split again
 var _water: Dictionary = {}        # settlement id -> [centre, near water]
+var _nights: Dictionary = {}       # agent_id -> [settlement id, nights slept there in a row, last night]
+var _last_wedding_day := -1
+var _crafts_told: Dictionary = {}  # crafts some camp is already known for
 
 func tick(delta: float, agents: Array, day: int, hour: float) -> Array:
 	var out: Array = []
@@ -81,7 +85,7 @@ func tick(delta: float, agents: Array, day: int, hour: float) -> Array:
 			by_id[a.agent_id] = a
 	var settlements: Array = settlement_system.get_settlements()
 	_ensure_cultures(settlements, out)
-	_note_people(agents, by_id, hour)
+	_note_people(agents, by_id, day, hour)
 	_marriages(agents, by_id, day, out)
 	_end_visits(by_id, day, hour, out)
 	_grumble(by_id, dt, hour)
@@ -111,8 +115,11 @@ func _ensure_cultures(settlements: Array, out: Array) -> void:
 			s.culture = c
 		var cul: Culture = s.culture
 		var changed := cul.refresh(s.knowledge_pool, _near_water(s))
-		if changed.has("craft") and str(changed["craft"]) != "":
-			out.append(_evt("world", "%s has become known for its %s." % [s.name, cul.craft], s.centre, [], false))
+		if changed.has("craft") and cul.has_own_craft():
+			# Big news the first time a craft makes a camp's name; after that, the camp's own.
+			var first := not _crafts_told.has(cul.craft)
+			_crafts_told[cul.craft] = true
+			out.append(_evt("world", "%s has become known for its %s." % [s.name, cul.craft], s.centre, [], first))
 	for id in _water.keys():
 		if settlement_system.get_settlement_for_id(int(id)) == null:
 			_water.erase(id)
@@ -146,8 +153,9 @@ func _drift() -> void:
 
 # ── Who lives where, who was born where ──────────────────────────────────────
 
-func _note_people(agents: Array, by_id: Dictionary, hour: float) -> void:
+func _note_people(agents: Array, by_id: Dictionary, day: int, hour: float) -> void:
 	var night := hour >= 21.0 or hour < 5.0
+	var night_id := day if hour >= 21.0 else day - 1
 	for a: Agent in agents:
 		if a.is_dead:
 			continue
@@ -170,9 +178,21 @@ func _note_people(agents: Array, by_id: Dictionary, hour: float) -> void:
 			continue
 		if not home_of.has(a.agent_id) or (night and a.night_sleeping) or settlement_system.is_pinned(a.agent_id):
 			home_of[a.agent_id] = int(s.id)
+		if night and a.night_sleeping:
+			var rec: Array = _nights.get(a.agent_id, [-1, 0, -999])
+			if int(rec[2]) != night_id:
+				rec = [int(s.id), int(rec[1]) + 1 if int(rec[0]) == int(s.id) else 1, night_id]
+				_nights[a.agent_id] = rec
 	for id in home_of.keys():
 		if not by_id.has(id):
 			home_of.erase(id)
+			_nights.erase(id)
+
+## Settled: slept at their home camp STABLE_NIGHTS nights running (people
+## drift between camps all the time; a wedding is between settled people).
+func is_settled(agent_id: int) -> bool:
+	var rec: Array = _nights.get(agent_id, [])
+	return not rec.is_empty() and int(rec[1]) >= STABLE_NIGHTS and int(rec[0]) == int(home_of.get(agent_id, -2))
 
 func home_name(agent_id: int) -> String:
 	return str(camp_names.get(int(home_of.get(agent_id, -1)), ""))
@@ -295,9 +315,14 @@ func _marriages(agents: Array, by_id: Dictionary, day: int, out: Array) -> void:
 		var hb := int(home_of.get(b.agent_id, -1))
 		if ha < 0 or hb < 0 or visits.has(a.agent_id) or visits.has(b.agent_id):
 			continue
-		_wed[key] = true
 		if ha == hb:
+			_wed[key] = true
 			continue
+		# Between settled people only, and one wedding a day across the island.
+		if not is_settled(a.agent_id) or not is_settled(b.agent_id) or day == _last_wedding_day:
+			continue
+		_wed[key] = true
+		_last_wedding_day = day
 		var sa = settlement_system.get_settlement_for_id(ha)
 		var sb = settlement_system.get_settlement_for_id(hb)
 		if sa == null or sb == null:
