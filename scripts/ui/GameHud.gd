@@ -44,7 +44,7 @@ var _toasts: Array = []             # {node, t}
 var _last_speed := -1.0
 var _game_over := false
 
-const HINT_OBSERVE := "Click someone to follow, anything else to see what it is · Tab walk among them · L lives · I ideas · J album · G island · M map · T look · Space pause"
+const HINT_OBSERVE := "Click someone to follow, anything else to see what it is · Tab walk among them · L lives · I ideas · J album · G island · M map · T look · P postcard · Space pause"
 const HINT_FOLLOW  := "Following · F or Esc to let go · Tab walk beside them · L their story"
 const HINT_WALK    := "Walking unseen · WASD drift · Shift hurry · mouse look · E listen in · Tab back to the sky"
 

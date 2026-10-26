@@ -43,6 +43,14 @@ func build_screen() -> void:
 		col.add_child(_seed_row())
 	var row := UiTheme.hbox(12)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	if starting and SaveGame.exists():
+		# Carry on with the island from last time.
+		var about := SaveGame.about()
+		var cont := UiTheme.button("Continue · island %d, day %d" % [int(about.get("seed", 0)), int(about.get("day", 0))], false, 18)
+		cont.custom_minimum_size = Vector2(0, 52)
+		cont.tooltip_text = "%d people, saved %s" % [int(about.get("people", 0)), about.get("saved", "")]
+		cont.pressed.connect(_continue)
+		row.add_child(cont)
 	var go := UiTheme.button("Begin" if starting else "Done", true, 20)
 	go.custom_minimum_size = Vector2(180, 52)
 	go.pressed.connect(_done)
@@ -134,6 +142,16 @@ func _choose(id: String) -> void:
 		return
 	UiTheme.set_style(id)
 	hud.apply_style_change()   # saves, re-dresses the world, rebuilds the HUD (and this screen)
+
+func _continue() -> void:
+	var m := main()
+	if m == null:
+		return
+	var err: String = m.continue_game()
+	if err != "":
+		m._push_notification("Couldn't continue: " + err)
+		return
+	hud.close_screen()   # starts the clock, as Begin does
 
 func _done() -> void:
 	hud.close_screen()   # (on a new game, closing starts the clock)

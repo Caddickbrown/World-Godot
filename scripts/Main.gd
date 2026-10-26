@@ -270,6 +270,83 @@ func _init_world() -> void:
 
 	_update_hud()
 
+# ── Save and continue (SaveGame) ─────────────────────────────────────────────
+
+## Write this world to disk. "" or what went wrong.
+func save_game(path: String = SaveGame.PATH) -> String:
+	return SaveGame.write(self, path)
+
+## Carry on with a saved world: build its island fresh from its seed, pour
+## the saved state in, redraw. "" or what went wrong.
+func continue_game(path: String = SaveGame.PATH) -> String:
+	var data := SaveGame.read(path)
+	if data.is_empty():
+		return "no saved world"
+	world_seed = int(data["seed"])
+	_init_world()
+	var err := SaveGame.restore(self, data)
+	if err != "":
+		return err
+	_redraw_all()
+	return ""
+
+## Autosave: when the window closes, and every AUTOSAVE_SECONDS of real time
+## (a save takes a few tenths of a second), in a real game only.
+const AUTOSAVE_SECONDS := 600.0
+var _autosave_left := AUTOSAVE_SECONDS
+
+func _is_real_game() -> bool:
+	return is_inside_tree() and get_tree().current_scene == self
+
+func _autosave_tick(delta: float) -> void:
+	if not _is_real_game() or game_over or time_system.speed <= 0.0:
+		return
+	_autosave_left -= delta
+	if _autosave_left <= 0.0:
+		_autosave_left = AUTOSAVE_SECONDS
+		save_game()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and _is_real_game() and world and not game_over:
+		save_game()
+
+## A postcard: this view as a picture, named for the island's seed (the same
+## seed grows the same island for a friend, with its own story), and the
+## seed on the clipboard to send with it.
+func take_postcard() -> void:
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	if img == null:
+		return
+	DirAccess.make_dir_recursive_absolute("user://postcards")
+	var path := "user://postcards/island-%d-day-%d.png" % [world.seed_val, time_system.day]
+	img.save_png(path)
+	DisplayServer.clipboard_set("World island %d" % world.seed_val)
+	_push_notification("Postcard saved (island %d copied to share)" % world.seed_val)
+	print("postcard: ", ProjectSettings.globalize_path(path))
+
+## Everything drawn from the simulation, drawn again (after a load).
+func _redraw_all() -> void:
+	terrain_renderer.rebuild()
+	agent_renderer.queue_free()
+	agent_renderer = AgentRenderer.new()
+	agent_renderer.world = world
+	agent_renderer.settlement_system = settlement_system
+	add_child(agent_renderer)
+	agent_renderer.setup(agents)
+	animal_renderer.clear()
+	animal_renderer.queue_free()
+	animal_renderer = AnimalRenderer.new()
+	animal_renderer.world = world
+	add_child(animal_renderer)
+	animal_renderer.setup(animal_sim)
+	environment_renderer.setup(world)
+	settlement_renderer.clear()
+	path_renderer.rebuild()
+	_select(null)
+	_centre_on_agents()
+	_update_hud()
+
 # ── Process (game loop) ───────────────────────────────────────────────────────
 
 ## Opt-in timing of each stage of a simulated frame (tools/profile.gd).
@@ -296,6 +373,7 @@ func _prof(stage: String) -> void:
 func _process(delta: float) -> void:
 	_update_view_overlays()
 	if game_over: return
+	_autosave_tick(delta)
 
 	var game_delta := time_system.update(delta)
 	if game_delta <= 0.0:
@@ -926,6 +1004,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				elif selected_agent: follow(selected_agent)
 		KEY_R:
 			_init_world()
+		KEY_P:
+			take_postcard()
 		KEY_H:
 			if view_mode == ViewMode.OBSERVE: _centre_on_agents()
 		KEY_SPACE:

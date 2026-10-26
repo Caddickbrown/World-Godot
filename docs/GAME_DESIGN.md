@@ -132,7 +132,7 @@ out; each area has its notes (rules, numbers, what is still open):
 | M2 | New look ✅ (first pass) | Island, smooth terrain, sea, sky, flora, people and settlements per `docs/ART_DIRECTION.md`. Weather: overcast and rain done. Next: animals in the same style, grass and flowers, a rainbow |
 | M3 | Stories ✅ (first pass) | Chronicle voice, life records and last lines, the Lives screen. Next: family twig drawing, "press a life" into the album |
 | M4 | Collecting ✅ (first pass) | Album of 29 moments (witness rule: on screen within 200 m, or following), the Idea Garden, hunches and glimmers. Next: more moments, ideas actually being lost (see open decisions) |
-| M5 | Postcards and polish | Seed postcards, save/continue, sound, settings, controller, a minimap |
+| M5 | Postcards and polish | Seed postcards ✅ (P: a picture named for the seed, seed copied), save/continue ✅ (SaveGame: autosave on close and every 10 minutes, Continue on the start screen), sound, settings, controller, a minimap ✅ |
 
 Each milestone ends with the standard shots (`tools/capture/shots.sh`), an independent review
 against this file and `ART_DIRECTION.md`, and a green `tests/run_ci.sh`.

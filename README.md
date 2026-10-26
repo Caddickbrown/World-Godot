@@ -23,6 +23,7 @@ Open the folder in Godot 4.7 and press Play (`scenes/Main.tscn`).
 | L, I, J | Lives, the Idea Garden, the Album (with hunches) |
 | T | Switch look: storybook (A) or field notes (B), for the UI and the world |
 | H, R | Back to the people; new world |
+| P | Postcard: this view saved as a picture named for the island's seed (seed copied to share) |
 
 ## Builds
 
