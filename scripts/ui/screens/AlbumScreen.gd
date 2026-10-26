@@ -25,7 +25,7 @@ func fill() -> void:
 	var sp := Control.new()
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(sp)
-	for t in [["all", "All"], ["firsts", "Firsts"], ["people", "People"], ["ideas", "Ideas"], ["world", "World"]]:
+	for t in [["all", "All"], ["firsts", "Firsts"], ["people", "People"], ["ideas", "Ideas"], ["world", "World"], ["pressed", "Pressed lives"]]:
 		var b := UiTheme.button(t[1], t[0] == _tab, 14)
 		b.pressed.connect(func(): _tab = t[0]; _rebuild())
 		head.add_child(b)
@@ -38,8 +38,12 @@ func fill() -> void:
 	grid.add_theme_constant_override("h_separation", 14)
 	grid.add_theme_constant_override("v_separation", 14)
 	(sc[1] as VBoxContainer).add_child(grid)
+	if _tab == "pressed":
+		_pressed_pages(sc[1], m.story.moments.pressed)
 	var i := 0
 	for e in entries:
+		if _tab == "pressed":
+			break
 		if _tab != "all" and e["kind"] != _tab:
 			continue
 		grid.add_child(_sticker(e, i))
@@ -107,3 +111,46 @@ func _rebuild() -> void:
 	for ch in body.get_children():
 		ch.queue_free()
 	fill()
+
+## Pressed lives (feat/generations): pages kept from this and earlier worlds,
+## newest first.
+func _pressed_pages(col: VBoxContainer, pages: Array) -> void:
+	if pages.is_empty():
+		col.add_child(UiTheme.wrap(UiTheme.label("No lives pressed yet. Open someone's story (L) and press it, or follow someone to the end of their days.", "hand", 18, "muted"), 600))
+		return
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 16)
+	grid.add_theme_constant_override("v_separation", 16)
+	col.add_child(grid)
+	var list := pages.duplicate()
+	list.reverse()
+	var i := 0
+	for pg in list:
+		grid.add_child(_page_card(pg, i))
+		i += 1
+
+func _page_card(pg: Dictionary, i: int) -> PanelContainer:
+	var p := PanelContainer.new()
+	var sb := UiTheme.panel_box(true)
+	sb.set_content_margin_all(14)
+	p.add_theme_stylebox_override("panel", sb)
+	p.custom_minimum_size = Vector2(300, 0)
+	var v := UiTheme.vbox(4)
+	v.add_child(UiTheme.caps("World %d" % int(pg.get("world", 0)), "faint", 10))
+	v.add_child(UiTheme.label(str(pg.get("name", "")), "display", 26))
+	v.add_child(UiTheme.wrap(UiTheme.label(PressedLife.span(pg), "body", 14, "muted"), 280))
+	if str(pg.get("last_line", "")) != "":
+		v.add_child(UiTheme.wrap(UiTheme.label("“%s”" % pg["last_line"], "hand", 17, "accent" if UiTheme.style == "fieldnotes" else "warn"), 280))
+	if str(pg.get("legend", "")) != "":
+		v.add_child(UiTheme.wrap(UiTheme.label("A legend: they %s." % pg["legend"], "hand", 16, "accent"), 280))
+	if str(pg.get("named_for", "")) != "":
+		v.add_child(UiTheme.label("Named for %s" % pg["named_for"], "body", 14, "muted"))
+	v.add_child(UiTheme.wrap(UiTheme.label(PressedLife.family(pg), "body", 14), 280))
+	var evs: Array = pg.get("events", [])
+	for e in evs.slice(maxi(0, evs.size() - 3)):
+		v.add_child(UiTheme.wrap(UiTheme.label("Day %d: %s" % [int(e["day"]), e["text"]], "hand", 15, "muted"), 280))
+	p.add_child(v)
+	if UiTheme.n("tilt") > 0.0:
+		p.rotation_degrees = [-1.2, 1.0, -0.6, 1.4][i % 4]
+	return p

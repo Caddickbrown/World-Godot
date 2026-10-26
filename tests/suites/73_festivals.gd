@@ -223,8 +223,9 @@ func _story(t) -> void:
 	keeper.on_festival({"kind": "ongoing", "festival": "harvest", "pos": Vector2(10, 10), "ids": [a.agent_id], "moment": "fest_harvest", "note": "n"})
 	t.check("...seen while it lasts, it is", keeper.moments.is_unlocked("fest_harvest"))
 	var ids: Array = Moments.DEFS.keys()
-	var mine := ids.slice(ids.size() - 5)
-	t.check("the festival moments are one block at the album's end", mine.all(func(x): return str(x).begins_with("fest_"))
+	var first := ids.find("fest_planting")
+	var mine := ids.slice(first, first + 5)
+	t.check("the festival moments are one block in the album", first >= 0 and mine.all(func(x): return str(x).begins_with("fest_"))
 		and FestivalSystem.KINDS.values().all(func(r): return Moments.DEFS.has(r["moment"])))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(t.TEST_ALBUM))
 

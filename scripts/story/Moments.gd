@@ -47,13 +47,23 @@ const DEFS := {
 	"fest_harvest":  ["The harvest feast", "be at the long table when a camp eats its harvest", "people", true],
 	"fest_mourning": ["Remembering", "be there when a camp remembers its dead at the shrine", "people", true],
 	"fest_midwinter":["The longest night", "see a camp's lights on midwinter night", "people", true],
+	# generations (feat/generations)
+	"named_for":     ["Named for them", "a child is named after someone gone", "people", true],
+	"four_generations": ["Four generations", "a child is born while a great-grandparent lives", "people", true],
+	"legend_told":   ["A legend told", "hear an elder tell a legend at the evening fire", "people", true],
+	"myth":          ["Into myth", "a legend outlives everyone who knew them", "ideas", false],
+	"pressed_life":  ["Pressed flower", "press a life into the album", "people", false],
 }
 
 var save_path := "user://world_album.json"
 var unlocked: Dictionary = {}   # id -> {day, note}
+## Lives pressed into the album (PressedLife.page), kept across worlds.
+var pressed: Array = []
+const MAX_PRESSED := 30
 
 func load_album() -> void:
 	unlocked.clear()
+	pressed = []
 	if not FileAccess.file_exists(save_path):
 		return
 	var f := FileAccess.open(save_path, FileAccess.READ)
@@ -62,12 +72,14 @@ func load_album() -> void:
 	var data = JSON.parse_string(f.get_as_text())
 	if data is Dictionary and data.get("unlocked") is Dictionary:
 		unlocked = data["unlocked"]
+	if data is Dictionary and data.get("pressed") is Array:
+		pressed = data["pressed"]
 
 func save_album(extra: Dictionary = {}) -> void:
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f == null:
 		return
-	var data := {"v": 1, "unlocked": unlocked}
+	var data := {"v": 1, "unlocked": unlocked, "pressed": pressed}
 	data.merge(extra)
 	f.store_string(JSON.stringify(data))
 
@@ -96,3 +108,19 @@ func entries() -> Array:
 		out.append({"id": id, "name": d[0], "hint": d[1], "kind": d[2], "found": not u.is_empty(),
 			"note": str(u.get("note", ""))})
 	return out
+
+## Press (or re-press, keeping it current) a life page.
+func press(page: Dictionary) -> void:
+	var i := pressed_index(str(page.get("key", "")))
+	if i >= 0:
+		pressed[i] = page
+	else:
+		pressed.append(page)
+		if pressed.size() > MAX_PRESSED:
+			pressed.pop_front()
+
+func pressed_index(key: String) -> int:
+	for i in pressed.size():
+		if str((pressed[i] as Dictionary).get("key", "")) == key:
+			return i
+	return -1

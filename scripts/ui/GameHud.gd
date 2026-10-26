@@ -331,6 +331,8 @@ func _fill_follow_card(a: Agent) -> void:
 			lines.append("Partner of %s." % life.partner)
 		if not life.children.is_empty():
 			lines.append("Children: %s%s." % [", ".join(life.children.slice(0, 3)), "…" if life.children.size() > 3 else ""])
+		if main.lineage_tracker:
+			lines.append_array(FamilyTwig.card_lines(main.lineage_tracker, a.agent_id))
 		lines.append("Knows %d ideas." % a.knowledge.size())
 		v.add_child(UiTheme.wrap(UiTheme.label(" ".join(lines), "body", 15), 260))
 	var btns := UiTheme.hbox(8)

@@ -47,6 +47,8 @@ static func thought(a: Agent) -> String:
 		return FestivalSystem.thought(a)
 	if a.mourning > 0.0 and a.mourning_for != "":
 		return "I keep looking for %s by the fire." % a.mourning_for
+	if a.heard_legend != "":
+		return a.heard_legend
 	if a.chore == "planting a tree" and a.state == Agent.State.GATHERING:
 		return "Someone will sit in the shade of this one."
 	if a.chore == "felling a tree" and a.state == Agent.State.GATHERING:
