@@ -194,6 +194,19 @@ func on_grief(mourner: Agent, dead: Agent, relation: String) -> void:
 	var what: String = {"partner": "their partner", "parent": "their parent", "child": "their child"}.get(relation, "someone close")
 	_event(mourner, "Lost %s, %s." % [what, dead.agent_name], "people")
 
+## FestivalSystem events: {kind: began|gathered|ongoing|ended, festival, pos,
+## ids, text?, major?, moment?, note?, life?, people?}. Told once the camp has
+## gathered; the album moment can be had any time while it lasts.
+func on_festival(evt: Dictionary) -> void:
+	var pos: Vector2 = evt.get("pos", Vector2(-1, -1))
+	var ids: Array = evt.get("ids", [])
+	if str(evt.get("text", "")) != "":
+		add("people", str(evt["text"]), pos, ids, bool(evt.get("major", true)))
+	for a in evt.get("people", []):
+		_event(a, str(evt.get("life", "")), "people")
+	if str(evt.get("moment", "")) != "" and not ids.is_empty():
+		_try_moment(str(evt["moment"]), pos, ids, str(evt.get("note", "")))
+
 ## World events (weather, fire, settlements). moment: optional moment id.
 func on_world(text: String, pos: Vector2 = Vector2(-1, -1), moment: String = "") -> void:
 	add("world", text, pos, [])

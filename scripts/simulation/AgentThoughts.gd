@@ -13,12 +13,15 @@ const DOING := {
 	Agent.State.PERFORMING:  "performing",
 	Agent.State.TRADING:     "trading",
 	Agent.State.RITUAL:      "at a gathering",
+	Agent.State.FESTIVAL:    "at a festival",
 }
 
 ## What the agent is doing, as a short phrase ("looking for food").
 static func doing(a: Agent) -> String:
 	if a.is_dead:
 		return "gone (" + a.death_cause.replace("_", " ") + ")"
+	if a.state == Agent.State.FESTIVAL:
+		return FestivalSystem.doing(a.festival)
 	if a.at_fire:
 		return "sitting by the fire"
 	if a.mourning > 0.0:
@@ -40,6 +43,8 @@ static func thought(a: Agent) -> String:
 	var energy: float = float(a.needs.get("energy", 1.0))
 	if a.state == Agent.State.SLEEPING:
 		return "Zzz…"
+	if a.state == Agent.State.FESTIVAL:
+		return FestivalSystem.thought(a)
 	if a.mourning > 0.0 and a.mourning_for != "":
 		return "I keep looking for %s by the fire." % a.mourning_for
 	if a.chore == "planting a tree" and a.state == Agent.State.GATHERING:

@@ -49,6 +49,13 @@ var album_path := "user://world_album.json"
 var _history_seen := 0
 var _was_storm := false
 var disease_system        # DiseaseSystem
+## The year's festivals (FestivalSystem) and what they look like.
+var festival_system: FestivalSystem
+var festival_renderer: FestivalRenderer
+## A festival starting or ending somewhere (pos: world metres, on the ground),
+## relayed from festival_system so listeners (sound) outlive a new world.
+signal festival_started(kind: String, pos: Vector3)
+signal festival_ended(kind: String, pos: Vector3)
 var population_manager    # PopulationManager
 ## Whales, fish, birds, frogs, bees: the small wild things (AmbientLife.gd).
 var ambient_life: AmbientLife
@@ -249,6 +256,14 @@ func _init_world() -> void:
 	story.setup(concept_graph, agents, album_path)
 	story.chronicle_added.connect(_on_chronicle)
 	story.moment_unlocked.connect(_on_moment)
+	festival_system = FestivalSystem.new()
+	festival_system.festival_started.connect(festival_started.emit)
+	festival_system.festival_ended.connect(festival_ended.emit)
+	if festival_renderer:
+		festival_renderer.queue_free()
+	festival_renderer = FestivalRenderer.new()
+	festival_renderer.world = world
+	add_child(festival_renderer)
 	_history_seen = 0
 	_was_storm = false
 
@@ -407,6 +422,10 @@ func _process(delta: float) -> void:
 	crafting_system.tick(game_delta, agents, item_defs, time_system.day, history_log)
 	settlement_system.tick(game_delta, agents, concept_graph, time_system.day, history_log, spatial_grid)
 	_prof("crafting, settlements")
+	festival_system.tick(game_delta, agents, settlement_system, time_system, world)
+	for evt in festival_system.drain_events():
+		story.on_festival(evt)
+	_prof("festivals")
 	tile_items.tick_spoilage(game_delta, item_defs, disaster_system.get_spoilage_mult())
 	animal_skill_system.tick_passive(game_delta)
 
@@ -446,6 +465,7 @@ func _process(delta: float) -> void:
 			a.set_meta("died_at", time_system.game_time)
 			history_log.add("death", history_log.format_death(a.agent_name, a.death_cause), time_system.day)
 			story.on_death(a)
+			festival_system.note_death(a, settlement_system)
 			_grieve_for(a)
 			audio_system.play_death()
 
@@ -889,6 +909,7 @@ func apply_style() -> void:
 	disaster_view.apply_style()
 	path_renderer.restyle()
 	ambient_renderer.restyle()
+	if festival_renderer: festival_renderer.restyle()
 
 func follow(agent: Agent) -> void:
 	_select(agent)
@@ -1000,6 +1021,7 @@ func _update_settlements() -> void:
 	var all: Array = settlement_system.get_settlements()
 	settlement_renderer.darkness = sky.darkness(time_system.time_of_day)
 	settlement_renderer.sync(all, world.natural_fires)
+	festival_renderer.sync(festival_system, settlement_renderer.darkness)
 	environment_renderer.set_clearings(settlement_renderer.clearings())
 	terrain_renderer.set_camps(all.map(func(st): return st.centre * TILE_SIZE))
 
