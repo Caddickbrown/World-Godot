@@ -56,6 +56,8 @@ func snap() -> void:
 var raining_clusters := 0
 var shown_clusters := 0
 var bolts := 0
+## A bolt came down at this ground point (metres): thunder follows (Soundscape).
+signal struck(ground: Vector3)
 var rainbow_shown := 0.0               # the rainbow's drawn strength (0 hidden)
 var rainbow_at := Vector3.INF
 
@@ -277,6 +279,7 @@ func strike_at(ground: Vector3, top: float = CLOUD_BASE) -> void:
 	_bolt_light.global_position = Vector3(ground.x, y0 + 12.0, ground.z) if is_inside_tree() else Vector3.ZERO
 	if _sky:
 		_sky.lightning_flash(0.9)
+	struck.emit(Vector3(ground.x, y0, ground.z))
 
 func bolt_visible() -> bool:
 	return _bolt.visible
