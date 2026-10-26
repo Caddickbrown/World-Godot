@@ -53,6 +53,10 @@ const DEFS := {
 	"legend_told":   ["A legend told", "hear an elder tell a legend at the evening fire", "people", true],
 	"myth":          ["Into myth", "a legend outlives everyone who knew them", "ideas", false],
 	"pressed_life":  ["Pressed flower", "press a life into the album", "people", false],
+	# cultures (feat/cultures)
+	"wedding_camps": ["A wedding between camps", "two people from different camps marry, and one moves", "people", true],
+	"new_camp":      ["A new camp is founded", "a crowded camp splits and some walk off to start afresh", "world", true],
+	"quarrel_mended":["Old quarrel mended", "two feuding camps make it up", "world", true],
 }
 
 var save_path := "user://world_album.json"

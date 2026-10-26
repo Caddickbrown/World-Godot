@@ -76,6 +76,7 @@ var _raised: Dictionary = {}      # "id:kind" -> day it first stood
 var _plans: Dictionary = {}
 var _houses: Dictionary = {}      # settlement id -> dwellings drawn
 var _granary_at: Dictionary = {}  # settlement id -> the barn's local transform (for the bales)
+var _dens := 1.0                  # the culture's layout density, while a plan is made
 
 func clear() -> void:
 	for ch in get_children():
@@ -135,6 +136,8 @@ func sync(settlements: Array, fires: Dictionary) -> void:
 		_houses[s.id] = count
 		var kinds := buildings_for(s)
 		var sig := "%d|%d|%.1f,%.1f|%s|%s" % [int(s.tier), count, s.centre.x, s.centre.y, ",".join(kinds), season]
+		if s.culture:   # its look (feat/cultures): redrawn, in turn, when it drifts
+			sig += "|c%d:%d" % [int(s.culture.seed), int(s.culture.version)]
 		var e: Dictionary = _built.get(s.id, {})
 		if e.is_empty() or str(e["sig"]) != sig:
 			# A new place appears at once; a changed one waits its turn (the
@@ -180,13 +183,16 @@ func _build_settlement(s, count: int, kinds: Array, season: String) -> Node3D:
 	var has_shrine := kinds.has("shrine")
 	var dwell_name: String = ["Hide tent", "Round hut", "Timber house"][clampi(int(s.tier), 0, 2)]
 	var cached: Dictionary = _plans.get(s.id, {})
-	if cached.is_empty() or (cached["at"] as Vector2).distance_to(s.centre) > 0.01:
-		cached = {"at": s.centre, "plan": _plan(s, c, shrine_local)}
+	var cul: Culture = s.culture
+	var dens: float = cul.density if cul else 1.0
+	if cached.is_empty() or (cached["at"] as Vector2).distance_to(s.centre) > 0.01 or float(cached.get("dens", 1.0)) != dens:
+		cached = {"at": s.centre, "plan": _plan(s, c, shrine_local), "dens": dens}
 		_plans[s.id] = cached
 	var plan: Dictionary = cached["plan"]
 	var stone := bool(ConceptEffects.settlement_fx(s)["unlocks_stone_buildings"])
 	var drawn: Array = []          # {p, foot} of what stands, for the wall and fields
 	var house := 0
+	var kit := PropKit.new()
 	for spot in plan["spots"]:
 		var what: String = spot["what"]
 		var p: Vector3 = spot["p"]
@@ -195,9 +201,10 @@ func _build_settlement(s, count: int, kinds: Array, season: String) -> Node3D:
 			if house > count:
 				continue
 			p.y = world.surface_y((c.x + p.x) / TILE_SIZE, (c.z + p.z) / TILE_SIZE) if world else 0.0
-			var d := _dwelling(int(s.tier), rng, stone)
+			var d := _dwelling(int(s.tier), rng, stone, cul)
 			d.position = p
 			d.rotation.y = float(spot["yaw"])
+			CultureLook.dwelling_deco(kit, PropKit.at(p, float(spot["yaw"])), cul, int(s.tier), house)
 			root.add_child(d)
 			list.append(_site("dwelling", "%s · %s" % [dwell_name, s.name], c + p, 1.8, s))
 			drawn.append(spot)
@@ -211,8 +218,13 @@ func _build_settlement(s, count: int, kinds: Array, season: String) -> Node3D:
 		st.material_override = _mat(Color(0.5, 0.48, 0.46))
 		root.add_child(st)
 	list.append(_site("hearth", str(s.name), c, 2.4, s))
+	# The camp's banner by the hearth, in its colour (feat/cultures).
+	if cul:
+		var ba := float(int(s.id) % 7) * 0.9
+		var bp := Vector3(cos(ba) * (PLAZA - 0.6), 0, sin(ba) * (PLAZA - 0.6))
+		bp.y = world.surface_y((c.x + bp.x) / TILE_SIZE, (c.z + bp.z) / TILE_SIZE) if world else 0.0
+		CultureLook.hearth_banner(kit, bp, cul)
 	# What they know, standing among them, all in one mesh.
-	var kit := PropKit.new()
 	if has_shrine:
 		var sp := _ground(c, shrine_local)
 		_shrine(kit, PropKit.at(sp, atan2(-sp.x, -sp.z)))
@@ -655,6 +667,9 @@ func _plan(s, c: Vector3, shrine_local: Vector3) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(s.id) * 104729 + 7
 	var lanes := _lanes_for(rng)
+	# A culture builds close or spread out (Culture.density, feat/cultures).
+	var dens: float = s.culture.density if s.culture else 1.0
+	_dens = dens
 	var placed: Array = [{"what": "hearth", "p": Vector3.ZERO, "foot": PLAZA - 1.0}]
 	# Where the sim gathers for rituals stays clear whether or not it stands yet.
 	placed.append({"what": "shrine", "p": shrine_local, "foot": 2.0})
@@ -678,10 +693,10 @@ func _plan(s, c: Vector3, shrine_local: Vector3) -> Dictionary:
 			var lane: Dictionary = lanes[rng.randi() % lanes.size()]
 			var along := rng.randf_range(PLAZA + foot, PLAZA + foot + 3.0 + reach)
 			var side := 1.0 if rng.randf() < 0.5 else -1.0
-			var off := foot + LANE_CLEAR + rng.randf_range(0.2, 1.6)
+			var off := foot + LANE_CLEAR + rng.randf_range(0.2, 1.6) * dens
 			var anchor: Dictionary = placed[rng.randi() % placed.size()]
 			var dir := rng.randf() * TAU
-			var gap := rng.randf_range(0.6, 1.9)
+			var gap := rng.randf_range(0.6, 1.9) * dens
 			var by_lane := rng.randf() < 0.5
 			var noise := rng.randf()
 			var p: Vector3
@@ -722,7 +737,7 @@ func _spot_score(what: String, p: Vector3, foot: float, placed: Array, lanes: Ar
 		var need: float = float(q["foot"]) + foot + 0.6
 		if d < need:
 			return INF
-		if d < need + 3.5:
+		if d < need + 3.5 * _dens:
 			near += 1
 	if not _land_ok(c + p, foot) or _slope(c + p, foot) > MAX_SLOPE:
 		return INF
@@ -941,14 +956,17 @@ func _channel(k: PropKit, c: Vector3, from: Vector3, to: Vector3) -> void:
 
 # ── Dwellings (as before) ────────────────────────────────────────────────────
 
-func _dwelling(tier: int, rng: RandomNumberGenerator, stone: bool = false) -> Node3D:
+func _dwelling(tier: int, rng: RandomNumberGenerator, stone: bool = false, cul: Culture = null) -> Node3D:
 	var d := Node3D.new()
+	var tone: float = rng.randf() * 0.15   # drawn first, so the rest of the draws don't move
+	var cols := CultureLook.dwelling_colours(cul, tier, [Color(0.74, 0.60, 0.44), Color(0.70, 0.58, 0.42), Color(0.86, 0.80, 0.68)][clampi(tier, 0, 2)],
+		[Color(0.74, 0.60, 0.44), Color(0.78, 0.66, 0.36), Color(0.62, 0.30, 0.22)][clampi(tier, 0, 2)])
 	match tier:
 		0:  # hide tent
 			var tent := MeshInstance3D.new()
 			tent.mesh = _cone(1.5, 2.6, 6)
 			tent.position.y = 1.3
-			tent.material_override = _mat(Color(0.74, 0.60, 0.44).darkened(rng.randf() * 0.15))
+			tent.material_override = _mat((cols[0] as Color).darkened(tone))
 			d.add_child(tent)
 			var pole := MeshInstance3D.new()
 			pole.mesh = _cone(0.05, 0.9, 4)
@@ -964,12 +982,12 @@ func _dwelling(tier: int, rng: RandomNumberGenerator, stone: bool = false) -> No
 			cyl.radial_segments = 10
 			wall.mesh = cyl
 			wall.position.y = 0.7
-			wall.material_override = _mat(Color(0.70, 0.58, 0.42))
+			wall.material_override = _mat(cols[0])
 			d.add_child(wall)
 			var roof := MeshInstance3D.new()
 			roof.mesh = _cone(2.1, 1.7, 10)
 			roof.position.y = 2.25
-			roof.material_override = _mat(Color(0.78, 0.66, 0.36).darkened(rng.randf() * 0.12))
+			roof.material_override = _mat((cols[1] as Color).darkened(tone * 0.8))
 			d.add_child(roof)
 		_:  # timber house with a pitched roof
 			var box := MeshInstance3D.new()
@@ -978,14 +996,14 @@ func _dwelling(tier: int, rng: RandomNumberGenerator, stone: bool = false) -> No
 			box.mesh = bm
 			box.position.y = 0.9
 			# Architecture: towns build in stone.
-			box.material_override = _mat(Color(0.70, 0.68, 0.64) if stone else Color(0.86, 0.80, 0.68))
+			box.material_override = _mat(Color(0.70, 0.68, 0.64) if stone else cols[0])
 			d.add_child(box)
 			var roof := MeshInstance3D.new()
 			var pm := PrismMesh.new()
 			pm.size = Vector3(3.4, 1.3, 2.8)
 			roof.mesh = pm
 			roof.position.y = 2.45
-			roof.material_override = _mat(Color(0.62, 0.30, 0.22).darkened(rng.randf() * 0.15))
+			roof.material_override = _mat((cols[1] as Color).darkened(tone))
 			d.add_child(roof)
 	var door := MeshInstance3D.new()
 	var dm := BoxMesh.new()

@@ -23,6 +23,7 @@ class Settlement extends RefCounted:
 	var lean_days: int = 0           # days in a row the land round the hearth was stripped
 	var moving_until_day: int = -1   # while moving, members are kept though far from the new hearth
 	var moves: int = 0
+	var culture = null               # Culture (CultureSystem sets it; renderers read it)
 
 # ---------------------------------------------------------------------------
 # Naming tables
@@ -106,6 +107,7 @@ func tick(delta: float, agents: Array, concept_graph: ConceptGraph, day: int, hi
 	if _membership_timer >= MEMBERSHIP_INTERVAL:
 		_membership_timer = 0.0
 		_update_membership(agents, spatial_grid)
+		_apply_pins(agents)
 		_reindex_members()
 		_check_tier_upgrades(agents, history_log, day)
 		_check_temple(agents)
@@ -141,11 +143,82 @@ func _reindex_members() -> void:
 func get_settlements() -> Array:
 	return settlements
 
+func get_settlement_for_id(id: int) -> RefCounted:
+	for s: Settlement in settlements:
+		if s.id == id:
+			return s
+	return null
+
+# ---------------------------------------------------------------------------
+# Pins (cultures: someone moving to another camp, a daughter camp's founders)
+# ---------------------------------------------------------------------------
+
+## agent_id -> [settlement id, last day]. Membership is by distance from the
+## hearth, so someone walking to a new home would drop out of it on the way;
+## a pin keeps them in it (and out of every other) until they arrive.
+var _pins: Dictionary = {}
+
+func pin_member(agent_id: int, s: Settlement, until_day: int) -> void:
+	_pins[agent_id] = [s.id, until_day]
+	for other: Settlement in settlements:
+		if other != s:
+			other.member_ids.erase(agent_id)
+	if not s.member_ids.has(agent_id):
+		s.member_ids.append(agent_id)
+	_settlement_by_agent[agent_id] = s
+
+func is_pinned(agent_id: int) -> bool:
+	return _pins.has(agent_id)
+
+func _apply_pins(agents: Array) -> void:
+	if _pins.is_empty():
+		return
+	var living: Dictionary = {}
+	for a: Agent in agents:
+		if not a.is_dead:
+			living[a.agent_id] = true
+	for aid in _pins.keys():
+		var pin: Array = _pins[aid]
+		var home: Settlement = get_settlement_for_id(int(pin[0])) as Settlement
+		if home == null or not living.has(aid) or _last_eval_day > int(pin[1]):
+			_pins.erase(aid)
+			continue
+		if home.member_ids.has(aid):
+			_pins.erase(aid)   # arrived: the hearth's own radius holds them now
+		for s: Settlement in settlements:
+			if s != home:
+				s.member_ids.erase(aid)
+		if not home.member_ids.has(aid):
+			home.member_ids.append(aid)
+
+## A camp founded by people who walked out of another (CultureSystem): no
+## chronicle line here (the culture system tells it), founders pinned to it.
+func found_camp(member_ids: Array, centre: Vector2, day: int, camp_name: String, pin_days: int = 2) -> Settlement:
+	var s: Settlement = Settlement.new()
+	s.id = _next_id
+	_next_id += 1
+	s.centre = centre
+	s.founding_day = day
+	s.last_contact_day = day
+	s.name = camp_name
+	settlements.append(s)
+	for aid in member_ids:
+		pin_member(int(aid), s, day + pin_days)
+	_prev_members[s.id] = []
+	return s
+
+func is_name_taken(n: String) -> bool:
+	for s: Settlement in settlements:
+		if s.name == n:
+			return true
+	return false
+
 
 func clear() -> void:
 	settlements.clear()
 	_prev_members.clear()
 	_settlement_by_agent.clear()
+	_pins.clear()
 	_next_id = 0
 	_formation_timer = 0.0
 

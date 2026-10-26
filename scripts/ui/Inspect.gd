@@ -25,8 +25,12 @@ static func describe(main: Node, p: Vector3) -> Dictionary:
 		return _animal(main, a)
 	var b := _building_at(main, Vector2(p.x, p.z))
 	if not b.is_empty():
-		return {"kind": "building", "title": str(b["name"]),
-			"lines": ["Raised day %d" % int(b["day"]), "At %s" % str(b.get("settlement_name", ""))]}
+		var lines: Array = ["Raised day %d" % int(b["day"]), "At %s" % str(b.get("settlement_name", ""))]
+		var cs = main.get("culture_system")   # the place's ways (feat/cultures)
+		var cul: Culture = cs.culture_of(int(b.get("settlement", -1))) if cs else null
+		if cul:
+			lines.append(cul.describe() + ((" A daughter of %s." % cul.mother_name) if cul.mother_name != "" else ""))
+		return {"kind": "building", "title": str(b["name"]), "lines": lines}
 	return _ground(main, tile_pos)
 
 static func _animal_at(main: Node, tp: Vector2) -> AnimalSim.Animal:

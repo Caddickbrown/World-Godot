@@ -33,6 +33,7 @@ var conflict_system       # ConflictSystem
 var trading_system        # TradingSystem
 var crafting_system       # CraftingSystem
 var settlement_system     # SettlementSystem
+var culture_system: CultureSystem   # camps' character, weddings, feuds, daughters (feat/cultures)
 var tile_items            # TileItems
 var spatial_grid          # SpatialGrid
 var history_log           # HistoryLog
@@ -245,6 +246,11 @@ func _init_world() -> void:
 	settlement_system = SettlementSystem.new()
 	conflict_system.settlement_system = settlement_system
 	settlement_system.world = world
+	culture_system = CultureSystem.new()
+	culture_system.world = world
+	culture_system.settlement_system = settlement_system
+	culture_system.concepts = concept_graph.concepts
+	conflict_system.culture_system = culture_system
 	hunting_system = HuntingSystem.new()
 	forest_system = ForestSystem.new()
 	agent_renderer.settlement_system = settlement_system
@@ -509,6 +515,9 @@ func _process(delta: float) -> void:
 	for evt in festival_system.drain_events():
 		story.on_festival(evt)
 	_prof("festivals")
+	for evt in culture_system.tick(game_delta, agents, time_system.day, time_system.hour):
+		story.on_culture(evt, agents)
+	_prof("cultures")
 	tile_items.tick_spoilage(game_delta, item_defs, disaster_system.get_spoilage_mult())
 	animal_skill_system.tick_passive(game_delta)
 
@@ -862,6 +871,8 @@ func _home_line(a: Agent) -> String:
 	if a == null or settlement_system == null:
 		return ""
 	var st = settlement_system.get_settlement_for_agent(a.agent_id)
+	if culture_system:
+		return culture_system.card_line(a)
 	if st == null:
 		return "No settled home"
 	return "Lives at " + (st.name if not str(st.name).is_empty() else "a camp")

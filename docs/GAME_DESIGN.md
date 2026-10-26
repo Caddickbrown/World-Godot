@@ -124,6 +124,8 @@ out; each area has its notes (rules, numbers, what is still open):
 | Places and maps | `docs/features/places.md` | Buildings from ideas, worn paths, discovery glow, minimap, inspect, Island screen, seed |
 | Generations | `docs/features/generations.md` | Family register, names that carry on, legends and myths at the fire, family twig, pressed lives |
 
+| Cultures | `docs/features/cultures.md` | Each camp's own dye, roofs, decoration, layout, food, craft and naming; visits and weddings between camps (ideas travel with who moves); rare feuds that always mend; crowded camps found daughter camps |
+
 ## Milestones
 
 | # | Name | Done when |

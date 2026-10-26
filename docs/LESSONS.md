@@ -181,3 +181,12 @@ One line of cause, one line of rule.
   distribution before picking a threshold.
 - **`user://` is shared by every worktree of the project.** Balance runs in parallel branches
   wrote into one `balance_album.json`, so the moments list showed other branches' moments.
+
+## Cultures (feat/cultures)
+
+- **"Which camp" is not "home".** Membership is by distance from a hearth at a 2 s sweep, so a
+  forager is briefly a member of whichever camp they pass. The first weddings-between-camps
+  count read 40 in 14 days, most of them people who had simply wandered. Rule: home is where
+  someone sleeps, night after night; a story about belonging waits for that.
+- **Pin a walker.** Anyone sent to another camp (a wedding, a daughter camp, a visit) drops out of
+  it on the way unless something holds them there; SettlementSystem pins do, until they arrive.
