@@ -38,6 +38,8 @@ static func is_master_craft(id: String) -> bool:
 
 ## id -> {places: Array[Vector2], day, last_name, last_id}
 var ghosts: Dictionary = {}
+## Bumped whenever a ghost comes or goes (ConceptGraph caches odds on it).
+var version := 0
 ## id -> {day, lost_day, last_name, near} for the latest time each was found again.
 var refound: Dictionary = {}
 var lost_total := 0
@@ -55,6 +57,7 @@ func note_death(dead: Agent, agents: Array, day: int, home: Vector2 = Vector2(-1
 		if home.x >= 0.0 and home.distance_to(dead.pos) > 2.0:
 			places.append(home)
 		ghosts[id] = {"places": places, "day": day, "last_name": dead.agent_name, "last_id": dead.agent_id}
+		version += 1
 		lost_total += 1
 		lost.append(str(id))
 	return lost
@@ -130,4 +133,5 @@ func note_refound(id: String, who: Agent, day: int) -> void:
 	refound[id] = {"day": day, "lost_day": int(g["day"]), "last_name": str(g["last_name"]),
 		"near": near_ghost(id, who.pos), "by": who.agent_name}
 	ghosts.erase(id)
+	version += 1
 	refound_total += 1

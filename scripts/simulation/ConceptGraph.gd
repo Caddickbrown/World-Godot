@@ -28,31 +28,81 @@ func _init(concepts_data: Array) -> void:
 	for c in concepts_data:
 		concepts[c["id"]] = c
 		known_by[c["id"]] = []
+		_index[c["id"]] = _ids.size()
+		_ids.append(c["id"])
 
 # ── Discovery ────────────────────────────────────────────────────────────────
 
 func check_discovery(agent: Agent, tile: Dictionary, delta: float, world: World, all_agents: Array, current_day: int = 0) -> String:
-	# Roll first, check after: a discovery's chance is about 1e-4 a second, and
-	# the conditions are the costly part (some scan every person, or 49 tiles),
-	# so checking them for all 83 ideas, every person, every frame was half of
-	# a frame at 20x. The odds are the same either way: the roll and the
-	# conditions are independent.
+	# One roll a person a frame, not one an idea. Every idea's chance is tiny
+	# (about 1e-4 a second), so the frame's odds are their sum: rolled once
+	# against an upper bound (each idea at the most its fire or ghost bonus
+	# could make it), then, on the rare hit, an idea picked in proportion and
+	# kept with the odds its bonus really has here. The same odds as rolling
+	# each idea (to first order: the chances are tiny), at a fraction of the
+	# cost: 83 rolls a person a frame were a third of a frame at 20x.
+	# Then, as before, the conditions (the costly part) only on a hit.
 	var base: float = agent.curiosity * delta * discovery_pace * agent.fxf("discovery_bonus")
 	if agent.knowledge.has("curiosity_culture"): base *= 1.2
 	if agent.task == "scout": base *= 1.15
+	if base <= 0.0:
+		return ""
+	var key: int = agent.knowledge.size() * 65536 + memory.version
+	var m = _mass.get(agent.agent_id)
+	if m == null or int(m[0]) != key:
+		var total := 0.0
+		for id in concepts:
+			if not agent.knowledge.has(id):
+				total += float(concepts[id].get("discovery_probability", 0.0001)) * _upper(id)
+		m = [key, total]
+		_mass[agent.agent_id] = m
+	var mass: float = m[1]
+	if mass * base > 0.05:
+		# Not small (a test, a fast-forward): one roll an idea, exactly.
+		return _discover_each(agent, tile, base, world, all_agents, current_day)
+	if mass <= 0.0 or randf() >= mass * base:
+		return ""
+	# Which idea: in proportion to its (upper) share.
+	var pick := randf() * mass
+	var id := ""
+	for cid in concepts:
+		if agent.knowledge.has(cid):
+			continue
+		pick -= float(concepts[cid].get("discovery_probability", 0.0001)) * _upper(cid)
+		if pick < 0.0:
+			id = cid
+			break
+	if id == "":
+		return ""
+	# Kept with the odds its bonus really has here.
+	var actual := memory.bonus(id, agent.pos)
+	if id == "fire" and _near_wildfire(tile, world):
+		actual *= FIRE_NEAR_WILDFIRE
+	if randf() >= actual / _upper(id):
+		return ""
+	var concept: Dictionary = concepts[id]
+	if not _prerequisites_met(agent, concept): return ""
+	if not _conditions_met(agent, tile, concept, world, all_agents): return ""
+	if IdeaMemory.reinvent < 1.0 and IdeaMemory.is_master_craft(id) and randf() >= IdeaMemory.reinvent \
+			and memory.held_by_living(id, all_agents): return ""
+	if known_by[id].is_empty():
+		concept["first_discoverer"] = {"name": agent.agent_name, "id": agent.agent_id, "day": current_day}
+	memory.note_refound(id, agent, current_day)
+	_grant(agent, id, current_day)
+	events.append({"type": "discovery", "agent_id": agent.agent_id, "agent_name": agent.agent_name, "concept_id": id})
+	return id
+
+## The plain way: every idea rolled on its own (used when the odds aren't
+## small, where one roll for the lot would saturate).
+func _discover_each(agent: Agent, tile: Dictionary, base: float, world: World, all_agents: Array, current_day: int) -> String:
+	var fire_near := _near_wildfire(tile, world)
 	for id in concepts:
-		if agent.knowledge.has(id): continue
+		if agent.knowledge.has(id):
+			continue
 		var concept: Dictionary = concepts[id]
 		var prob: float = float(concept.get("discovery_probability", 0.0001)) * base * memory.bonus(id, agent.pos)
-
-		if id == "fire" and not world.natural_fires.is_empty():
-			var adj := [[0,0],[1,0],[-1,0],[0,1],[0,-1]]
-			for d in adj:
-				var key := "%d,%d" % [tile["x"] + d[0], tile["z"] + d[1]]
-				if world.natural_fires.has(key):
-					prob *= 30.0
-					break
-
+		if id == "fire" and fire_near:
+			prob *= FIRE_NEAR_WILDFIRE
 		if randf() >= prob: continue
 		if not _prerequisites_met(agent, concept): continue
 		if not _conditions_met(agent, tile, concept, world, all_agents): continue
@@ -65,6 +115,27 @@ func check_discovery(agent: Agent, tile: Dictionary, delta: float, world: World,
 		events.append({"type": "discovery", "agent_id": agent.agent_id, "agent_name": agent.agent_name, "concept_id": id})
 		return id
 	return ""
+
+## Fire is 30x likelier beside a wildfire.
+const FIRE_NEAR_WILDFIRE := 30.0
+## agent id -> [key, sum of ideas' upper odds] (see check_discovery).
+var _mass: Dictionary = {}
+
+## The most an idea's odds can be multiplied by anywhere: by a wildfire
+## (fire) and by its ghost (a lost idea, near where it was last known).
+func _upper(id: String) -> float:
+	var u := FIRE_NEAR_WILDFIRE if id == "fire" else 1.0
+	if memory.ghosts.has(id):
+		u *= maxf(1.0, IdeaMemory.ghost_bonus)
+	return u
+
+func _near_wildfire(tile: Dictionary, world: World) -> bool:
+	if world.natural_fires.is_empty() or tile.is_empty():
+		return false
+	for d in [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]:
+		if world.natural_fires.has("%d,%d" % [int(tile["x"]) + d[0], int(tile["z"]) + d[1]]):
+			return true
+	return false
 
 func _prerequisites_met(agent: Agent, concept: Dictionary) -> bool:
 	for prereq in concept.get("prerequisites", []):
@@ -142,8 +213,49 @@ func _grant(agent: Agent, id: String, _day: int = 0) -> void:
 
 # ── Spreading ────────────────────────────────────────────────────────────────
 
+## Who knows what, as bits (an idea's index in _ids): two ints of 63.
+var _ids: Array = []              # index -> idea id
+var _index: Dictionary = {}       # idea id -> index
+var _masks: Dictionary = {}       # agent id -> [knowledge size, lo bits, hi bits]
+
+## A person's ideas as bits, rebuilt when they know more (knowledge only grows).
+func _mask(a: Agent) -> Array:
+	var m = _masks.get(a.agent_id)
+	if m != null and int(m[0]) == a.knowledge.size():
+		return m
+	var lo := 0
+	var hi := 0
+	for id in a.knowledge:
+		var i: int = _index.get(id, -1)
+		if i < 0:
+			continue
+		if i < 63:
+			lo |= 1 << i
+		else:
+			hi |= 1 << (i - 63)
+	m = [a.knowledge.size(), lo, hi]
+	_masks[a.agent_id] = m
+	return m
+
+## Two people near each other may pass on what one knows and the other
+## doesn't. Only those ideas are looked at (the bits that differ), in the
+## same order as ever, so the same dice fall: neighbours by a fire mostly
+## know the same things, and checking all 83 for every pair was a third of
+## the people's time.
 func try_spread(agent_a: Agent, agent_b: Agent, delta_time: float = 5.0) -> void:
-	for id in concepts:
+	var ma := _mask(agent_a)
+	var mb := _mask(agent_b)
+	var x0: int = int(ma[1]) ^ int(mb[1])
+	var x1: int = int(ma[2]) ^ int(mb[2])
+	if x0 == 0 and x1 == 0:
+		return
+	for i in _ids.size():
+		if i < 63:
+			if (x0 >> i) & 1 == 0:
+				continue
+		elif (x1 >> (i - 63)) & 1 == 0:
+			continue
+		var id: String = _ids[i]
 		var concept: Dictionary = concepts[id]
 		var a_knows: bool = agent_a.knowledge.has(id)
 		var b_knows: bool = agent_b.knowledge.has(id)

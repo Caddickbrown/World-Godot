@@ -28,7 +28,7 @@ const SYSTEMS := ["world", "concept_graph", "time_system", "weather_system", "an
 ## Main's own state.
 const MAIN_VARS := ["agents", "birth_times", "_history_seen", "_was_storm", "game_over"]
 ## Per-instance state that isn't worth a file: caches rebuilt on use.
-const SKIP_PROPS := ["_fx", "_fx_n", "heightfield"]
+const SKIP_PROPS := ["_fx", "_fx_n", "heightfield", "_masks", "_mass"]
 ## Big fields known to hold plain data only (no objects anywhere inside):
 ## stored as they are, without walking them (the tiles alone took 0.4 s).
 const PLAIN_PROPS := ["tiles", "trade_traffic", "glacier_data", "cut_trees", "natural_fires", "growing"]

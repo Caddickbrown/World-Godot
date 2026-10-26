@@ -70,6 +70,7 @@ func _disasters(t) -> void:
 	ft.erase("flooded")
 	# A real flood: picks low ground by a river or the shore, and draws water there.
 	var fl := DisasterSystem.new()
+	seed(4)   # where the flood starts is rolled: fixed, so the check doesn't hang on what ran before
 	fl.start(DisasterSystem.DisasterType.FLOOD, 5, hist, w)
 	fl.remaining_time = fl.duration * 0.5
 	fl.apply(w, [])
