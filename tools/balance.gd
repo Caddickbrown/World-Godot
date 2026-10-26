@@ -64,6 +64,14 @@ func _initialize() -> void:
 		for id in main.story.ledger.ideas:
 			lost += int(main.story.ledger.ideas[id]["times_lost"])
 		print("  ideas lost (ever): ", lost)
+		if args.has("ideas"):
+			var rows: Array = []
+			for id in main.story.ledger.ideas:
+				var r: Dictionary = main.story.ledger.ideas[id]
+				if int(r["peak"]) > 0:
+					rows.append("%s(e%d) now %d peak %d low %d found %d taught %d lost %d" % [id, int(main.concept_graph.concepts[id].get("era", 1)),
+						int(r["holders"]), int(r["peak"]), int(r.get("low", -1)), int(r.get("found", 0)), int(r["taught"]), int(r["times_lost"])])
+			for row in rows: print("    ", row)
 		var woods := 0
 		var young := 0
 		var planted := 0

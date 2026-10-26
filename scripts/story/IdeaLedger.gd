@@ -12,7 +12,9 @@ const BLOOM_SHARE := 0.4
 enum Stage { SEED, SPROUT, BLOOM, WILTED }
 
 ## concept id -> {holders, peak, first_name, first_day, lost_day, lost_with, times_lost,
-##                refound_by, refound_day, taught, stage}
+##                refound_by, refound_day, taught, stage, found, low, lost_pos}
+## found: times anyone thought of it (first or again); low: the fewest living
+## holders once it had reached three (how near it came to being lost).
 var ideas: Dictionary = {}
 var concept_names: Dictionary = {}
 
@@ -22,7 +24,7 @@ func setup(concepts: Dictionary) -> void:
 		concept_names[id] = str((concepts[id] as Dictionary).get("name", id))
 		ideas[id] = {"holders": 0, "peak": 0, "first_name": "", "first_day": -1, "lost_day": -1,
 			"lost_with": "", "times_lost": 0, "refound_by": "", "refound_day": -1, "taught": 0,
-			"stage": Stage.SEED}
+			"stage": Stage.SEED, "found": 0, "low": -1, "lost_pos": Vector2(-1, -1)}
 
 func name_of(id: String) -> String:
 	return str(concept_names.get(id, id.replace("_", " ").capitalize()))
@@ -35,6 +37,7 @@ func note_discovery(id: String, who: String, day: int) -> Dictionary:
 	# First means nobody has ever held it (peak 0), not merely "not seen yet".
 	var first: bool = int(rec["first_day"]) < 0 and int(rec["peak"]) == 0
 	var refound: bool = int(rec["stage"]) == Stage.WILTED
+	rec["found"] = int(rec.get("found", 0)) + 1
 	if first:
 		rec["first_name"] = who
 		rec["first_day"] = day
@@ -64,13 +67,16 @@ func recount(agents: Array, day: int, recently_dead: Array = []) -> Array:
 	for a in recently_dead:
 		for id in a.knowledge:
 			if not counts.has(id):
-				last_holder[id] = a.agent_name
+				last_holder[id] = a
 	var changes: Array = []
 	for id in ideas:
 		var rec: Dictionary = ideas[id]
 		var n: int = int(counts.get(id, 0))
 		rec["holders"] = n
 		rec["peak"] = maxi(int(rec["peak"]), n)
+		# The fewest who held it once it had taken hold (3+): how near it came to being lost.
+		if int(rec["peak"]) >= 3:
+			rec["low"] = n if int(rec.get("low", -1)) < 0 else mini(int(rec["low"]), n)
 		var stage: int
 		if n == 0:
 			stage = Stage.WILTED if int(rec["peak"]) > 0 else Stage.SEED
@@ -79,12 +85,17 @@ func recount(agents: Array, day: int, recently_dead: Array = []) -> Array:
 		else:
 			stage = Stage.SPROUT
 		if stage != int(rec["stage"]):
-			var change := {"id": id, "from": int(rec["stage"]), "to": stage, "last_holder": ""}
+			var change := {"id": id, "from": int(rec["stage"]), "to": stage, "last_holder": "", "last_id": -1}
 			if stage == Stage.WILTED:
 				rec["lost_day"] = day
 				rec["times_lost"] = int(rec["times_lost"]) + 1
-				rec["lost_with"] = str(last_holder.get(id, rec.get("lost_with", "")))
+				var last = last_holder.get(id, null)
+				rec["lost_with"] = last.agent_name if last else str(rec.get("lost_with", ""))
+				# Where it was last known: the last holder's place when they died.
+				rec["lost_pos"] = last.pos if last else Vector2(-1, -1)
 				change["last_holder"] = rec["lost_with"]
+				change["last_id"] = last.agent_id if last else -1
+				change["pos"] = rec["lost_pos"]
 			rec["stage"] = stage
 			changes.append(change)
 	return changes

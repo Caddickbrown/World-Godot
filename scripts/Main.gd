@@ -445,6 +445,8 @@ func _process(delta: float) -> void:
 			a.set_meta("death_logged", true)
 			a.set_meta("died_at", time_system.game_time)
 			history_log.add("death", history_log.format_death(a.agent_name, a.death_cause), time_system.day)
+			var camp = settlement_system.get_settlement_for_agent(a.agent_id)
+			concept_graph.note_death(a, agents, time_system.day, camp.centre if camp else Vector2(-1, -1))
 			story.on_death(a)
 			_grieve_for(a)
 			audio_system.play_death()

@@ -320,8 +320,12 @@ func _sync_knowledge_pool(agents: Array, concept_graph: ConceptGraph) -> void:
 				if randf() < 0.2:
 					var pool_keys: Array = s.knowledge_pool.keys()
 					var chosen: String = str(pool_keys[randi() % pool_keys.size()])
-					if not a.knowledge.has(chosen):
-						a.knowledge[chosen] = true
+					# Only from someone still there to show them: the pool outlives
+					# its holders, and learning from it brought lost ideas back
+					# unseen (feat/ideas).
+					if not a.is_dead and not a.knowledge.has(chosen) and _member_holds(s, chosen, agents):
+						if concept_graph: concept_graph._grant(a, chosen)
+						else: a.knowledge[chosen] = true
 
 		# Contributing all current members' knowledge to pool each tick
 		for a: Agent in agents:
@@ -539,3 +543,9 @@ func _find_centroid_agents(agents_group: Array) -> Vector2:
 	for a: Agent in agents_group:
 		sum += a.pos
 	return sum / float(agents_group.size())
+
+static func _member_holds(s, id: String, agents: Array) -> bool:
+	for b: Agent in agents:
+		if not b.is_dead and b.health > 0.0 and b.knowledge.has(id) and s.member_ids.has(b.agent_id):
+			return true
+	return false

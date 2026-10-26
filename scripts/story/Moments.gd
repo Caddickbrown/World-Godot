@@ -21,7 +21,7 @@ const DEFS := {
 	"long_life":     ["A long life", "someone dies of old age", "people", true],
 	"teacher":       ["The teacher", "someone teaches an idea to ten people", "people", true],
 	"last_founder":  ["The last founder", "the last of the first forty dies", "people", false],
-	"idea_lost":     ["Forgotten", "an idea dies with the last who knew it", "ideas", false],
+	"idea_lost":     ["An idea lost", "an idea dies with the last who knew it", "ideas", false],
 	"idea_refound":  ["Found again", "a lost idea is rediscovered", "ideas", true],
 	"ten_ideas":     ["Ten ideas", "the world holds ten ideas at once", "ideas", false],
 	"first_camp":    ["A camp", "people settle together", "world", true],
@@ -41,6 +41,9 @@ const DEFS := {
 	"whale_breach":  ["A whale breaches", "see a whale leap clear of the sea", "world", true],
 	"frog_chorus":   ["The frog chorus", "be by the water when the frogs start up at dusk", "world", true],
 	"wild_honey":    ["Wild honey", "someone eats honey from a bees' nest in the woods", "firsts", true],
+	# ideas lost (feat/ideas)
+	"ghost_found":   ["Where it was left", "a lost idea is found again near where it was last known", "ideas", true],
+	"born_after":    ["New hands", "someone born after an idea was lost finds it again", "ideas", true],
 }
 
 var save_path := "user://world_album.json"
